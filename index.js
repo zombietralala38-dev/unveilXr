@@ -1,17 +1,3 @@
-
-if (typeof File === 'undefined') {
-  const { Blob } = require('node:buffer');
-  global.Blob = Blob;
-  global.File = class extends Blob {
-    constructor(parts, filename, options = {}) {
-      super(parts, options);
-      this.name = filename;
-      this.lastModified = options.lastModified || Date.now();
-    }
-  };
-}
-// ------------------------------------------
-
 const fs = require("node:fs");
 const path = require("node:path");
 const http = require("node:http"); // Requisito de Railway
@@ -28,7 +14,7 @@ const {
   SlashCommandBuilder,
 } = require("discord.js");
 const { fetch } = require("undici");
-const SuperLuaObfuscator = require("./obfuscator.js");
+const UnveilX = require("./obfuscator.js");
 
 // ───────────────────────────── Config ─────────────────────────────
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
@@ -272,9 +258,24 @@ async function handleObfuscate(interaction) {
     });
   }
 
+  // --- NUEVA REGLA: REVISAR SI EMPIEZA POR PRINT, LOCAL O LOAD ---
+  const trimmedSource = source.trim();
+  if (!trimmedSource.startsWith("print") && !trimmedSource.startsWith("local") && !trimmedSource.startsWith("load")) {
+    const elapsed = Date.now() - startedAt;
+    return await interaction.editReply({
+      embeds: [
+        buildErrorEmbed("Obfuscation rejected", "Code must start with 'print', 'local' or 'load' to use unveilX.", [
+          { name: "Status", value: "rejected", inline: true },
+          { name: "Time", value: formatDuration(elapsed), inline: true },
+        ]),
+      ],
+    });
+  }
+  // ----------------------------------------------------------------
+
   let obfuscated;
   try {
-    obfuscated = new SuperLuaObfuscator().obfuscate(source);
+    obfuscated = new UnveilX().obfuscate(source);
   } catch (err) {
     const elapsed = Date.now() - startedAt;
     return await interaction.editReply({
