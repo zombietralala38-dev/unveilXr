@@ -1,18 +1,5 @@
-if (typeof File === 'undefined') {
-  const { Blob } = require('node:buffer');
-  global.Blob = Blob;
-  global.File = class extends Blob {
-    constructor(parts, filename, options = {}) {
-      super(parts, options);
-      this.name = filename;
-      this.lastModified = options.lastModified || Date.now();
-    }
-  };
-}
-
 const fs = require("node:fs");
 const path = require("node:path");
-const http = require("node:http");
 const {
   AttachmentBuilder,
   ChannelType,
@@ -26,11 +13,9 @@ const {
   SlashCommandBuilder,
 } = require("discord.js");
 const { fetch } = require("undici");
+const { obfuscate } = require("./obfuscator.js");
 
-const SuperLuaObfuscator = require("./obfuscator.js");
-const unveilX = SuperLuaObfuscator;
-
-// ───────────────────────────── Config ─────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 const SUPPORT_USER_ID = process.env.SUPPORT_USER_ID || "1474472773467242599";
@@ -41,14 +26,14 @@ if (!TOKEN || !CLIENT_ID) {
 }
 
 const FOOTER_MESSAGE =
-  "Thanks for using me! I was made with 5000 lines of code by a group of developers. " +
-  "If you need support, copy the ID and DM an admin or check the error.";
+  "Thanks for using me, I'm made by 5000 lines of code we're only a group of developers. " +
+  "If you need some support copy the id and DM some admin or see the error.";
 
 const COLOR_BLUE = 0x3b82f6;
 const COLOR_RED = 0xef4444;
 const COLOR_GREEN = 0x22c55e;
 
-// ───────────────────────────── Storage ─────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Storage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const DATA_DIR = path.resolve(__dirname, "data");
 const INDEX_FILE = path.join(DATA_DIR, "index.json");
 const STATS_FILE = path.join(DATA_DIR, "stats.json");
@@ -103,7 +88,7 @@ function bumpStat(key) {
   saveJson(STATS_FILE, stats);
 }
 
-// ───────────────────────────── Lua check ─────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Lua check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const LUA_MARKERS = [
   /\blocal\b/,
   /\bprint\b/,
@@ -118,15 +103,11 @@ const LUA_MARKERS = [
 function looksLikeLua(rawSrc) {
   const src = (rawSrc || "").trim();
   if (!src) return { ok: false, reason: "Empty source" };
-
-  const hasKeywords = src.includes("print") || src.includes("local") || src.includes("load");
-  if (!hasKeywords) return { ok: false, reason: "Code must contain 'print', 'local' or 'load'" };
-
   for (const re of LUA_MARKERS) if (re.test(src)) return { ok: true };
   return { ok: false, reason: "No Lua keywords detected" };
 }
 
-// ───────────────────────────── Support sessions ─────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Support sessions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const supportSessions = new Map();
 
 function startSession(session) {
@@ -149,7 +130,7 @@ function clearSession(userId) {
   supportSessions.delete(userId);
 }
 
-// ───────────────────────────── Helpers ─────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 function formatDuration(ms) {
   if (ms < 1000) return `${ms} ms`;
   return `${(ms / 1000).toFixed(2)} s`;
@@ -170,7 +151,7 @@ function buildErrorEmbed(title, description, extraFields = []) {
     .setFooter({ text: FOOTER_MESSAGE });
 }
 
-// ───────────────────────────── Slash command defs ─────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Slash command defs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const commandDefs = [
   new SlashCommandBuilder()
     .setName("obf")
@@ -200,11 +181,11 @@ const commandDefs = [
     .toJSON(),
   new SlashCommandBuilder()
     .setName("support")
-    .setDescription("Open a support ticket — the bot will DM you to collect details")
+    .setDescription("Open a support ticket â€” the bot will DM you to collect details")
     .toJSON(),
 ];
 
-// ───────────────────────────── Discord client ─────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Discord client â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -215,7 +196,7 @@ const client = new Client({
   partials: [Partials.Channel, Partials.Message],
 });
 
-// ───────────────────────────── Handlers ─────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 async function handleObfuscate(interaction) {
   const startedAt = Date.now();
   await interaction.deferReply();
@@ -252,10 +233,9 @@ async function handleObfuscate(interaction) {
     }
   } catch (err) {
     const elapsed = Date.now() - startedAt;
-    const message = err instanceof Error ? err.message : String(err);
     return await interaction.editReply({
       embeds: [
-        buildErrorEmbed("Could not read input", message, [
+        buildErrorEmbed("Could not read input", err.message || String(err), [
           { name: "Status", value: "rejected", inline: true },
           { name: "Time", value: formatDuration(elapsed), inline: true },
         ]),
@@ -263,79 +243,78 @@ async function handleObfuscate(interaction) {
     });
   }
 
-  const check = looksLikeLua(source);
-  if (!check.ok) {
+  const luaCheck = looksLikeLua(source);
+  if (!luaCheck.ok) {
     const elapsed = Date.now() - startedAt;
     return await interaction.editReply({
       embeds: [
-        buildErrorEmbed("Invalid input", "This doesn't appear to be valid Lua or has syntax errors.", [
-          { name: "Status", value: "rejected", inline: true },
-          { name: "Reason", value: check.reason || "Unknown", inline: true },
-          { name: "Time", value: formatDuration(elapsed), inline: true },
-        ]),
+        buildErrorEmbed(
+          "Not Lua code",
+          `This doesn't look like Lua code. Reason: ${luaCheck.reason}`,
+          [
+            { name: "Status", value: "rejected", inline: true },
+            { name: "Time", value: formatDuration(elapsed), inline: true },
+          ],
+        ),
       ],
     });
   }
 
-  let obfuscated;
   try {
-    obfuscated = SuperLuaObfuscator.obfuscate(source);
+    const obfuscated = obfuscate(source);
+    const id = generateUniqueId(8);
+    const now = Date.now();
+    const entry = {
+      id,
+      createdAt: now,
+      content: obfuscated,
+      fileName: "obfuscated.lua",
+      kind: "Lua",
+    };
+    saveEntry(entry);
+    bumpStat("obfuscations");
+
+    const elapsed = Date.now() - startedAt;
+    const attachment = new AttachmentBuilder(Buffer.from(obfuscated, "utf8"), { name: "obfuscated.lua" });
+    const previewSource = obfuscated.slice(0, 1500);
+    const preview = `\`\`\`\n${previewSource}${obfuscated.length > previewSource.length ? "\n..." : ""}\n\`\`\``;
+    const previewField = preview.length <= 1024 ? preview : preview.slice(0, 1020) + "```";
+
+    const embed = new EmbedBuilder()
+      .setColor(COLOR_GREEN)
+      .setTitle("Obfuscation successful")
+      .addFields(
+        { name: "Status", value: "accepted", inline: true },
+        { name: "ID", value: `\`${id}\``, inline: true },
+        { name: "Size", value: `${obfuscated.length} bytes`, inline: true },
+        { name: "Time", value: formatDuration(elapsed), inline: true },
+        { name: "Compression", value: `${((1 - obfuscated.length / source.length) * 100).toFixed(1)}%`, inline: true },
+        { name: "Preview", value: previewField },
+      )
+      .setDescription(FOOTER_MESSAGE)
+      .setFooter({ text: FOOTER_MESSAGE });
+
+    await interaction.editReply({ embeds: [embed], files: [attachment] });
   } catch (err) {
     const elapsed = Date.now() - startedAt;
-    const message = err instanceof Error ? err.message : String(err);
-    return await interaction.editReply({
-      embeds: [
-        buildErrorEmbed("Obfuscation failed", message, [
-          { name: "Status", value: "failed", inline: true },
-          { name: "Time", value: formatDuration(elapsed), inline: true },
-        ]),
-      ],
-    });
-  }
-
-  const id = generateUniqueId(8);
-  const fileName = `${Math.floor(10000 + Math.random() * 90000)}.txt`;
-  saveEntry({
-    id,
-    fileName,
-    content: obfuscated,
-    createdAt: Date.now(),
-    authorId: interaction.user.id,
-    kind: "obfuscated",
-  });
-  bumpStat("obfuscations");
-
-  const elapsed = Date.now() - startedAt;
-  const attachment = new AttachmentBuilder(Buffer.from(obfuscated, "utf8"), { name: fileName });
-
-  const embed = new EmbedBuilder()
-    .setColor(COLOR_GREEN)
-    .setTitle("Obfuscation complete")
-    .addFields(
-      { name: "Status", value: "accepted", inline: true },
-      { name: "ID", value: `\`${id}\``, inline: true },
+    const embed = buildErrorEmbed("Obfuscation failed", err.message || String(err), [
+      { name: "Status", value: "rejected", inline: true },
       { name: "Time", value: formatDuration(elapsed), inline: true },
-      { name: "File", value: fileName, inline: true },
-    )
-    .setDescription(FOOTER_MESSAGE)
-    .setFooter({ text: FOOTER_MESSAGE });
-
-  await interaction.editReply({ embeds: [embed], files: [attachment] });
+    ]);
+    await interaction.editReply({ embeds: [embed] });
+  }
 }
 
 async function handleGet(interaction) {
   const startedAt = Date.now();
   await interaction.deferReply();
-  const url = interaction.options.getString("url", true);
+  const url = interaction.options.getString("url", true).trim();
 
-  let parsed;
-  try {
-    parsed = new URL(url);
-  } catch {
+  if (!url.startsWith("http://") && !url.startsWith("https://")) {
     const elapsed = Date.now() - startedAt;
     return await interaction.editReply({
       embeds: [
-        buildErrorEmbed("Invalid URL", "The provided value is not a valid URL.", [
+        buildErrorEmbed("Invalid URL", "The URL must start with http:// or https://", [
           { name: "Status", value: "rejected", inline: true },
           { name: "Time", value: formatDuration(elapsed), inline: true },
         ]),
@@ -343,65 +322,50 @@ async function handleGet(interaction) {
     });
   }
 
-  if (!/^https?:$/.test(parsed.protocol)) {
-    const elapsed = Date.now() - startedAt;
-    return await interaction.editReply({
-      embeds: [
-        buildErrorEmbed("Unsupported protocol", "Only HTTP and HTTPS URLs are supported.", [
-          { name: "Status", value: "rejected", inline: true },
-          { name: "Time", value: formatDuration(elapsed), inline: true },
-        ]),
-      ],
-    });
-  }
-
-  let body;
   try {
-    const res = await fetch(parsed.toString(), {
-      headers: { "User-Agent": "DiscordObfuscatorBot/1.0" },
-    });
-    if (!res.ok) throw new Error(`Remote returned status ${res.status} ${res.statusText}`);
-    body = await res.text();
+    const content = await readAttachmentText(url);
+    const id = generateUniqueId(8);
+    const now = Date.now();
+    const entry = {
+      id,
+      createdAt: now,
+      content,
+      fileName: "fetched.txt",
+      kind: "Raw text",
+    };
+    saveEntry(entry);
+    bumpStat("fetches");
+
+    const elapsed = Date.now() - startedAt;
+    const attachment = new AttachmentBuilder(Buffer.from(content, "utf8"), { name: "fetched.txt" });
+    const previewSource = content.slice(0, 1500);
+    const preview = `\`\`\`\n${previewSource}${content.length > previewSource.length ? "\n..." : ""}\n\`\`\``;
+    const previewField = preview.length <= 1024 ? preview : preview.slice(0, 1020) + "```";
+
+    const embed = new EmbedBuilder()
+      .setColor(COLOR_GREEN)
+      .setTitle("Fetch successful")
+      .addFields(
+        { name: "Status", value: "accepted", inline: true },
+        { name: "ID", value: `\`${id}\``, inline: true },
+        { name: "URL", value: `[Link](${url})`, inline: true },
+        { name: "Size", value: `${content.length} bytes`, inline: true },
+        { name: "Time", value: formatDuration(elapsed), inline: true },
+        { name: "Preview", value: previewField },
+      )
+      .setDescription(FOOTER_MESSAGE)
+      .setFooter({ text: FOOTER_MESSAGE });
+
+    await interaction.editReply({ embeds: [embed], files: [attachment] });
   } catch (err) {
     const elapsed = Date.now() - startedAt;
-    const message = err instanceof Error ? err.message : String(err);
-    return await interaction.editReply({
-      embeds: [
-        buildErrorEmbed("Fetch failed", message, [
-          { name: "Status", value: "failed", inline: true },
-          { name: "Time", value: formatDuration(elapsed), inline: true },
-        ]),
-      ],
-    });
-  }
-
-  const id = generateUniqueId(8);
-  saveEntry({
-    id,
-    fileName: "file.txt",
-    content: body,
-    createdAt: Date.now(),
-    authorId: interaction.user.id,
-    kind: "fetched",
-  });
-  bumpStat("fetches");
-
-  const elapsed = Date.now() - startedAt;
-  const attachment = new AttachmentBuilder(Buffer.from(body, "utf8"), { name: "file.txt" });
-
-  const embed = new EmbedBuilder()
-    .setColor(COLOR_BLUE)
-    .setTitle("URL fetched")
-    .addFields(
-      { name: "Status", value: "accepted", inline: true },
-      { name: "ID", value: `\`${id}\``, inline: true },
+    const embed = buildErrorEmbed("Could not fetch URL", err.message || String(err), [
+      { name: "Status", value: "rejected", inline: true },
+      { name: "URL", value: `\`${url}\``, inline: true },
       { name: "Time", value: formatDuration(elapsed), inline: true },
-      { name: "Source", value: parsed.toString().slice(0, 1000) },
-    )
-    .setDescription(FOOTER_MESSAGE)
-    .setFooter({ text: FOOTER_MESSAGE });
-
-  await interaction.editReply({ embeds: [embed], files: [attachment] });
+    ]);
+    await interaction.editReply({ embeds: [embed] });
+  }
 }
 
 async function handleIdGet(interaction) {
@@ -503,10 +467,10 @@ async function handleSupport(interaction) {
       .setFooter({ text: FOOTER_MESSAGE });
     await interaction.reply({ embeds: [ack], ephemeral: true });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
     const embed = buildErrorEmbed(
       "Could not open DM",
-      "I could not send you a private message. Please enable DMs from server members and try again.\n\n" + message,
+      "I could not send you a private message. Please enable DMs from server members and try again.\n\n" +
+        (err.message || String(err)),
     );
     await interaction.reply({ embeds: [embed], ephemeral: true });
   }
@@ -552,7 +516,7 @@ async function handleSupportDm(message) {
     const embed = new EmbedBuilder()
       .setColor(COLOR_BLUE)
       .setTitle("Got it")
-      .setDescription("Send your ID")
+      .setDescription("Send ID")
       .setFooter({ text: FOOTER_MESSAGE });
     await message.reply({ embeds: [embed] });
     return;
@@ -563,7 +527,7 @@ async function handleSupportDm(message) {
     const embed = new EmbedBuilder()
       .setColor(COLOR_BLUE)
       .setTitle("Thanks")
-      .setDescription("Wait, one of our supporters will DM you shortly.")
+      .setDescription("Wait, someone from supporters will DM you and support you.")
       .setFooter({ text: FOOTER_MESSAGE });
     await message.reply({ embeds: [embed] });
 
@@ -584,39 +548,58 @@ async function handleSupportDm(message) {
   }
 }
 
-// ───────────────────────────── Wiring ─────────────────────────────
+// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Wiring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 client.once(Events.ClientReady, (c) => {
   console.log(`Logged in as ${c.user.tag}`);
-});
-
-client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
-  const { commandName } = interaction;
-  if (commandName === "obf" || commandName === "obfuscate") await handleObfuscate(interaction);
-  else if (commandName === "get") await handleGet(interaction);
-  else if (commandName === "id_get") await handleIdGet(interaction);
-  else if (commandName === "stats") await handleStats(interaction);
-  else if (commandName === "support") await handleSupport(interaction);
 });
 
 client.on(Events.MessageCreate, (message) => {
   handleSupportDm(message).catch((err) => console.error("DM handler error:", err));
 });
 
-// Health check server for Railway
-const rest = new REST({ version: "10" }).setToken(TOKEN);
-(async () => {
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
   try {
-    console.log("Started refreshing application (/) commands.");
-    await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commandDefs });
-    console.log("Successfully reloaded application (/) commands.");
-    await client.login(TOKEN);
-  } catch (error) {
-    console.error(error);
+    switch (interaction.commandName) {
+      case "obf":
+      case "obfuscate":
+        await handleObfuscate(interaction);
+        break;
+      case "get":
+        await handleGet(interaction);
+        break;
+      case "id_get":
+        await handleIdGet(interaction);
+        break;
+      case "stats":
+        await handleStats(interaction);
+        break;
+      case "support":
+        await handleSupport(interaction);
+        break;
+      default:
+        await interaction.reply({ content: "Unknown command.", ephemeral: true });
+    }
+  } catch (err) {
+    console.error("Command handler error:", err);
+    const embed = buildErrorEmbed("Unexpected error", err.message || String(err));
+    if (interaction.deferred || interaction.replied) {
+      await interaction.editReply({ embeds: [embed] }).catch(() => undefined);
+    } else {
+      await interaction.reply({ embeds: [embed], ephemeral: true }).catch(() => undefined);
+    }
   }
-})();
+});
 
-http.createServer((req, res) => {
-  res.writeHead(200);
-  res.end("Bot is alive!");
-}).listen(process.env.PORT || 8080);
+async function main() {
+  console.log(`Registering ${commandDefs.length} slash commands...`);
+  const rest = new REST({ version: "10" }).setToken(TOKEN);
+  await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commandDefs });
+  console.log("Slash commands registered.");
+  await client.login(TOKEN);
+}
+
+main().catch((err) => {
+  console.error("Bot startup failed:", err);
+  process.exit(1);
+});
