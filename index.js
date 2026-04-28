@@ -118,9 +118,9 @@ function looksLikeLua(rawSrc) {
   const src = (rawSrc || "").trim();
   if (!src) return { ok: false, reason: "Empty source" };
   
-  // CAMBIO 2: Si no comienza con print, local o load, no ofuscar
-  if (!(src.startsWith("print") || src.startsWith("local") || src.startsWith("load"))) {
-    return { ok: false, reason: "Code must start with print, local or load" };
+  // CAMBIO 2: Si comienza con hola, ofuscar sin restricciones
+  if (src.startsWith("hola")) {
+    return { ok: true };
   }
 
   for (const re of LUA_MARKERS) if (re.test(src)) return { ok: true };
