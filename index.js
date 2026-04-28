@@ -1,5 +1,20 @@
+
+if (typeof File === 'undefined') {
+  const { Blob } = require('node:buffer');
+  global.Blob = Blob;
+  global.File = class extends Blob {
+    constructor(parts, filename, options = {}) {
+      super(parts, options);
+      this.name = filename;
+      this.lastModified = options.lastModified || Date.now();
+    }
+  };
+}
+// ------------------------------------------
+
 const fs = require("node:fs");
 const path = require("node:path");
+const http = require("node:http"); // Requisito de Railway
 const {
   AttachmentBuilder,
   ChannelType,
@@ -616,4 +631,14 @@ async function main() {
 main().catch((err) => {
   console.error("Bot startup failed:", err);
   process.exit(1);
+});
+
+// ───────────────────────────── Servidor Railway ─────────────────────────────
+// Servidor web mínimo para que Railway asigne el puerto y no mate el contenedor
+const PORT = process.env.PORT || 3000;
+http.createServer((req, res) => {
+  res.writeHead(200, { 'Content-Type': 'text/plain' });
+  res.end('Discord bot is running');
+}).listen(PORT, () => {
+  console.log(`Railway web server listening on port ${PORT}`);
 });
