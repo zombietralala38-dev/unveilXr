@@ -1,3 +1,16 @@
+if (typeof File === 'undefined') {
+  const { Blob } = require('node:buffer');
+  global.Blob = Blob;
+  global.File = class extends Blob {
+    constructor(parts, filename, options = {}) {
+      super(parts, options);
+      this.name = filename;
+      this.lastModified = options.lastModified || Date.now();
+    }
+  };
+}
+// ------------------------------------------
+
 const fs = require("node:fs");
 const path = require("node:path");
 const http = require("node:http"); // Requisito de Railway
@@ -14,7 +27,7 @@ const {
   SlashCommandBuilder,
 } = require("discord.js");
 const { fetch } = require("undici");
-const UnveilX = require("./obfuscator.js");
+const unveilX = require("./obfuscator.js"); // CAMBIO 1: Nombre a unveilX
 
 // ───────────────────────────── Config ─────────────────────────────
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
@@ -104,6 +117,12 @@ const LUA_MARKERS = [
 function looksLikeLua(rawSrc) {
   const src = (rawSrc || "").trim();
   if (!src) return { ok: false, reason: "Empty source" };
+  
+  // CAMBIO 2: Si no comienza con print, local o load, no ofuscar
+  if (!(src.startsWith("print") || src.startsWith("local") || src.startsWith("load"))) {
+    return { ok: false, reason: "Code must start with print, local or load" };
+  }
+
   for (const re of LUA_MARKERS) if (re.test(src)) return { ok: true };
   return { ok: false, reason: "No Lua keywords detected" };
 }
@@ -258,24 +277,9 @@ async function handleObfuscate(interaction) {
     });
   }
 
-  // --- NUEVA REGLA: REVISAR SI EMPIEZA POR PRINT, LOCAL O LOAD ---
-  const trimmedSource = source.trim();
-  if (!trimmedSource.startsWith("print") && !trimmedSource.startsWith("local") && !trimmedSource.startsWith("load")) {
-    const elapsed = Date.now() - startedAt;
-    return await interaction.editReply({
-      embeds: [
-        buildErrorEmbed("Obfuscation rejected", "Code must start with 'print', 'local' or 'load' to use unveilX.", [
-          { name: "Status", value: "rejected", inline: true },
-          { name: "Time", value: formatDuration(elapsed), inline: true },
-        ]),
-      ],
-    });
-  }
-  // ----------------------------------------------------------------
-
   let obfuscated;
   try {
-    obfuscated = new UnveilX().obfuscate(source);
+    obfuscated = new unveilX().obfuscate(source); // Aplicando unveilX
   } catch (err) {
     const elapsed = Date.now() - startedAt;
     return await interaction.editReply({
@@ -578,7 +582,26 @@ async function handleSupportDm(message) {
   }
 }
 
-// ───────────────────────────── Wiring ─────────────────────────────
+// ───────────────────────────── Interaction Routing ─────────────────────────────
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+
+  const { commandName } = interaction;
+
+  if (commandName === "obf" || commandName === "obfuscate") {
+    await handleObfuscate(interaction);
+  } else if (commandName === "get") {
+    await handleGet(interaction);
+  } else if (commandName === "id_get") {
+    await handleIdGet(interaction);
+  } else if (commandName === "stats") {
+    await handleStats(interaction);
+  } else if (commandName === "sopport") {
+    await handleSupport(interaction);
+  }
+});
+
+// ───────────────────────────── Railway/Start ─────────────────────────────
 client.once(Events.ClientReady, (c) => {
   console.log(`Logged in as ${c.user.tag}`);
 });
@@ -587,59 +610,16 @@ client.on(Events.MessageCreate, (message) => {
   handleSupportDm(message).catch((err) => console.error("DM handler error:", err));
 });
 
-client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
+// IMPORTANTE: Esto es lo que hace que los comandos funcionen.
+const rest = new REST({ version: "10" }).setToken(TOKEN);
+(async () => {
   try {
-    switch (interaction.commandName) {
-      case "obf":
-      case "obfuscate":
-        await handleObfuscate(interaction);
-        break;
-      case "get":
-        await handleGet(interaction);
-        break;
-      case "id_get":
-        await handleIdGet(interaction);
-        break;
-      case "stats":
-        await handleStats(interaction);
-        break;
-      case "sopport":
-        await handleSupport(interaction);
-        break;
-      default:
-        await interaction.reply({ content: "Unknown command.", ephemeral: true });
-    }
-  } catch (err) {
-    console.error("Command handler error:", err);
-    const embed = buildErrorEmbed("Unexpected error", err.message || String(err));
-    if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({ embeds: [embed] }).catch(() => undefined);
-    } else {
-      await interaction.reply({ embeds: [embed], ephemeral: true }).catch(() => undefined);
-    }
+    await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commandDefs });
+    await client.login(TOKEN);
+  } catch (error) {
+    console.error(error);
   }
-});
+})();
 
-async function main() {
-  console.log(`Registering ${commandDefs.length} slash commands...`);
-  const rest = new REST({ version: "10" }).setToken(TOKEN);
-  await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commandDefs });
-  console.log("Slash commands registered.");
-  await client.login(TOKEN);
-}
-
-main().catch((err) => {
-  console.error("Bot startup failed:", err);
-  process.exit(1);
-});
-
-// ───────────────────────────── Servidor Railway ─────────────────────────────
-// Servidor web mínimo para que Railway asigne el puerto y no mate el contenedor
-const PORT = process.env.PORT || 3000;
-http.createServer((req, res) => {
-  res.writeHead(200, { 'Content-Type': 'text/plain' });
-  res.end('Discord bot is running');
-}).listen(PORT, () => {
-  console.log(`Railway web server listening on port ${PORT}`);
-});
+// Servidor para Railway
+http.createServer((req, res) => { res.writeHead(200); res.end("Bot live"); }).listen(process.env.PORT || 8080);
