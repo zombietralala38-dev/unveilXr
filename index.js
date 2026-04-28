@@ -27,7 +27,7 @@ const {
   SlashCommandBuilder,
 } = require("discord.js");
 const { fetch } = require("undici");
-const unveilX = require("./obfuscator.js"); // CAMBIO 1: Nombre a unveilX
+const unveilX = require("./obfuscator.js"); // CAMBIO 1
 
 // ───────────────────────────── Config ─────────────────────────────
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
@@ -117,11 +117,10 @@ const LUA_MARKERS = [
 function looksLikeLua(rawSrc) {
   const src = (rawSrc || "").trim();
   if (!src) return { ok: false, reason: "Empty source" };
-  
-  // CAMBIO 2: Si comienza con hola, ofuscar sin restricciones
-  if (src.startsWith("hola")) {
-    return { ok: true };
-  }
+
+  // CAMBIO 2: Verificar que contenga print, local o load en cualquier parte
+  const hasKeywords = src.includes("print") || src.includes("local") || src.includes("load");
+  if (!hasKeywords) return { ok: false, reason: "Code must contain 'print', 'local' or 'load'" };
 
   for (const re of LUA_MARKERS) if (re.test(src)) return { ok: true };
   return { ok: false, reason: "No Lua keywords detected" };
@@ -279,7 +278,9 @@ async function handleObfuscate(interaction) {
 
   let obfuscated;
   try {
-    obfuscated = new unveilX().obfuscate(source); // Aplicando unveilX
+    // Corregido para que use la clase exportada
+    const Obf = (unveilX.default || unveilX);
+    obfuscated = new Obf().obfuscate(source);
   } catch (err) {
     const elapsed = Date.now() - startedAt;
     return await interaction.editReply({
@@ -582,44 +583,39 @@ async function handleSupportDm(message) {
   }
 }
 
-// ───────────────────────────── Interaction Routing ─────────────────────────────
-client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
-
-  const { commandName } = interaction;
-
-  if (commandName === "obf" || commandName === "obfuscate") {
-    await handleObfuscate(interaction);
-  } else if (commandName === "get") {
-    await handleGet(interaction);
-  } else if (commandName === "id_get") {
-    await handleIdGet(interaction);
-  } else if (commandName === "stats") {
-    await handleStats(interaction);
-  } else if (commandName === "sopport") {
-    await handleSupport(interaction);
-  }
-});
-
-// ───────────────────────────── Railway/Start ─────────────────────────────
+// ───────────────────────────── Wiring ─────────────────────────────
 client.once(Events.ClientReady, (c) => {
   console.log(`Logged in as ${c.user.tag}`);
+});
+
+client.on(Events.InteractionCreate, async (interaction) => {
+  if (!interaction.isChatInputCommand()) return;
+  const { commandName } = interaction;
+  if (commandName === "obf" || commandName === "obfuscate") await handleObfuscate(interaction);
+  else if (commandName === "get") await handleGet(interaction);
+  else if (commandName === "id_get") await handleIdGet(interaction);
+  else if (commandName === "stats") await handleStats(interaction);
+  else if (commandName === "sopport") await handleSupport(interaction);
 });
 
 client.on(Events.MessageCreate, (message) => {
   handleSupportDm(message).catch((err) => console.error("DM handler error:", err));
 });
 
-// IMPORTANTE: Esto es lo que hace que los comandos funcionen.
+// Railway Fix: Servidor HTTP para Health Checks y Registro de Comandos
 const rest = new REST({ version: "10" }).setToken(TOKEN);
 (async () => {
   try {
+    console.log("Started refreshing application (/) commands.");
     await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commandDefs });
+    console.log("Successfully reloaded application (/) commands.");
     await client.login(TOKEN);
   } catch (error) {
     console.error(error);
   }
 })();
 
-// Servidor para Railway
-http.createServer((req, res) => { res.writeHead(200); res.end("Bot live"); }).listen(process.env.PORT || 8080);
+http.createServer((req, res) => {
+  res.writeHead(200);
+  res.end("Bot is alive!");
+}).listen(process.env.PORT || 8080);
