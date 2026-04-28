@@ -27,7 +27,10 @@ const {
   SlashCommandBuilder,
 } = require("discord.js");
 const { fetch } = require("undici");
-const unveilX = require("./obfuscator.js"); // CAMBIO 1
+
+// CONEXIÓN AL ARCHIVO
+const SuperLuaObfuscator = require("./obfuscator.js"); 
+const unveilX = SuperLuaObfuscator;
 
 // ───────────────────────────── Config ─────────────────────────────
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
@@ -118,7 +121,7 @@ function looksLikeLua(rawSrc) {
   const src = (rawSrc || "").trim();
   if (!src) return { ok: false, reason: "Empty source" };
 
-  // CAMBIO 2: Verificar que contenga print, local o load en cualquier parte
+  // AHORA BUSCA EN CUALQUIER SITIO
   const hasKeywords = src.includes("print") || src.includes("local") || src.includes("load");
   if (!hasKeywords) return { ok: false, reason: "Code must contain 'print', 'local' or 'load'" };
 
@@ -278,7 +281,6 @@ async function handleObfuscate(interaction) {
 
   let obfuscated;
   try {
-    // Corregido para que use la clase exportada
     const Obf = (unveilX.default || unveilX);
     obfuscated = new Obf().obfuscate(source);
   } catch (err) {
