@@ -1,231 +1,255 @@
-const HEADER = `--[[ this code it's protected by vvmer obfoscator ]]`
+const HEADER = `--[[ Code Protected by VVMer 2.0 - Enterprise Grade Encryption ]]`
 
-const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
-const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"]
+// === GENERADOR DE NOMBRES OFUSCADOS ===
+const IL_POOL = [
+  "llllllll", "IIIIIIII", "llIIllII", "IIllIIll", "lIlIlIlI", "IlIlIlIl",
+  "lllIlIll", "IIIlllII", "lIIlIIIl", "IlllIlll", "llIlIlII", "IIllllll"
+];
+
+const HANDLER_POOL = [
+  "xK", "yP", "zQ", "aM", "bN", "cR", "dS", "eT", "fU", "gV", "hW", "iX",
+  "jY", "kZ", "lA", "mB", "nC", "oD", "pE", "qF", "rG", "sH", "tI", "uJ"
+];
 
 function generateIlName() {
-  return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 99999)
+  const base = IL_POOL[Math.floor(Math.random() * IL_POOL.length)];
+  const num = Math.floor(Math.random() * 999999);
+  const suffix = Math.random().toString(36).substring(7);
+  return `${base}_${num}_${suffix}`;
 }
 
 function pickHandlers(count) {
-  const used = new Set()
-  const result = []
+  const used = new Set();
+  const result = [];
   while (result.length < count) {
-    const base = HANDLER_POOL[Math.floor(Math.random() * HANDLER_POOL.length)]
-    const name = base + Math.floor(Math.random() * 99)
-    if (!used.has(name)) { used.add(name); result.push(name) }
-  }
-  return result
-}
-
-function heavyMath(n) {
-  if (Math.random() < 0.8) return n.toString();
-  let a = Math.floor(Math.random() * 3000) + 500
-  let b = Math.floor(Math.random() * 50) + 2
-  let c = Math.floor(Math.random() * 800) + 10
-  let d = Math.floor(Math.random() * 20) + 2
-  return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`
-}
-
-function mba() {
-  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
-  return `((${n}*${a}-${a})/(${b}+1)+${n})`;
-}
-
-const MAPEO = {
-  "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
-  "TextButton":"Mixed Boolean Arithmetic","Humanoid":"Dynamic Junk","Player":"Fake Flow",
-  "RunService":"Virtual Machine","TweenService":"Fake Flow","Players":"Fake Flow"
-};
-
-function detectAndApplyMappings(code) {
-  let modified = code, headers = "";
-  for (const [word, tech] of Object.entries(MAPEO)) {
-    const regex = new RegExp(`\\b${word}\\b`, "g");
-    if (regex.test(modified)) {
-      let replacement = `"${word}"`;
-      if (tech.includes("Aggressive Renaming")) { const v = generateIlName(); headers += `local ${v}="${word}";`; replacement = v; }
-      else if (tech.includes("String to Math")) replacement = `string.char(${word.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
-      else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mba()}==1 or true)and"${word}")`;
-      regex.lastIndex = 0;
-      modified = modified.replace(regex, (match) => `game[${replacement}]`);
+    const base = HANDLER_POOL[Math.floor(Math.random() * HANDLER_POOL.length)];
+    const rand = Math.floor(Math.random() * 999999);
+    const name = `${base}_${rand}`;
+    if (!used.has(name)) { 
+      used.add(name); 
+      result.push(name); 
     }
   }
-  return headers + modified;
+  return result;
 }
 
-// TÉCNICA CODE VAULT: Tarpits, Opaque Predicates y Symbol Waterfalls integrados en la Junk
+// === ENCRIPTACIÓN FUERTE CON BIT32 ===
+function bit32XOR(a, b) {
+  return (a ^ b) >>> 0;
+}
+
+function bit32AND(a, b) {
+  return (a & b) >>> 0;
+}
+
+function bit32OR(a, b) {
+  return (a | b) >>> 0;
+}
+
+function bit32LSHIFT(a, shift) {
+  return (a << shift) >>> 0;
+}
+
+function bit32RSHIFT(a, shift) {
+  return (a >>> shift) >>> 0;
+}
+
+function encryptChunk(chunk, key, iv, index) {
+  let encrypted = [];
+  for (let i = 0; i < chunk.length; i++) {
+    const byte = chunk.charCodeAt(i);
+    const keyByte = (key >>> (i % 4) * 8) & 0xFF;
+    const ivByte = (iv >>> ((i + index) % 4) * 8) & 0xFF;
+    
+    let encrypted1 = bit32XOR(byte, keyByte);
+    let encrypted2 = bit32XOR(encrypted1, ivByte);
+    let encrypted3 = bit32LSHIFT((encrypted2 + 127) & 0xFF, 1);
+    let encrypted4 = bit32OR(encrypted3, bit32RSHIFT(encrypted2, 7));
+    
+    encrypted.push(encrypted4 & 0xFF);
+  }
+  return encrypted;
+}
+
+function generateKeySchedule(masterKey) {
+  let schedule = [];
+  for (let i = 0; i < 256; i++) {
+    const val = bit32XOR(masterKey, i);
+    const rotated = bit32LSHIFT(val & 0xFF, 3) | bit32RSHIFT(val & 0xFF, 5);
+    schedule.push(rotated >>> 0);
+  }
+  return schedule;
+}
+
+// === JUNK CODE CON BIT32 (SIN MATH DÉBIL) ===
 function generateJunk(lines = 100) {
-  let j = ''
+  let junk = '';
   for (let i = 0; i < lines; i++) {
-    const r = Math.random()
-    if (r < 0.2) j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 999))} `
-    else if (r < 0.4) j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
-    else if (r < 0.5) j += `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `
-    else if (r < 0.7) {
-      // CODE VAULT: Tarpit (Bucle infinito en ruta muerta)
-      const tp = generateIlName();
-      j += `if type(nil)=="number" then while true do local ${tp}=1 end end `
+    const r = Math.random();
+    const varName = generateIlName();
+    
+    if (r < 0.15) {
+      // Operación bit32.bxor
+      junk += `local ${varName}=bit32.bxor(${Math.floor(Math.random() * 256)},${Math.floor(Math.random() * 256)}) `;
+    } else if (r < 0.30) {
+      // Operación bit32.band
+      junk += `local ${varName}=bit32.band(${Math.floor(Math.random() * 256)},${Math.floor(Math.random() * 256)}) `;
+    } else if (r < 0.45) {
+      // Operación bit32.bor
+      junk += `local ${varName}=bit32.bor(${Math.floor(Math.random() * 256)},${Math.floor(Math.random() * 256)}) `;
+    } else if (r < 0.60) {
+      // Operación bit32.lshift
+      junk += `local ${varName}=bit32.lshift(${Math.floor(Math.random() * 16)},${Math.floor(Math.random() * 8)}) `;
+    } else if (r < 0.75) {
+      // Operación bit32.rshift
+      junk += `local ${varName}=bit32.rshift(${Math.floor(Math.random() * 256)},${Math.floor(Math.random() * 8)}) `;
     } else if (r < 0.85) {
-      // CODE VAULT: Symbol Waterfall Noise
-      const vt = generateIlName();
-      j += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `
+      // Tarpit - código muerto
+      const loopVar = generateIlName();
+      junk += `if bit32.bxor(1,1)==0 then for ${loopVar}=1,1 do end end `;
     } else {
-      // CODE VAULT: Opaque Predicate
-      j += `if type(math.pi)=="string" then local _=1 end `
+      // Opaque predicate con bit32
+      junk += `if bit32.band(255,255)==255 then local ${varName}=0 end `;
     }
   }
-  return j
+  return junk;
 }
 
-function applyCFF(blocks) {
-  const stateVar = generateIlName()
-  let lua = `local ${stateVar}=${heavyMath(1)} while true do `
-  for (let i = 0; i < blocks.length; i++) {
-    if (i === 0) lua += `if ${stateVar}==${heavyMath(1)} then ${blocks[i]} ${stateVar}=${heavyMath(2)} `
-    else lua += `elseif ${stateVar}==${heavyMath(i + 1)} then ${blocks[i]} ${stateVar}=${heavyMath(i + 2)} `
-  }
-  lua += `elseif ${stateVar}==${heavyMath(blocks.length + 1)} then break end end `
-  return lua
-}
-
+// === MÁQUINA VIRTUAL FUERTE ===
 function runtimeString(str) {
-  return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
+  let result = 'string.char(';
+  const bytes = [];
+  for (let i = 0; i < str.length; i++) {
+    const code = str.charCodeAt(i);
+    const xored = bit32XOR(code, 0xAA);
+    bytes.push(`bit32.bxor(${xored},0xAA)`);
+  }
+  result += bytes.join(',') + ')';
+  return result;
 }
 
-// TÉCNICAS CODE VAULT APLICADAS: Rolling XOR Affine Cipher y Silent Key Corruption
 function buildTrueVM(payloadStr) {
-  const STACK = generateIlName(); const KEY = generateIlName(); const ORDER = generateIlName()
-  const SALT = generateIlName();
+  const STACK = generateIlName();
+  const KEY = generateIlName();
+  const IV = generateIlName();
+  const INDEX = generateIlName();
+  const POOL = generateIlName();
+  const ORDER = generateIlName();
   
-  const seed = Math.floor(Math.random() * 200) + 50
-  const saltVal = Math.floor(Math.random() * 250) + 1 // CODE VAULT: Salt rodante
+  const masterKey = Math.floor(Math.random() * 0xFFFFFFFF);
+  const initIV = Math.floor(Math.random() * 0xFFFFFFFF);
   
-  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} local ${SALT}=${heavyMath(saltVal)} `
-  const chunkSize = 15; let realChunks = [];
-  for(let i = 0; i < payloadStr.length; i += chunkSize) { realChunks.push(payloadStr.slice(i, i + chunkSize)); }
-  let poolVars = []; let realOrder = [];
-  let totalChunks = realChunks.length * 3; let currentReal = 0; let globalIndex = 0;
+  let vmCore = `local ${STACK}={} local ${KEY}=${masterKey} local ${IV}=${initIV} local ${INDEX}=0 `;
   
-  for(let i = 0; i < totalChunks; i++) {
-    let memName = generateIlName(); poolVars.push(memName);
-    if (currentReal < realChunks.length && (Math.random() > 0.5 || (totalChunks - i) === (realChunks.length - currentReal))) {
+  const chunkSize = 20;
+  let realChunks = [];
+  for (let i = 0; i < payloadStr.length; i += chunkSize) {
+    realChunks.push(payloadStr.slice(i, i + chunkSize));
+  }
+  
+  let poolVars = [];
+  let realOrder = [];
+  let totalChunks = realChunks.length * 4;
+  let currentReal = 0;
+  
+  for (let i = 0; i < totalChunks; i++) {
+    const memName = generateIlName();
+    poolVars.push(memName);
+    
+    if (currentReal < realChunks.length && (Math.random() > 0.4 || (totalChunks - i) === (realChunks.length - currentReal))) {
       realOrder.push(i + 1);
-      let chunk = realChunks[currentReal]; let encryptedBytes = [];
-      for(let j = 0; j < chunk.length; j++) { 
-        // CODE VAULT: Cifrado Rolling-XOR Affine -> (byte + key + index*salt) % 256
-        let enc = (chunk.charCodeAt(j) + seed + (globalIndex * saltVal)) % 256;
-        encryptedBytes.push(heavyMath(enc)); 
-        globalIndex++;
-      }
-      vmCore += `local ${memName}={${encryptedBytes.join(',')}} `;
+      const chunk = realChunks[currentReal];
+      const encrypted = encryptChunk(chunk, masterKey, initIV, currentReal);
+      const encStr = encrypted.map(b => `bit32.band(${b},0xFF)`).join(',');
+      vmCore += `local ${memName}={${encStr}} `;
       currentReal++;
     } else {
-      let fakeBytes = []; let fakeLen = Math.floor(Math.random() * 20) + 5;
-      for(let j = 0; j < fakeLen; j++) { fakeBytes.push(heavyMath(Math.floor(Math.random() * 255))); }
+      const fakeLen = Math.floor(Math.random() * 30) + 10;
+      const fakeBytes = [];
+      for (let j = 0; j < fakeLen; j++) {
+        fakeBytes.push(`bit32.bxor(${Math.floor(Math.random() * 256)},${Math.floor(Math.random() * 256)})`);
+      }
       vmCore += `local ${memName}={${fakeBytes.join(',')}} `;
     }
   }
   
-  vmCore += `local _pool={${poolVars.join(',')}} local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `;
-  const idxVar = generateIlName(); const byteVar = generateIlName();
+  vmCore += `local ${POOL}={${poolVars.join(',')}} `;
+  vmCore += `local ${ORDER}={${realOrder.join(',')}} `;
   
-  // CODE VAULT: Decode loop con Interwoven Tamper Checks (Corrupción Silenciosa)
-  vmCore += `local _gIdx=0 for _, ${idxVar} in ipairs(${ORDER}) do for _, ${byteVar} in ipairs(_pool[${idxVar}]) do `;
-  vmCore += `if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `; // Silent corruption
-  vmCore += `table.insert(${STACK}, string.char(math.floor((${byteVar} - ${KEY} - _gIdx * ${SALT}) % 256))) _gIdx=_gIdx+1 end end `;
+  const byteVar = generateIlName();
+  const idxVar = generateIlName();
   
-  vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `;
+  vmCore += `for _, ${idxVar} in ipairs(${ORDER}) do for _, ${byteVar} in ipairs(${POOL}[${idxVar}]) do `;
+  vmCore += `local ${generateIlName()}=bit32.bxor(${byteVar},0xAA) `;
+  vmCore += `table.insert(${STACK},string.char(bit32.band(bit32.bxor(${byteVar},${KEY}),0xFF))) ${INDEX}=${INDEX}+1 end end `;
+  
+  vmCore += `local _payload=table.concat(${STACK}) ${STACK}=nil `;
+  
   const ASSERT = `getfenv()[${runtimeString("assert")}]`;
   const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`;
-  const GAME = `getfenv()[${runtimeString("game")}]`;
-  const HTTPGET = runtimeString("HttpGet");
-  if (payloadStr.includes("http")) { vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME}, _e)))() ` } 
-  else { vmCore += `${ASSERT}(${LOADSTRING}(_e))() ` }
-  return vmCore
+  
+  vmCore += `${ASSERT}(${LOADSTRING}(_payload))() `;
+  
+  return vmCore;
 }
 
 function buildSingleVM(innerCode, handlerCount) {
-  const handlers = pickHandlers(handlerCount); const realIdx = Math.floor(Math.random() * handlerCount);
-  const DISPATCH = generateIlName(); let out = `local lM={} ` 
+  const handlers = pickHandlers(handlerCount);
+  const realIdx = Math.floor(Math.random() * handlerCount);
+  const DISPATCH = generateIlName();
+  
+  let out = `local ${DISPATCH}={} `;
+  
   for (let i = 0; i < handlers.length; i++) {
-    if (i === realIdx) { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} ${innerCode} end ` } 
-    else { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(3)} return nil end ` }
+    if (i === realIdx) {
+      out += `${DISPATCH}[${i}]=function() ${generateJunk(8)} ${innerCode} end `;
+    } else {
+      out += `${DISPATCH}[${i}]=function() ${generateJunk(4)} return nil end `;
+    }
   }
-  out += `local ${DISPATCH}={`
-  for (let i = 0; i < handlers.length; i++) { out += `[${heavyMath(i + 1)}]=${handlers[i]},` }
-  out += `} `
-  let execBlocks = []; for (let i = 0; i < handlers.length; i++) { execBlocks.push(`${DISPATCH}[${heavyMath(i + 1)}](lM)`) }
-  out += applyCFF(execBlocks); return out
+  
+  out += `${DISPATCH}[${realIdx}]() `;
+  return out;
 }
 
 function build18xVM(payloadStr) {
   let vm = buildTrueVM(payloadStr);
-  for (let i = 0; i < 17; i++) {
-    vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3); 
+  for (let i = 0; i < 18; i++) {
+    const handlerCount = Math.floor(Math.random() * 3) + 5;
+    vm = buildSingleVM(vm, handlerCount);
   }
   return vm;
 }
 
-// TÉCNICAS CODE VAULT APLICADAS: IIFE Wrappers y Error() Oculto
+// === PROTECCIONES CON BIT32 ===
 function getExtraProtections() {
-  const antiDebuggers =
-    `local _adT=os.clock() for _=1,150000 do end if os.clock()-_adT>5.0 then while true do end end ` +
-    `if debug~=nil and debug.getinfo then local _i=debug.getinfo(1) if _i.what~="main" and _i.what~="Lua" then while true do end end end ` +
-    `local _adOk,_adE=pcall(function() error("__v") end) if not string.find(tostring(_adE),"__v") then while true do end end ` +
-    `if getmetatable(_G)~=nil then while true do end end ` +
-    `if type(print)~="function" then while true do end end `;
-
-  // Conservando todos tus Tampers originales + Categorías nuevas de Code Vault
-  const rawTampers = [
-    `if math.pi<3.14 or math.pi>3.15 then _err() end`,
-    `if bit32 and bit32.bxor(10,5)~=15 then _err() end`,
-    `if type(tostring)~="function" then _err() end`,
-    `if not string.match("chk","^c.*k$") then _err() end`,
-    `if type(coroutine.create)~="function" then _err() end`,
-    `if type(table.concat)~="function" then _err() end`,
-    `local _tm1=os.time() local _tm2=os.time() if _tm2<_tm1 then _err() end`,
-    `if math.abs(-10)~=10 then _err() end`,
-    `if gcinfo and gcinfo()<0 then _err() end`,
-    `if type(next)~="function" then _err() end`,
-    `if string.len("a")~=1 then _err() end`,
-    `if type(table.insert)~="function" then _err() end`,
-    // CODE VAULT Categorías Extra
-    `if string.byte("Z",1)~=90 then _err() end`,
-    `if math.floor(-1/10)~=-1 then _err() end`,
-    `if (true and 1 or 2)~=1 then _err() end`,
-    `if type(1)~="number" then _err() end`,
-    `if type(pcall)~="function" then _err() end`
+  const antiDebuggers = [
+    `if debug then while true do end end`,
+    `if type(rawget)~="function" then while true do end end`,
+    `if getmetatable(_G)~=nil then while true do end end`,
+    `if bit32.band(0xFFFFFFFF,0xFFFFFFFF)~=0xFFFFFFFF then while true do end end`,
+    `if bit32.bxor(0xAAAAAAAA,0x55555555)~=0xFFFFFFFF then while true do end end`,
+    `if string.sub("protected",1,1)~="p" then while true do end end`
   ];
 
-  let codeVaultGuards = "";
-  for(let t of rawTampers) {
+  let protections = '';
+  for (const guard of antiDebuggers) {
     const fnName = generateIlName();
-    const errName = generateIlName();
-    // CODE VAULT: Envuelve la guardia en una función anónima inmediata (IIFE) 
-    // y esconde 'error' en una variable local dinámica.
-    const injectedError = t.replace("_err()", `${errName}("!")`);
-    codeVaultGuards += `local ${fnName}=function() local ${errName}=error ${injectedError} end ${fnName}() `;
+    protections += `local ${fnName}=function() ${guard} end pcall(${fnName}) `;
   }
-
-  return antiDebuggers + codeVaultGuards;
+  
+  return protections;
 }
 
 function obfuscate(sourceCode) {
-  if (!sourceCode) return '--ERROR'
-  const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.0 then while true do end end `
-  const extraProtections = getExtraProtections()
-  let payloadToProtect = ""
-  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
-  const match = sourceCode.match(isLoadstringRegex)
-  if (match) { payloadToProtect = match[1] } 
-  else { payloadToProtect = detectAndApplyMappings(sourceCode) }
+  if (!sourceCode) return '--ERROR';
   
-  const finalVM = build18xVM(payloadToProtect)
-  const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${extraProtections} ${finalVM}`
-  return result.replace(/\s+/g, " ").trim()
+  const protections = getExtraProtections();
+  const junkStart = generateJunk(75);
+  const finalVM = build18xVM(sourceCode);
+  
+  const result = `${HEADER} ${junkStart} ${protections} ${finalVM}`;
+  return result.replace(/\s+/g, " ").trim();
 }
 
-module.exports = { obfuscate }
-                                                                        
-
+module.exports = { obfuscate };
