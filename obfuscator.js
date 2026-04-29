@@ -18,15 +18,10 @@ function pickHandlers(count) {
   return result
 }
 
-// +20% Math Code: Ecuaciones más fuertes (multiplicación y división) y mayor frecuencia
 function heavyMath(n) {
-  // Bajamos la probabilidad de ignorar el math del 85% al 65%. 
-  // Esto significa un ~20% más de matemáticas inyectadas en el código final.
   if (Math.random() < 0.65) return n.toString();
-  
   let a = Math.floor(Math.random() * 50) + 5;
   let b = Math.floor(Math.random() * 10) + 2;
-  // Ecuación más robusta pero 100% segura contra errores de coma flotante en Lua
   return `((((${n}+${a})*${b})/${b})-${a})`;
 }
 
@@ -90,7 +85,75 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
-// NÚCLEO: Ejecución final del payload
+// ----------------------------------------------------------------------
+// NUEVO: Generador de anti‑debugger con límite de 10 segundos
+// ----------------------------------------------------------------------
+function generateTimeBomb() {
+  const startVar = generateIlName()
+  const checkVar = generateIlName()
+  return `local ${startVar}=os.clock() local ${checkVar}=function() if os.clock()-${startVar}>10 then while true do end end end ${checkVar}() `
+}
+
+// ----------------------------------------------------------------------
+// NUEVO: Anti‑tamper anidado (tamper dentro de tamper)
+// ----------------------------------------------------------------------
+function generateNestedTamper(depth = 3) {
+  if (depth <= 0) return ""
+  const fnName = generateIlName()
+  const inner = generateNestedTamper(depth - 1)
+  const check = `
+    if math.pi<3.14 or math.pi>3.15 then error("tampered") end
+    if type(tostring)~="function" then error("tampered") end
+    ${inner}
+  `
+  return `local ${fnName}=function() ${check} end ${fnName}() `
+}
+
+// ----------------------------------------------------------------------
+// NUEVO: Anti‑tamper integrado en anti‑debugger (tamper dentro de debugger)
+// ----------------------------------------------------------------------
+function generateDebuggerWithTamper() {
+  const dbg = generateTimeBomb()
+  const tamper = generateNestedTamper(2)
+  return `${dbg} ${tamper}`
+}
+
+// ----------------------------------------------------------------------
+// Modificación de getExtraProtections para incluir las nuevas defensas
+// ----------------------------------------------------------------------
+function getExtraProtections() {
+  const antiSandbox = 
+    `if typeof(task)~="table" then while true do end end ` + 
+    `if not game or not workspace then while true do end end ` + 
+    `local _adT=os.clock() for _=1,50000 do end if os.clock()-_adT>2.0 then while true do end end ` + 
+    `if type(print)~="function" then while true do end end `;
+
+  const rawTampers = [
+    `if math.pi<3.14 or math.pi>3.15 then _err() end`,
+    `if type(tostring)~="function" then _err() end`,
+    `if type(table.concat)~="function" then _err() end`,
+    `if string.len("a")~=1 then _err() end`
+  ];
+
+  let codeVaultGuards = "";
+  for(let t of rawTampers) {
+    const fnName = generateIlName();
+    const errName = generateIlName();
+    const injectedError = t.replace("_err()", `${errName}("!")`);
+    codeVaultGuards += `local ${fnName}=function() local ${errName}=error ${injectedError} end ${fnName}() `;
+  }
+
+  // Añadimos el anti‑debugger con tamper anidado
+  const timeBombTamper = generateDebuggerWithTamper();
+  // Añadimos tamper anidado puro
+  const pureNestedTamper = generateNestedTamper(4);
+
+  return antiSandbox + codeVaultGuards + timeBombTamper + pureNestedTamper;
+}
+
+// ----------------------------------------------------------------------
+// buildTrueVM – sin cambios
+// ----------------------------------------------------------------------
 function buildTrueVM(payloadStr) {
   const STACK = generateIlName(); const KEY = generateIlName(); const ORDER = generateIlName()
   const SALT = generateIlName();
@@ -141,13 +204,20 @@ function buildTrueVM(payloadStr) {
   return vmCore
 }
 
-// CAPAS DE VM: Función genérica para construir envoltorios de protección
+// ----------------------------------------------------------------------
+// buildSingleVM – ahora inyecta tamper dentro de cada handler falso
+// ----------------------------------------------------------------------
 function buildSingleVM(innerCode, handlerCount) {
   const handlers = pickHandlers(handlerCount); const realIdx = Math.floor(Math.random() * handlerCount);
   const DISPATCH = generateIlName(); let out = `local lM={} ` 
   for (let i = 0; i < handlers.length; i++) {
-    if (i === realIdx) { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(3)} ${innerCode} end ` } 
-    else { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(2)} return nil end ` }
+    // Inyectamos un pequeño tamper + junk en todos los handlers
+    const extraTamper = generateNestedTamper(2);
+    if (i === realIdx) { 
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(3)} ${extraTamper} ${innerCode} end ` 
+    } else { 
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(2)} ${extraTamper} return nil end ` 
+    }
   }
   out += `local ${DISPATCH}={`
   for (let i = 0; i < handlers.length; i++) { out += `[${heavyMath(i + 1)}]=${handlers[i]},` }
@@ -156,51 +226,26 @@ function buildSingleVM(innerCode, handlerCount) {
   out += applyCFF(execBlocks); return out
 }
 
-// ARQUITECTURA JERÁRQUICA: Mother -> Intermediate -> Small VMs
+// ----------------------------------------------------------------------
+// Arquitectura jerárquica (Mother -> Intermediate -> Small VMs)
+// ----------------------------------------------------------------------
 function buildMotherVM(payloadStr) {
-  // 1. Capa más profunda: El núcleo que ejecuta todo
   let coreVM = buildTrueVM(payloadStr);
   
-  // 2. Small VMs: 3 pequeñas VMs que se encargan de reconstruir el núcleo
   let smallVMs = coreVM;
   for (let i = 0; i < 3; i++) {
     smallVMs = buildSingleVM(smallVMs, 2); 
   }
 
-  // 3. Intermediate VM: Una VM un poco más compleja que reconstruye las pequeñas
   let intermediateVM = buildSingleVM(smallVMs, 3);
-
-  // 4. Mother VM: La VM principal que envuelve todo e inicializa el proceso
   let motherVM = buildSingleVM(intermediateVM, 4);
 
   return motherVM;
 }
 
-function getExtraProtections() {
-  const antiSandbox = 
-    `if typeof(task)~="table" then while true do end end ` + 
-    `if not game or not workspace then while true do end end ` + 
-    `local _adT=os.clock() for _=1,50000 do end if os.clock()-_adT>2.0 then while true do end end ` + 
-    `if type(print)~="function" then while true do end end `;
-
-  const rawTampers = [
-    `if math.pi<3.14 or math.pi>3.15 then _err() end`,
-    `if type(tostring)~="function" then _err() end`,
-    `if type(table.concat)~="function" then _err() end`,
-    `if string.len("a")~=1 then _err() end`
-  ];
-
-  let codeVaultGuards = "";
-  for(let t of rawTampers) {
-    const fnName = generateIlName();
-    const errName = generateIlName();
-    const injectedError = t.replace("_err()", `${errName}("!")`);
-    codeVaultGuards += `local ${fnName}=function() local ${errName}=error ${injectedError} end ${fnName}() `;
-  }
-
-  return antiSandbox + codeVaultGuards;
-}
-
+// ----------------------------------------------------------------------
+// obfuscate – resultado final con todas las protecciones
+// ----------------------------------------------------------------------
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
   const extraProtections = getExtraProtections()
@@ -212,7 +257,6 @@ function obfuscate(sourceCode) {
   if (match) { payloadToProtect = match[1] } 
   else { payloadToProtect = detectAndApplyMappings(sourceCode) }
   
-  // Llamamos a la arquitectura jerárquica
   const finalVM = buildMotherVM(payloadToProtect)
   
   const result = `${HEADER}\n${generateJunk(10)} ${extraProtections} ${finalVM}`
