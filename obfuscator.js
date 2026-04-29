@@ -1,4 +1,4 @@
-const HEADER = `--[[ this code is protected by vvmer obfuscator | Mother VM Architecture ]]`
+const HEADER = `--[[ protected by vvmer obfuscator | Architecture: Mother VM -> Intermediate VM -> Small VMs ]]`
 
 const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"]
@@ -18,19 +18,22 @@ function pickHandlers(count) {
   return result
 }
 
-// 30% Menos Math Code y Ecuaciones más cortas para reducir tamaño
+// +20% Math Code: Ecuaciones más fuertes (multiplicación y división) y mayor frecuencia
 function heavyMath(n) {
-  // 85% de las veces devuelve el número normal para ahorrar espacio y CPU (100% fiabilidad)
-  if (Math.random() < 0.85) return n.toString();
-  let a = Math.floor(Math.random() * 20) + 2;
-  let b = Math.floor(Math.random() * 5) + 1;
-  // Matemáticas más simples: menos peso, mismo nivel de confusión para el scrapper
-  return `((${n}+${a})-${a}+(${b}-${b}))`;
+  // Bajamos la probabilidad de ignorar el math del 85% al 65%. 
+  // Esto significa un ~20% más de matemáticas inyectadas en el código final.
+  if (Math.random() < 0.65) return n.toString();
+  
+  let a = Math.floor(Math.random() * 50) + 5;
+  let b = Math.floor(Math.random() * 10) + 2;
+  // Ecuación más robusta pero 100% segura contra errores de coma flotante en Lua
+  return `((((${n}+${a})*${b})/${b})-${a})`;
 }
 
 function mba() {
-  let a = Math.floor(Math.random() * 10) + 5;
-  return `((1*${a}-${a})+1)`;
+  let a = Math.floor(Math.random() * 20) + 5;
+  let b = Math.floor(Math.random() * 5) + 1;
+  return `(((1*${a})+${b})-(${a}+${b})+1)`;
 }
 
 const MAPEO = {
@@ -55,15 +58,14 @@ function detectAndApplyMappings(code) {
   return headers + modified;
 }
 
-// Generador de Junk reducido para mantener el tamaño en ~30KB
 function generateJunk(lines = 15) {
   let j = ''
   for (let i = 0; i < lines; i++) {
     const r = Math.random()
-    if (r < 0.2) j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 99))} `
-    else if (r < 0.4) j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random()*100)+50)}) `
-    else if (r < 0.6) j += `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `
-    else if (r < 0.8) {
+    if (r < 0.25) j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 999))} `
+    else if (r < 0.45) j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random()*100)+50)}) `
+    else if (r < 0.65) j += `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `
+    else if (r < 0.85) {
       const tp = generateIlName();
       j += `if type(nil)=="number" then while true do local ${tp}=1 end end `
     } else {
@@ -88,7 +90,7 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
-// CORE VM - Reconstruye el código real de forma segura (100% fiable)
+// NÚCLEO: Ejecución final del payload
 function buildTrueVM(payloadStr) {
   const STACK = generateIlName(); const KEY = generateIlName(); const ORDER = generateIlName()
   const SALT = generateIlName();
@@ -101,7 +103,6 @@ function buildTrueVM(payloadStr) {
   for(let i = 0; i < payloadStr.length; i += chunkSize) { realChunks.push(payloadStr.slice(i, i + chunkSize)); }
   let poolVars = []; let realOrder = [];
   
-  // Menos chunks falsos para ahorrar KB, pero suficientes para ofuscar
   let totalChunks = realChunks.length * 2; let currentReal = 0; let globalIndex = 0;
   
   for(let i = 0; i < totalChunks; i++) {
@@ -140,7 +141,7 @@ function buildTrueVM(payloadStr) {
   return vmCore
 }
 
-// CHILD VM - VMs pequeñas controladas por la Mother VM
+// CAPAS DE VM: Función genérica para construir envoltorios de protección
 function buildSingleVM(innerCode, handlerCount) {
   const handlers = pickHandlers(handlerCount); const realIdx = Math.floor(Math.random() * handlerCount);
   const DISPATCH = generateIlName(); let out = `local lM={} ` 
@@ -155,22 +156,31 @@ function buildSingleVM(innerCode, handlerCount) {
   out += applyCFF(execBlocks); return out
 }
 
-// MOTHER VM - Orquesta todo en ~30KB (4 capas altamente densas en lugar de 18 vacías)
+// ARQUITECTURA JERÁRQUICA: Mother -> Intermediate -> Small VMs
 function buildMotherVM(payloadStr) {
-  let vm = buildTrueVM(payloadStr);
-  // Reconstruye capas pequeñas hacia afuera
-  for (let i = 0; i < 4; i++) {
-    vm = buildSingleVM(vm, 2); // Solo 2 handlers por capa para mantener el tamaño bajo
+  // 1. Capa más profunda: El núcleo que ejecuta todo
+  let coreVM = buildTrueVM(payloadStr);
+  
+  // 2. Small VMs: 3 pequeñas VMs que se encargan de reconstruir el núcleo
+  let smallVMs = coreVM;
+  for (let i = 0; i < 3; i++) {
+    smallVMs = buildSingleVM(smallVMs, 2); 
   }
-  return vm;
+
+  // 3. Intermediate VM: Una VM un poco más compleja que reconstruye las pequeñas
+  let intermediateVM = buildSingleVM(smallVMs, 3);
+
+  // 4. Mother VM: La VM principal que envuelve todo e inicializa el proceso
+  let motherVM = buildSingleVM(intermediateVM, 4);
+
+  return motherVM;
 }
 
-// PROTECCIONES EXTREMAS: Anti-Sandbox y Anti-Robo enfocadas en Roblox
 function getExtraProtections() {
   const antiSandbox = 
-    `if typeof(task)~="table" then while true do end end ` + // Solo Roblox tiene 'task' nativo
-    `if not game or not workspace then while true do end end ` + // Escapa de Node.js o sandboxes web puras
-    `local _adT=os.clock() for _=1,50000 do end if os.clock()-_adT>2.0 then while true do end end ` + // Anti-Timeout/Debuggers
+    `if typeof(task)~="table" then while true do end end ` + 
+    `if not game or not workspace then while true do end end ` + 
+    `local _adT=os.clock() for _=1,50000 do end if os.clock()-_adT>2.0 then while true do end end ` + 
     `if type(print)~="function" then while true do end end `;
 
   const rawTampers = [
@@ -202,10 +212,9 @@ function obfuscate(sourceCode) {
   if (match) { payloadToProtect = match[1] } 
   else { payloadToProtect = detectAndApplyMappings(sourceCode) }
   
-  // Construimos la Mother VM con el payload
+  // Llamamos a la arquitectura jerárquica
   const finalVM = buildMotherVM(payloadToProtect)
   
-  // Ensamblaje final
   const result = `${HEADER}\n${generateJunk(10)} ${extraProtections} ${finalVM}`
   return result.replace(/\s+/g, " ").trim()
 }
