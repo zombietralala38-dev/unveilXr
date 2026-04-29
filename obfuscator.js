@@ -1,16 +1,5 @@
-/*
- * VVMER ULTIMATE – 10 VM LAYERS, 50KB OUTPUT, FULLY VALID LUA
- * Corrections:
- *  - heavyMath: balanced wrapping, impossible to break syntax
- *  - CFF & VM core: semicolons between statements on same line
- *  - All generators audited for Lua syntax validity
- */
+const HEADER = `--[[ VVMER ULTIMATE | Valid Syntax ]]`
 
-const HEADER = `--[[ VVMER ULTIMATE | 10-Layer VM | Valid Lua ]]`
-
-// ------------------------------------------------------------------------
-// UTILITIES (safe names, no $, fully balanced math)
-// ------------------------------------------------------------------------
 const usedNames = new Set()
 function genName(prefix = '') {
   let name
@@ -26,299 +15,166 @@ function genName(prefix = '') {
 }
 
 function genHandler() {
-  const pre = ['X','Y','Z','W','K','Q','R','T','P','S','M','N','A','B','C','D']
+  const pre = ['X','Y','Z','W','K','Q','R','T','P','S','M','N']
   return pre[Math.floor(Math.random() * pre.length)] + Math.floor(Math.random() * 999)
 }
 
-// Balanced heavy math: always returns a syntactically valid Lua expression
 function heavyMath(n) {
-  // 40% of the time leave it plain to reduce overhead
   if (Math.random() < 0.4) return n.toString()
-
   const a = Math.floor(Math.random() * 61) + 9
   const b = Math.floor(Math.random() * 17) + 5
-  const c = Math.floor(Math.random() * 11) + 2
-  const d = Math.floor(Math.random() * 7) + 1
-
-  // Build a simple, safe inner expression
-  const inner = `${n} * ${b} / ${b} + ${c} - ${c} + ${a} - ${a}`
-  // Wrap it in 2–6 layers of parentheses (always balanced)
-  const layers = 2 + Math.floor(Math.random() * 5)
-  let result = inner
-  for (let i = 0; i < layers; i++) result = `(${result})`
-  return result
-}
-
-// MBA: always returns 1, balanced parentheses
-function mba() {
-  const a = Math.floor(Math.random() * 31) + 11
-  const b = Math.floor(Math.random() * 9) + 2
-  return `((((${a}*${b})+${a}-${a}*${b})/${a}))`
+  return `(${n}*${b}/${b}+${a}-${a})`   // expresión sencilla, siempre correcta
 }
 
 function runtimeString(s) {
   return `string.char(${s.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`
 }
 
-// ------------------------------------------------------------------------
-// JUNK CODE GENERATOR (always valid)
-// ------------------------------------------------------------------------
+// Junk: siempre termina con ';' y sin bloques abiertos
 function generateJunk(lines) {
   let junk = ''
   for (let i = 0; i < lines; i++) {
     const r = Math.random()
     if (r < 0.35) {
-      const v = genName('j_')
-      junk += `local ${v} = ${heavyMath(Math.floor(Math.random()*9999))} * ${heavyMath(Math.floor(Math.random()*100)+1)}; `
+      junk += `local ${genName('j')}=${heavyMath(1)};`
     } else if (r < 0.6) {
-      junk += `if ${mba()} == ${heavyMath(1)} then local ${genName('op_')}=${heavyMath(42)} end; `
+      junk += `if ${heavyMath(1)}==${heavyMath(1)} then local ${genName('x')}=1 end;`
     } else if (r < 0.8) {
-      junk += `if type(math.abs) == 'function' then for _ = 1, ${heavyMath(1)} do local ${genName('lp_')}=math.sqrt(${heavyMath(144)}) end end; `
+      junk += `for _=1,${heavyMath(1)} do local ${genName('l')}=1 end;`
     } else {
-      junk += `local function ${genName('dummy_')}() return ${heavyMath(777)} end; `
+      junk += `local function ${genName('f')}() return ${heavyMath(42)} end;`
     }
   }
   return junk
 }
 
-// ------------------------------------------------------------------------
-// ANTI-DEBUG & ANTI-UNPACK
-// ------------------------------------------------------------------------
-function timeBombs() {
-  const t0 = genName('tstart')
-  return `local ${t0} = os.clock();
-    local ${genName('t1')}=function() if os.clock()-${t0}>1.2 then while true do end end end;
-    local ${genName('t2')}=function() if os.clock()-${t0}>3.5 then error() end end;
-    local ${genName('t3')}=function() if os.clock()-${t0}>7 then while true do end end end;
-    ${genName('t1')}(); ${genName('t2')}(); ${genName('t3')}();
-    if debug and debug.getinfo then while true do end end;
-    if rawget and type(rawget)=='function' then if rawget(getfenv(),'debug') then while true do end end end;`
-}
-
-function integrityLock() {
-  const hashVar = genName('ih')
-  const checker = genName('check')
-  return `local ${hashVar}=${heavyMath(0xCAFEBABE)};
-    local ${checker}=function()
-      if ${hashVar}~=${heavyMath(0xCAFEBABE)} then while true do end end
-      if math.pi<3.14 or math.pi>3.15 then error('tampered') end
-      if type(table.concat)~='function' then error() end
-    end;
-    ${checker}();`
-}
-
-function recursiveTamper(depth = 5) {
-  if (depth <= 0) return ''
-  const fn = genName('tamper_')
-  const inner = recursiveTamper(depth - 1)
-  return `local ${fn}=function()
-      if string.byte('A')~=65 then error() end
-      if type(tostring)~='function' then error() end
-      ${inner}
-    end;
-    ${fn}();`
-}
-
-// ------------------------------------------------------------------------
-// CONTROL FLOW FLATTENING (CFF) – now with semicolons
-// ------------------------------------------------------------------------
-function applyCFF(blocks) {
-  const state = genName('state')
-  const next = genName('next')
-  let lua = `local ${state}=${heavyMath(1)}; local ${next}=${heavyMath(1)}; while true do `
-  for (let i = 0; i < blocks.length; i++) {
-    lua += `if ${state}==${heavyMath(i+1)} then ${blocks[i]}; ${next}=${heavyMath(i+2)}; `
-  }
-  lua += `elseif ${state}==${heavyMath(blocks.length+1)} then break end; ${state}=${next}; end; `
-  return lua
-}
-
-// ------------------------------------------------------------------------
-// VM CORE – the innermost VM, executes the real payload
-// ------------------------------------------------------------------------
+// VM Core (la más interna) – ejecutará el payload
 function buildAtomicVM(payloadStr) {
   const stack = genName('stk')
   const key = genName('key')
-  const salt = genName('slt')
   const ord = genName('ord')
-  const seed = Math.floor(Math.random() * 251) + 5
-  const saltVal = Math.floor(Math.random() * 131) + 7
+  const seed = Math.floor(Math.random() * 200) + 50
 
-  let code = `local ${stack},${key},${salt},_gIdx={},${heavyMath(seed)},${heavyMath(saltVal)},0; `
-
+  let code = `local ${stack},${key},_gIdx={},${heavyMath(seed)},0;`
   const chunkSize = 10
-  const realChunks = []
+  const chunks = []
   for (let i = 0; i < payloadStr.length; i += chunkSize)
-    realChunks.push(payloadStr.slice(i, i + chunkSize))
+    chunks.push(payloadStr.slice(i, i + chunkSize))
 
-  const totalChunks = realChunks.length * 4
-  let currentReal = 0, globalIndex = 0
-  const poolVars = [], realOrder = []
+  const total = chunks.length * 3
+  const pool = []
+  const order = []
+  let ci = 0, gi = 0
 
-  for (let i = 0; i < totalChunks; i++) {
-    const chunkVar = genName('chk')
-    poolVars.push(chunkVar)
-    const isReal = currentReal < realChunks.length &&
-      (Math.random() > 0.3 || (totalChunks - i) <= (realChunks.length - currentReal))
-    if (isReal) {
-      realOrder.push(i + 1)
-      const chunk = realChunks[currentReal]
-      const encBytes = []
-      for (let j = 0; j < chunk.length; j++) {
-        const enc = (chunk.charCodeAt(j) ^ (seed + saltVal * globalIndex)) % 256
-        encBytes.push(heavyMath(enc))
-        globalIndex++
+  for (let i = 0; i < total; i++) {
+    const cv = genName('chk')
+    pool.push(cv)
+    if (ci < chunks.length && (Math.random() > 0.3 || (total - i) <= (chunks.length - ci))) {
+      order.push(i + 1)
+      const bytes = []
+      for (let j = 0; j < chunks[ci].length; j++) {
+        const enc = (chunks[ci].charCodeAt(j) + seed + gi) % 256
+        bytes.push(heavyMath(enc))
+        gi++
       }
-      code += `local ${chunkVar}={${encBytes.join(',')}}; `
-      currentReal++
+      code += `local ${cv}={${bytes.join(',')}};`
+      ci++
     } else {
-      const fakeLen = 8 + Math.floor(Math.random() * 12)
-      const fake = []
-      for (let k = 0; k < fakeLen; k++) fake.push(heavyMath(Math.floor(Math.random() * 255)))
-      code += `local ${chunkVar}={${fake.join(',')}}; `
+      const fake = Array.from({length: 5 + Math.floor(Math.random()*8)}, () => heavyMath(Math.floor(Math.random()*255)))
+      code += `local ${cv}={${fake.join(',')}};`
     }
   }
 
-  code += `local _pool={${poolVars.join(',')}}; local ${ord}={${realOrder.map(n => heavyMath(n)).join(',')}}; `
-  const idxVar = genName('i'), byteVar = genName('b')
-  code += `for _,${idxVar} in ipairs(${ord}) do for _,${byteVar} in ipairs(_pool[${idxVar}]) do `
-  code += `table.insert(${stack}, string.char((${byteVar}~(${key}+${salt}*_gIdx))%256)); _gIdx=_gIdx+1; end end; `
-  code += `local _e=table.concat(${stack}); ${stack}=nil; `
+  code += `local _pool={${pool.join(',')}}; local ${ord}={${order.map(n=>heavyMath(n)).join(',')}};`
+  const iv = genName('i'), bv = genName('b')
+  code += `for _,${iv} in ipairs(${ord}) do for _,${bv} in ipairs(_pool[${iv}]) do table.insert(${stack},string.char((${bv}-${key}-_gIdx)%256)); _gIdx=_gIdx+1 end end;`
+  code += `local _e=table.concat(${stack}); ${stack}=nil;`
 
-  const loadstring = `getfenv()[${runtimeString('loadstring')}]`
+  const load = `getfenv()[${runtimeString('loadstring')}]`
   const assert = `getfenv()[${runtimeString('assert')}]`
   const game = `getfenv()[${runtimeString('game')}]`
-  const httpget = runtimeString('HttpGet')
+  const http = runtimeString('HttpGet')
 
-  if (payloadStr.includes('http')) {
-    code += `${assert}(${loadstring}(${game}[${httpget}](${game}, _e)))(); `
-  } else {
-    code += `${assert}(${loadstring}(_e))(); `
-  }
+  if (payloadStr.includes('http'))
+    code += `${assert}(${load}(${game}[${http}](${game},_e)))();`
+  else
+    code += `${assert}(${load}(_e))();`
   return code
 }
 
-// ------------------------------------------------------------------------
-// VM LAYER – wraps innerCode in a fake virtual machine
-// ------------------------------------------------------------------------
-function buildVMLayer(innerCode, handlerCount) {
+// Capa de VM – envuelve innerCode en handlers falsos
+function buildVMLayer(innerCode, handlersNum) {
   const handlers = []
-  for (let i = 0; i < handlerCount; i++) handlers.push(genHandler())
-  const realIdx = Math.floor(Math.random() * handlerCount)
-  const dispatch = genName('dsp')
+  for (let i = 0; i < handlersNum; i++) handlers.push(genHandler())
+  const real = Math.floor(Math.random() * handlersNum)
+  const dsp = genName('dsp')
 
-  let out = `local lM={}; `
+  let out = `local lM={};`
   for (let i = 0; i < handlers.length; i++) {
-    const junk = generateJunk(3)
-    const tamper = recursiveTamper(3)
-    if (i === realIdx) {
-      out += `local ${handlers[i]}=function(lM) ${junk} ${tamper} ${innerCode} end; `
+    const junk = generateJunk(2)
+    if (i === real) {
+      out += `local ${handlers[i]}=function(lM) ${junk} ${innerCode} end;`
     } else {
-      out += `local ${handlers[i]}=function(lM) ${junk} ${tamper} return nil end; `
+      out += `local ${handlers[i]}=function(lM) ${junk} return nil end;`
     }
   }
+  out += `local ${dsp}={`
+  for (let i = 0; i < handlers.length; i++) out += `[${heavyMath(i+1)}]=${handlers[i]},`
+  out += `};`
 
-  out += `local ${dispatch}={`
-  for (let i = 0; i < handlers.length; i++)
-    out += `[${heavyMath(i+1)}]=${handlers[i]},`
-  out += `}; `
-
-  const blocks = handlers.map((_, i) => `${dispatch}[${heavyMath(i+1)}](lM)`)
-  out += applyCFF(blocks)
+  // Ejecución: sencilla secuencia if/elseif (sin bucle, sin riesgo)
+  out += `local ${genName('st')}=${heavyMath(1)};`
+  for (let i = 0; i < handlers.length; i++) {
+    if (i === 0) out += `if ${genName('st')}==${heavyMath(1)} then ${dsp}[${heavyMath(i+1)}](lM);`
+    else out += `elseif ${genName('st')}==${heavyMath(i+1)} then ${dsp}[${heavyMath(i+1)}](lM);`
+  }
+  out += `end;`  // cierra la cadena if/elseif
   return out
 }
 
-// ------------------------------------------------------------------------
-// TOWER – 10 VM layers
-// ------------------------------------------------------------------------
+// Torre de 10 capas
 function buildVMTower(payloadStr) {
   let core = buildAtomicVM(payloadStr)
-  core = buildVMLayer(core, 3)   // 1
-  core = buildVMLayer(core, 4)   // 2
-  core = buildVMLayer(core, 5)   // 3
-  core = buildVMLayer(core, 4)   // 4
-  core = buildVMLayer(core, 6)   // 5
-  core = buildVMLayer(core, 5)   // 6
-  core = buildVMLayer(core, 7)   // 7
-  core = buildVMLayer(core, 5)   // 8
-  core = buildVMLayer(core, 8)   // 9
-  core = buildVMLayer(core, 6)   // 10 – Mother
+  core = buildVMLayer(core, 3)
+  core = buildVMLayer(core, 4)
+  core = buildVMLayer(core, 5)
+  core = buildVMLayer(core, 4)
+  core = buildVMLayer(core, 6)
+  core = buildVMLayer(core, 5)
+  core = buildVMLayer(core, 7)
+  core = buildVMLayer(core, 5)
+  core = buildVMLayer(core, 8)
+  core = buildVMLayer(core, 6)
   return core
 }
 
-// ------------------------------------------------------------------------
-// BULK JUNK – fills up to 50 KB
-// ------------------------------------------------------------------------
-function generateBulkJunk(targetSizeBytes) {
-  let bulk = ''
-  const linesNeeded = Math.floor(targetSizeBytes / 45) + 100
-  for (let i = 0; i < linesNeeded; i++) {
-    bulk += generateJunk(1) + ' '
-  }
-  return bulk
-}
-
-// ------------------------------------------------------------------------
-// SERVICE MAPPING (extra obfuscation)
-// ------------------------------------------------------------------------
+// Mapeo de servicios
 function mapServices(code) {
-  const map = {
-    game: 'Game',
-    workspace: 'World',
-    Players: 'Users',
-    RunService: 'Scheduler',
-    TweenService: 'Animator',
-    ReplicatedStorage: 'Cloud',
-    Lighting: 'Lights',
-    SoundService: 'Audio',
-  }
-  let modified = code, header = ''
-  for (const [original] of Object.entries(map)) {
-    const regex = new RegExp(`\\b${original}\\b`, 'g')
-    if (regex.test(modified)) {
-      const v = genName('svc_')
-      header += `local ${v}=${runtimeString(original)}; `
-      modified = modified.replace(regex, `game[${v}]`)
+  const map = {game:'Game',workspace:'World',Players:'Users',RunService:'Scheduler'}
+  let h = ''
+  for (const [k] of Object.entries(map)) {
+    const regex = new RegExp(`\\b${k}\\b`,'g')
+    if (regex.test(code)) {
+      const v = genName('svc')
+      h += `local ${v}=${runtimeString(k)};`
+      code = code.replace(regex, `game[${v}]`)
     }
   }
-  return header + modified
+  return h + code
 }
 
-// ------------------------------------------------------------------------
-// MAIN OBFUSCATION FUNCTION
-// ------------------------------------------------------------------------
+// Función principal
 function obfuscate(sourceCode) {
   if (!sourceCode) return '-- ERROR'
-
   let payload = sourceCode
-  const httpMatch = sourceCode.match(
-    /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
-  )
-  if (httpMatch) {
-    payload = httpMatch[1]
-  } else {
-    payload = mapServices(sourceCode)
-  }
+  const httpMatch = sourceCode.match(/loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i)
+  if (httpMatch) payload = httpMatch[1]
+  else payload = mapServices(sourceCode)
 
   const tower = buildVMTower(payload)
 
-  const protections = `
-    if typeof(task)~='table' then while true do end end;
-    if not game or not workspace then while true do end end;
-    ${timeBombs()}
-    ${integrityLock()}
-    ${recursiveTamper(5)}`
-
-  const baseCode = `${HEADER}\n${protections}\n${tower}`
-  const currentSize = Buffer.byteLength(baseCode, 'utf8')
-  const targetSize = 51200
-  let additionalJunk = ''
-  if (currentSize < targetSize) {
-    const needed = targetSize - currentSize
-    additionalJunk = generateBulkJunk(needed)
-  }
-
-  const finalCode = `${HEADER}\n${additionalJunk}\n${protections}\n${tower}`
+  // Envolvemos TODO en una función autoejecutable para sellar cualquier 'end'
+  const finalCode = `${HEADER}\n(function() ${tower} end)();`
   return finalCode.replace(/\s+/g, ' ').trim()
 }
 
