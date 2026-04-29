@@ -1,4 +1,8 @@
-const HEADER = `--[[ protected by vvmer obfuscator | Architecture: Mother VM -> Intermediate VM -> Small VMs ]]`
+const HEADER = `--[[ 
+    protected by vvmer obfuscator 
+    Architecture: Custom Bytecode Interpreter (Luraph Style) 
+    Control Flow: Aggressive Flattening (Moonveil Style)
+]]`
 
 const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"]
@@ -18,15 +22,10 @@ function pickHandlers(count) {
   return result
 }
 
-// +20% Math Code: Ecuaciones más fuertes (multiplicación y división) y mayor frecuencia
 function heavyMath(n) {
-  // Bajamos la probabilidad de ignorar el math del 85% al 65%. 
-  // Esto significa un ~20% más de matemáticas inyectadas en el código final.
   if (Math.random() < 0.65) return n.toString();
-  
   let a = Math.floor(Math.random() * 50) + 5;
   let b = Math.floor(Math.random() * 10) + 2;
-  // Ecuación más robusta pero 100% segura contra errores de coma flotante en Lua
   return `((((${n}+${a})*${b})/${b})-${a})`;
 }
 
@@ -75,6 +74,7 @@ function generateJunk(lines = 15) {
   return j
 }
 
+// Moonveil Style: Control Flow Flattening
 function applyCFF(blocks) {
   const stateVar = generateIlName()
   let lua = `local ${stateVar}=${heavyMath(1)} while true do `
@@ -90,88 +90,88 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
-// NÚCLEO: Ejecución final del payload
+/** * LURAPH STYLE: Custom Bytecode + Opcode Mutation
+ * Implementa una arquitectura donde el código se transforma en instrucciones numéricas.
+ */
 function buildTrueVM(payloadStr) {
-  const STACK = generateIlName(); const KEY = generateIlName(); const ORDER = generateIlName()
-  const SALT = generateIlName();
-  
-  const seed = Math.floor(Math.random() * 200) + 50
-  const saltVal = Math.floor(Math.random() * 100) + 1 
-  
-  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} local ${SALT}=${heavyMath(saltVal)} `
-  const chunkSize = 20; let realChunks = [];
-  for(let i = 0; i < payloadStr.length; i += chunkSize) { realChunks.push(payloadStr.slice(i, i + chunkSize)); }
-  let poolVars = []; let realOrder = [];
-  
-  let totalChunks = realChunks.length * 2; let currentReal = 0; let globalIndex = 0;
-  
-  for(let i = 0; i < totalChunks; i++) {
-    let memName = generateIlName(); poolVars.push(memName);
-    if (currentReal < realChunks.length && (Math.random() > 0.4 || (totalChunks - i) === (realChunks.length - currentReal))) {
-      realOrder.push(i + 1);
-      let chunk = realChunks[currentReal]; let encryptedBytes = [];
-      for(let j = 0; j < chunk.length; j++) { 
-        let enc = (chunk.charCodeAt(j) + seed + (globalIndex * saltVal)) % 256;
-        encryptedBytes.push(heavyMath(enc)); 
-        globalIndex++;
-      }
-      vmCore += `local ${memName}={${encryptedBytes.join(',')}} `;
-      currentReal++;
-    } else {
-      let fakeBytes = []; let fakeLen = Math.floor(Math.random() * 10) + 5;
-      for(let j = 0; j < fakeLen; j++) { fakeBytes.push(heavyMath(Math.floor(Math.random() * 255))); }
-      vmCore += `local ${memName}={${fakeBytes.join(',')}} `;
-    }
+  const STACK = generateIlName(); 
+  const INSTR_PTR = generateIlName(); 
+  const BYTECODE = generateIlName();
+  const KEY = Math.floor(Math.random() * 200) + 50;
+
+  // Mutación de Opcodes: Cada vez que generas el script, los números de las acciones cambian.
+  let opcodes = {
+    PUSH_STR: Math.floor(Math.random() * 100) + 1,
+    EXECUTE: Math.floor(Math.random() * 100) + 101,
+    JUNK: Math.floor(Math.random() * 100) + 201
+  };
+
+  // Convertimos el payload en una "Instrucción de Bytecode" cifrada
+  let encodedPayload = "";
+  for(let i = 0; i < payloadStr.length; i++) {
+    encodedPayload += String.fromCharCode((payloadStr.charCodeAt(i) + KEY) % 256);
   }
-  
-  vmCore += `local _pool={${poolVars.join(',')}} local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `;
-  const idxVar = generateIlName(); const byteVar = generateIlName();
-  
-  vmCore += `local _gIdx=0 for _, ${idxVar} in ipairs(${ORDER}) do for _, ${byteVar} in ipairs(_pool[${idxVar}]) do `;
-  vmCore += `table.insert(${STACK}, string.char(math.floor((${byteVar} - ${KEY} - (_gIdx * ${SALT})) % 256))) _gIdx=_gIdx+1 end end `;
-  
-  vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `;
-  const ASSERT = `getfenv()[${runtimeString("assert")}]`;
-  const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`;
-  const GAME = `getfenv()[${runtimeString("game")}]`;
-  const HTTPGET = runtimeString("HttpGet");
-  
-  if (payloadStr.includes("http")) { vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME}, _e)))() ` } 
-  else { vmCore += `${ASSERT}(${LOADSTRING}(_e))() ` }
-  return vmCore
+
+  // Generamos el array de Bytecode (Instrucción -> Valor)
+  let bytecodeData = `{${opcodes.JUNK}, ${opcodes.PUSH_STR}, "${encodedPayload}", ${opcodes.EXECUTE}}`;
+
+  let vmCore = `
+    local ${BYTECODE} = ${bytecodeData}
+    local ${STACK} = ""
+    local ${INSTR_PTR} = 1
+    
+    while ${INSTR_PTR} <= #(${BYTECODE}) do
+        local inst = ${BYTECODE}[${INSTR_PTR}]
+        
+        if inst == ${heavyMath(opcodes.PUSH_STR)} then
+            ${INSTR_PTR} = ${INSTR_PTR} + 1
+            local data = ${BYTECODE}[${INSTR_PTR}]
+            for i = 1, #data do
+                ${STACK} = ${STACK} .. string.char((string.byte(data, i) - ${heavyMath(KEY)}) % 256)
+            end
+        elseif inst == ${heavyMath(opcodes.EXECUTE)} then
+            local _f = getfenv()[${runtimeString("loadstring")}](${STACK})
+            getfenv()[${runtimeString("assert")}](_f, "VM Error")()
+        elseif inst == ${heavyMath(opcodes.JUNK)} then
+            ${generateJunk(2)}
+        end
+        ${INSTR_PTR} = ${INSTR_PTR} + 1
+    end
+  `;
+
+  return vmCore;
 }
 
-// CAPAS DE VM: Función genérica para construir envoltorios de protección
 function buildSingleVM(innerCode, handlerCount) {
-  const handlers = pickHandlers(handlerCount); const realIdx = Math.floor(Math.random() * handlerCount);
-  const DISPATCH = generateIlName(); let out = `local lM={} ` 
+  const handlers = pickHandlers(handlerCount); 
+  const realIdx = Math.floor(Math.random() * handlerCount);
+  const DISPATCH = generateIlName(); 
+  let out = `local lM={} ` 
   for (let i = 0; i < handlers.length; i++) {
-    if (i === realIdx) { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(3)} ${innerCode} end ` } 
-    else { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(2)} return nil end ` }
+    if (i === realIdx) { 
+        out += `local ${handlers[i]}=function(lM) ${innerCode} end ` 
+    } else { 
+        out += `local ${handlers[i]}=function(lM) ${generateJunk(2)} return nil end ` 
+    }
   }
   out += `local ${DISPATCH}={`
   for (let i = 0; i < handlers.length; i++) { out += `[${heavyMath(i + 1)}]=${handlers[i]},` }
   out += `} `
-  let execBlocks = []; for (let i = 0; i < handlers.length; i++) { execBlocks.push(`${DISPATCH}[${heavyMath(i + 1)}](lM)`) }
-  out += applyCFF(execBlocks); return out
+  let execBlocks = []; 
+  for (let i = 0; i < handlers.length; i++) { execBlocks.push(`${DISPATCH}[${heavyMath(i + 1)}](lM)`) }
+  out += applyCFF(execBlocks); 
+  return out
 }
 
-// ARQUITECTURA JERÁRQUICA: Mother -> Intermediate -> Small VMs
 function buildMotherVM(payloadStr) {
-  // 1. Capa más profunda: El núcleo que ejecuta todo
+  // Capa 1: Bytecode Intérprete (Luraph Style)
   let coreVM = buildTrueVM(payloadStr);
   
-  // 2. Small VMs: 3 pequeñas VMs que se encargan de reconstruir el núcleo
-  let smallVMs = coreVM;
-  for (let i = 0; i < 3; i++) {
-    smallVMs = buildSingleVM(smallVMs, 2); 
-  }
+  // Capa 2: Moonveil Style (Control Flow Flattening envolviendo al intérprete)
+  let intermediateVM = buildSingleVM(coreVM, 3);
 
-  // 3. Intermediate VM: Una VM un poco más compleja que reconstruye las pequeñas
-  let intermediateVM = buildSingleVM(smallVMs, 3);
-
-  // 4. Mother VM: La VM principal que envuelve todo e inicializa el proceso
-  let motherVM = buildSingleVM(intermediateVM, 4);
+  // Capa 3: Mother VM (Capa final de entrada)
+  let motherVM = buildSingleVM(intermediateVM, 2);
 
   return motherVM;
 }
@@ -180,14 +180,12 @@ function getExtraProtections() {
   const antiSandbox = 
     `if typeof(task)~="table" then while true do end end ` + 
     `if not game or not workspace then while true do end end ` + 
-    `local _adT=os.clock() for _=1,50000 do end if os.clock()-_adT>2.0 then while true do end end ` + 
-    `if type(print)~="function" then while true do end end `;
+    `local _adT=os.clock() for _=1,50000 do end if os.clock()-_adT>2.0 then while true do end end `;
 
   const rawTampers = [
     `if math.pi<3.14 or math.pi>3.15 then _err() end`,
     `if type(tostring)~="function" then _err() end`,
-    `if type(table.concat)~="function" then _err() end`,
-    `if string.len("a")~=1 then _err() end`
+    `if type(table.concat)~="function" then _err() end`
   ];
 
   let codeVaultGuards = "";
@@ -209,14 +207,16 @@ function obfuscate(sourceCode) {
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(isLoadstringRegex)
   
-  if (match) { payloadToProtect = match[1] } 
-  else { payloadToProtect = detectAndApplyMappings(sourceCode) }
+  if (match) { 
+    payloadToProtect = match[1] 
+  } else { 
+    payloadToProtect = detectAndApplyMappings(sourceCode) 
+  }
   
-  // Llamamos a la arquitectura jerárquica
   const finalVM = buildMotherVM(payloadToProtect)
   
-  const result = `${HEADER}\n${generateJunk(10)} ${extraProtections} ${finalVM}`
-  return result.replace(/\s+/g, " ").trim()
+  // Retornamos el código limpio de saltos de línea innecesarios pero sin minificar agresivamente
+  return `${HEADER}\n${generateJunk(5)}\n${extraProtections}\n${finalVM}`
 }
 
 module.exports = { obfuscate }
