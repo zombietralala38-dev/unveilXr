@@ -1,3 +1,10 @@
+// ─── Polyfill: File global para Node.js < 20 ───────────────────────────────
+if (typeof File === "undefined") {
+  const { File: NodeFile } = require("buffer");
+  global.File = NodeFile;
+}
+// ────────────────────────────────────────────────────────────────────────────
+
 const fs = require("node:fs");
 const path = require("node:path");
 const {
@@ -15,7 +22,7 @@ const {
 const { fetch } = require("undici");
 const { obfuscate } = require("./obfuscator.js");
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Config â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────── Config ─────────────────────
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 const SUPPORT_USER_ID = process.env.SUPPORT_USER_ID || "1474472773467242599";
@@ -33,7 +40,7 @@ const COLOR_BLUE = 0x3b82f6;
 const COLOR_RED = 0xef4444;
 const COLOR_GREEN = 0x22c55e;
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Storage â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────── Storage ────────────────────
 const DATA_DIR = path.resolve(__dirname, "data");
 const INDEX_FILE = path.join(DATA_DIR, "index.json");
 const STATS_FILE = path.join(DATA_DIR, "stats.json");
@@ -88,7 +95,7 @@ function bumpStat(key) {
   saveJson(STATS_FILE, stats);
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Lua check â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────── Lua check ──────────────────
 const LUA_MARKERS = [
   /\blocal\b/,
   /\bprint\b/,
@@ -107,7 +114,7 @@ function looksLikeLua(rawSrc) {
   return { ok: false, reason: "No Lua keywords detected" };
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Support sessions â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────── Support sessions ───────────
 const supportSessions = new Map();
 
 function startSession(session) {
@@ -130,7 +137,7 @@ function clearSession(userId) {
   supportSessions.delete(userId);
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Helpers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────── Helpers ────────────────────
 function formatDuration(ms) {
   if (ms < 1000) return `${ms} ms`;
   return `${(ms / 1000).toFixed(2)} s`;
@@ -151,7 +158,7 @@ function buildErrorEmbed(title, description, extraFields = []) {
     .setFooter({ text: FOOTER_MESSAGE });
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Slash command defs â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────── Slash command defs ─────────
 const commandDefs = [
   new SlashCommandBuilder()
     .setName("obf")
@@ -181,11 +188,11 @@ const commandDefs = [
     .toJSON(),
   new SlashCommandBuilder()
     .setName("support")
-    .setDescription("Open a support ticket â€” the bot will DM you to collect details")
+    .setDescription("Open a support ticket — the bot will DM you to collect details")
     .toJSON(),
 ];
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Discord client â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────── Discord client ──────────────
 const client = new Client({
   intents: [
     GatewayIntentBits.Guilds,
@@ -196,7 +203,7 @@ const client = new Client({
   partials: [Partials.Channel, Partials.Message],
 });
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Handlers â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────── Handlers ───────────────────
 async function handleObfuscate(interaction) {
   const startedAt = Date.now();
   await interaction.deferReply();
@@ -548,7 +555,7 @@ async function handleSupportDm(message) {
   }
 }
 
-// â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€ Wiring â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
+// ─────────────────────────────────────────────── Wiring ─────────────────────
 client.once(Events.ClientReady, (c) => {
   console.log(`Logged in as ${c.user.tag}`);
 });
