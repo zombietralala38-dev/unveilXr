@@ -1,11 +1,7 @@
 /*
- * VVMER OBFUSCATOR – SINTAXIS LIMPIA, 20% MATH CODE
- * + 5 técnicas del ofuscador original:
- *   1. Renombrado agresivo de servicios clave
- *   2. Junk con tarpits, opaque predicates y symbol waterfalls
- *   3. VM de 18 capas con cifrado XOR-Affine rodante
- *   4. Control Flow Flattening en los dispatchers
- *   5. Anti-tamper con IIFE y error ofuscado
+ * VVMER OBFUSCATOR – SINTAXIS LIMPIA, 20% MATH CODE + 5 TÉCNICAS
+ * Corregido: todos los bloques están en scopes separados (do...end)
+ * para evitar el límite de 200 locales por scope en Luau/Roblox.
  */
 
 const HEADER = `--[[ VVMER | Clean Syntax | 20% Math + 5 Techs ]]`
@@ -24,7 +20,6 @@ function genName(prefix = '') {
   return name
 }
 
-// Matemática balanceada (evalúa exactamente a n)
 function heavyMath(n) {
   if (Math.random() < 0.1) return n.toString()
   const a = Math.floor(Math.random() * 61) + 9
@@ -33,14 +28,10 @@ function heavyMath(n) {
   return `(((${n}+${a}-${a})*${b}/${b})+${c}-${c})`
 }
 
-// Cifrado de strings con heavyMath
 function runtimeString(s) {
   return `string.char(${s.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`
 }
 
-// ------------------------------------------------------------
-// TÉCNICA 1: Renombrado agresivo de palabras clave de Roblox
-// ------------------------------------------------------------
 const MAPEO = {
   "ScreenGui": "Aggressive Renaming",
   "Frame": "String to Math",
@@ -60,7 +51,7 @@ function detectAndApplyMappings(code) {
     if (regex.test(modified)) {
       let replacement = `"${word}"`
       if (tech.includes("Aggressive Renaming")) {
-        const v = genName()               // nombre aleatorio real
+        const v = genName()
         headers += `local ${v}="${word}" `
         replacement = v
       } else if (tech.includes("String to Math")) {
@@ -75,95 +66,36 @@ function detectAndApplyMappings(code) {
   return headers + modified
 }
 
-// ------------------------------------------------------------
-// TÉCNICA 2: Junk avanzado con tarpits y opaque predicates
-// ------------------------------------------------------------
-function generateAdvancedJunk(lines) {
-  let j = ''
-  for (let i = 0; i < lines; i++) {
-    const r = Math.random()
-    if (r < 0.15) {
-      // Junk matemático puro
-      const v = genName('m_')
-      j += `local ${v}=${heavyMath(Math.floor(Math.random()*9999))}*${heavyMath(Math.floor(Math.random()*100)+1)} `
-    } else if (r < 0.35) {
-      // Opaque predicate simple
-      j += `if ${heavyMath(1)}==${heavyMath(1)} then local ${genName('op_')}=${heavyMath(42)} end `
-    } else if (r < 0.55) {
-      // Tarpit (bucle infinito en ruta muerta)
-      const tp = genName('tp_')
-      j += `if type(nil)=="number" then while true do local ${tp}=1 end end `
-    } else if (r < 0.75) {
-      // Symbol waterfall noise
-      const vt = genName('vt_')
-      j += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `
-    } else if (r < 0.9) {
-      // Opaque predicate con tipo imposible
-      j += `if type(math.pi)=="string" then local _=1 end `
-    } else {
-      // Bucle matemático muerto
-      j += `for _=1,${heavyMath(1)} do local ${genName('lp_')}=math.sqrt(${heavyMath(144)}) end `
-    }
-  }
-  return j
-}
-
-// ------------------------------------------------------------
-// TÉCNICA 3: VM de 18 capas (TrueVM + 17 SingleVM layers)
-// ------------------------------------------------------------
-function buildTrueVM(payloadStr) {
-  const STACK = genName()
-  const chunkSize = 15
-  let realChunks = []
-  for (let i = 0; i < payloadStr.length; i += chunkSize)
-    realChunks.push(payloadStr.slice(i, i + chunkSize))
-
-  const seed = Math.floor(Math.random() * 200) + 50
-  const saltVal = Math.floor(Math.random() * 250) + 1
-  const KEY = genName()
-  const SALT = genName()
-
-  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} local ${SALT}=${heavyMath(saltVal)} `
-
-  let realOrder = []
-  let globalIndex = 0
-  const totalChunks = realChunks.length * 3
-  let currentReal = 0
-
-  for (let i = 0; i < totalChunks; i++) {
-    const memName = genName()
-    if (currentReal < realChunks.length && (Math.random() > 0.5 || (totalChunks - i) === (realChunks.length - currentReal))) {
-      realOrder.push(i + 1)
-      const chunk = realChunks[currentReal]
-      let encBytes = []
-      for (let j = 0; j < chunk.length; j++) {
-        const enc = (chunk.charCodeAt(j) + seed + (globalIndex * saltVal)) % 256
-        encBytes.push(heavyMath(enc))
-        globalIndex++
+function generateAdvancedJunk(totalLines) {
+  const chunkSize = 40
+  let junk = ''
+  for (let i = 0; i < totalLines; i += chunkSize) {
+    const lines = Math.min(chunkSize, totalLines - i)
+    let block = ''
+    for (let j = 0; j < lines; j++) {
+      const r = Math.random()
+      if (r < 0.15) {
+        const v = genName('m_')
+        block += `local ${v}=${heavyMath(Math.floor(Math.random()*9999))}*${heavyMath(Math.floor(Math.random()*100)+1)} `
+      } else if (r < 0.35) {
+        block += `if ${heavyMath(1)}==${heavyMath(1)} then local ${genName('op_')}=${heavyMath(42)} end `
+      } else if (r < 0.55) {
+        const tp = genName('tp_')
+        block += `if type(nil)=="number" then while true do local ${tp}=1 end end `
+      } else if (r < 0.75) {
+        const vt = genName('vt_')
+        block += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `
+      } else if (r < 0.9) {
+        block += `if type(math.pi)=="string" then local _=1 end `
+      } else {
+        block += `for _=1,${heavyMath(1)} do local ${genName('lp_')}=math.sqrt(${heavyMath(144)}) end `
       }
-      vmCore += `local ${memName}={${encBytes.join(',')}} `
-      currentReal++
-    } else {
-      let fakeBytes = []
-      let fakeLen = Math.floor(Math.random() * 20) + 5
-      for (let j = 0; j < fakeLen; j++) fakeBytes.push(heavyMath(Math.floor(Math.random() * 255)))
-      vmCore += `local ${memName}={${fakeBytes.join(',')}} `
     }
+    junk += `do ${block} end `
   }
-
-  const poolVars = []  // se recolectan los nombres de arriba, pero eso no es necesario, los guardaremos en orden
-  // Para simplificar, generamos el array de nombres después (no óptimo pero funcional)
-  // Alternativa: guardar en un array durante el bucle. Voy a volver a recoger los nombres reales.
-  // Mejor reescribo la parte anterior para guardar los memNames en orden.
-  // Pero para no alargar, asumiré que son las variables generadas en el mismo orden (puedo construirlas igual).
-  // Haré un pequeño truco: volver a generar la misma secuencia (misma semilla matemática? No). 
-  // Para mantener sencillez, reharemos la generación de memNames exactamente igual para construir _pool.
-  // (En producción se puede hacer con una lista, pero aquí es solo demostración)
-  // Usaré un enfoque determinista: antes de generar, guardar nombres.
-  // Voy a reordenar el código para que sea más limpio.
-  return vmCore  // placeholder, la reescribiré
+  return junk
 }
-// Reimplementación completa y funcional de buildTrueVM con lista de nombres
+
 function buildTrueVMFixed(payloadStr) {
   const STACK = genName()
   const chunkSize = 15
@@ -269,7 +201,7 @@ function buildSingleVM(innerCode, handlerCount) {
   const execBlocks = handlers.map((_, i) => `${DISPATCH}[${heavyMath(i+1)}](lM)`)
   const stateVar = genName('sv_')
   out += applyCFF(execBlocks, stateVar)
-  return out
+  return `do ${out} end`  // scope separado para no exceder 200 locales
 }
 
 function build18xVM(payloadStr) {
@@ -279,16 +211,13 @@ function build18xVM(payloadStr) {
   return vm
 }
 
-// ------------------------------------------------------------
-// TÉCNICA 5: Anti-tamper con IIFE y error ofuscado
-// ------------------------------------------------------------
 function getExtraProtections() {
-  const antiDebug =
+  const antiDebuggers =
     `local _adT=os.clock() for _=1,150000 do end if os.clock()-_adT>5.0 then while true do end end ` +
     `if debug~=nil and debug.getinfo then local _i=debug.getinfo(1) if _i.what~="main" and _i.what~="Lua" then while true do end end end ` +
     `local _adOk,_adE=pcall(function() error("__v") end) if not string.find(tostring(_adE),"__v") then while true do end end ` +
     `if getmetatable(_G)~=nil then while true do end end ` +
-    `if type(print)~="function" then while true do end end `
+    `if type(print)~="function" then while true do end end`
 
   const tamperChecks = [
     `if math.pi<3.14 or math.pi>3.15 then _err() end`,
@@ -315,15 +244,12 @@ function getExtraProtections() {
     const fn = genName('guard_')
     const errVar = genName('err_')
     const inject = t.replace("_err()", `${errVar}("!")`)
-    guards += `local ${fn}=function() local ${errVar}=error ${inject} end ${fn}() `
+    guards += `do local ${fn}=function() local ${errVar}=error ${inject} end ${fn}() end `
   }
 
-  return antiDebug + guards
+  return `do ${antiDebuggers} end ` + guards
 }
 
-// ------------------------------------------------------------
-// OBFUSCATE principal
-// ------------------------------------------------------------
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
 
@@ -336,9 +262,9 @@ function obfuscate(sourceCode) {
     payloadToProtect = detectAndApplyMappings(sourceCode)
   }
 
-  const envScan = `if delta and delta.getinfo then while true do end end ` +
+  const envScan = `do if delta and delta.getinfo then while true do end end ` +
                   `if getgc then while true do end end ` +
-                  `local ${genName('t0')}=os.clock() local function ${genName('chk')}() if os.clock()-${genName('t0')}>3 then while true do end end end ${genName('chk')}()`
+                  `local ${genName('t0')}=os.clock() local function ${genName('chk')}() if os.clock()-${genName('t0')}>3 then while true do end end end ${genName('chk')}() end`
   const extra = getExtraProtections()
   const junk = generateAdvancedJunk(150)
   const vm = build18xVM(payloadToProtect)
