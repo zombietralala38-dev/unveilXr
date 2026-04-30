@@ -4,7 +4,7 @@
  * Las matemáticas son parte del cifrado de strings.
  */
 
-const HEADER = `--[[ VVMER | Clean Syntax | 20% Math ]]`
+const HEADER = `--[[ this code itw protected by unveilX | https://discord.gg/DU35Mhyhq ]]`
 
 const usedNames = new Set()
 function genName(prefix = '') {
