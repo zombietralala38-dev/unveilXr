@@ -27,6 +27,79 @@ function runtimeString(s) {
   return `string.char(${s.split('').map(c => lightMath(c.charCodeAt(0))).join(',')})`
 }
 
+// COMPRESIÓN REAL DE STRINGS (LZ77-style)
+function compressString(s) {
+  const bytes = []
+  for (let i = 0; i < s.length; i++) {
+    bytes.push(s.charCodeAt(i))
+  }
+  
+  const compressed = []
+  let i = 0
+  while (i < bytes.length) {
+    let bestLen = 0
+    let bestDist = 0
+    
+    // Buscar match anterior (mini LZ77)
+    for (let j = Math.max(0, i - 32); j < i; j++) {
+      let len = 0
+      while (len < Math.min(255, bytes.length - i) && bytes[i + len] === bytes[j + len]) {
+        len++
+      }
+      if (len > bestLen && len >= 3) {
+        bestLen = len
+        bestDist = i - j
+      }
+    }
+    
+    if (bestLen >= 3) {
+      compressed.push(255) // Flag de compresión
+      compressed.push(bestDist)
+      compressed.push(bestLen)
+      i += bestLen
+    } else {
+      if (bytes[i] === 255) {
+        compressed.push(255)
+        compressed.push(0)
+      }
+      compressed.push(bytes[i])
+      i++
+    }
+  }
+  
+  return compressed
+}
+
+function buildCompressionDecompressor() {
+  return `
+local function _decompress(compressed)
+  local result = {}
+  local i = 1
+  while i <= #compressed do
+    if compressed[i] == 255 then
+      i = i + 1
+      if compressed[i] == 0 then
+        table.insert(result, string.char(255))
+        i = i + 1
+      else
+        local dist = compressed[i]
+        local len = compressed[i + 1]
+        local pos = #result - dist + 1
+        for j = 1, len do
+          table.insert(result, result[pos + j - 1])
+        end
+        i = i + 2
+      end
+    else
+      table.insert(result, string.char(compressed[i]))
+      i = i + 1
+    end
+  end
+  return table.concat(result)
+end
+  `
+}
+
 function generateStrongJunk(lines) {
   let block = ''
   for (let i = 0; i < lines; i++) {
@@ -41,61 +114,58 @@ function generateStrongJunk(lines) {
   return block
 }
 
-function junkBlocks(totalLines, blockSize = 30) {
-  let full = ''
-  for (let i = 0; i < totalLines; i += blockSize) {
-    const lines = Math.min(blockSize, totalLines - i)
-    full += `do ${generateStrongJunk(lines)} end `
-  }
-  return full
-}
-
-// ═══════════════════ VM ANIDADA (genérica) ═════════════════════════
-function buildGenericVMLayer(innerCode, layers = 4) {
-  const handlerCount = Math.floor(Math.random() * 3) + 3
+// ═══════════════════ VM ANIDADA CUSTOM (30 CAPAS) ═════════════════════════
+function buildCustomVMLayer(innerCode, depth = 1) {
   const handlers = []
   const usedLocal = new Set()
+  const handlerCount = Math.floor(Math.random() * 3) + 3
+  
   while (handlers.length < handlerCount) {
     const base = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 52)]
     const name = base + Math.floor(Math.random() * 99)
-    if (!usedLocal.has(name)) { usedLocal.add(name); handlers.push(name) }
+    if (!usedLocal.has(name)) { 
+      usedLocal.add(name)
+      handlers.push(name) 
+    }
   }
 
   const realIdx = Math.floor(Math.random() * handlerCount)
-  const DISPATCH = genName('d')
-  let layerCode = `local lM={} `
+  const DISPATCH = genName('d_' + depth)
+  const CODE_VAR = genName('c_' + depth)
+  
+  let layerCode = `local ${DISPATCH}={} `
+  
   for (let i = 0; i < handlers.length; i++) {
-    const junk = generateStrongJunk(3)
-    if (i === realIdx)
-      layerCode += `local ${handlers[i]}=function(${DISPATCH},code) ${junk} ${innerCode} end `
-    else
-      layerCode += `local ${handlers[i]}=function(${DISPATCH},code) ${junk} return nil end `
+    const junk = generateStrongJunk(2)
+    if (i === realIdx) {
+      layerCode += `${DISPATCH}[${lightMath(i+1)}]=function(${CODE_VAR}) ${junk} ${innerCode} end `
+    } else {
+      layerCode += `${DISPATCH}[${lightMath(i+1)}]=function(${CODE_VAR}) ${junk} return nil end `
+    }
   }
-  layerCode += `local ${DISPATCH}={`
-  for (let i = 0; i < handlers.length; i++) layerCode += `[${lightMath(i+1)}]=${handlers[i]},`
-  layerCode += `} `
-
-  const execBlocks = handlers.map((_, i) => `${DISPATCH}[${lightMath(i+1)}](${DISPATCH},code)`)
-  const stateVar = genName('s')
-  layerCode += `local ${stateVar}=${lightMath(1)} while true do `
-  for (let i = 0; i < execBlocks.length; i++) {
-    if (i === 0) layerCode += `if ${stateVar}==${lightMath(1)} then ${execBlocks[i]} ${stateVar}=${lightMath(2)} `
-    else layerCode += `elseif ${stateVar}==${lightMath(i+1)} then ${execBlocks[i]} ${stateVar}=${lightMath(i+2)} `
-  }
-  layerCode += `elseif ${stateVar}==${lightMath(execBlocks.length+1)} then break end end `
+  
+  const execIdx = lightMath(realIdx + 1)
+  layerCode += `local ${genName('s_' + depth)}=${lightMath(1)} `
+  layerCode += `while true do if ${genName('s_' + depth)}==${lightMath(1)} then ${DISPATCH}[${execIdx}](${CODE_VAR}) break end end `
+  
   return `do ${layerCode} end`
 }
 
-function generateVMExecutor() {
-  let inner = `local fn,err=loadstring(code) if fn then fn() else error(err) end`
-  for (let i = 0; i < 5; i++) {
-    inner = buildGenericVMLayer(inner, 4)
+function generateDeepVMExecutor() {
+  let inner = `local fn,err=loadstring(${genName('code')}) if fn then fn() else error(err) end`
+  
+  // 30 CAPAS DE VM ANIDADA
+  for (let i = 0; i < 30; i++) {
+    inner = buildCustomVMLayer(inner, i)
   }
+  
   return inner
 }
 
-// ═══════════════════ ANTI‑TAMPER GENERATOR ═════════════════════════
+// ═══════════════════ ANTI‑TAMPER GIGA BRUTAL ═════════════════════════
 function generateGigaAntiTamper(payloadData, isUrl) {
+  
+  // RC4 ENCRYPTION
   function rc4(key, data) {
     const s = Array.from({ length: 256 }, (_, i) => i)
     let j = 0
@@ -123,14 +193,17 @@ function generateGigaAntiTamper(payloadData, isUrl) {
   const encBytes = rc4(key, toEncrypt)
   const encHex = Array.from(encBytes, c => '\\x' + c.charCodeAt(0).toString(16).padStart(2, '0').toUpperCase()).join('')
 
-  const vmExecutorBody = generateVMExecutor()
+  // COMPRESIÓN
+  const compData = isUrl ? compressString(payloadData) : []
+  const compStr = isUrl ? `{${compData.join(',')}}` : 'nil'
 
-  // Constantes ofuscadas
+  const vmExecutorBody = generateDeepVMExecutor()
+
+  // CONSTANTES RC4 OFUSCADAS
   const Q = rc4("A!_x2$9*", "\x1F\xA4\x3D\xB2\xCC\x77\xE9\x01\x10\xF0\xDA\x0F\x00")
   const R = rc4("B7!hJpQ", "\xAB\xCD\xEF\x01\x23\x45\x67\x89\xAB\xCD\xEF\x01")
   const S = rc4("z99pLm", "\xDE\xAD\xBE\xEF\x00\x11\x22\x33\x44\x55\x66\x77\x88")
 
-  // Template CORREGIDO - Todos los ends balanceados
   const antiTamperTemplate = `
 local _A,_B,_C,_D,_E,_F,_G,_H,_I,_J = getfenv,rawget,pcall,debug,error,math,string,table,bit32,os
 local _K = _A()
@@ -155,6 +228,8 @@ local function _P(key, data)
   end
   return _H.concat(r)
 end
+
+${buildCompressionDecompressor()}
 
 local _Q = _P("A!_x2$9*", "${Q}")
 local _R = _P("B7!hJpQ", "${R}")
@@ -208,31 +283,31 @@ local function _AB(level)
       end
       _K.loadstring = function(...) return loadstring("error('tamper')") end
     elseif level == 2 then
-      _C(function() 
+      _C(function()
         local plr = game:GetService("Players").LocalPlayer
         if plr then plr:Kick("0x" .. _F.format("%08X", _F.random(0, 0xFFFFFFFF))) end
       end)
     elseif level == 3 then
-      spawn(function() 
-        while true do 
-          wait(0.5) 
+      spawn(function()
+        while true do
+          wait(0.5)
           _C(function()
             local kids = workspace:GetChildren()
-            if #kids > 0 then 
+            if #kids > 0 then
               pcall(function() kids[_F.random(#kids)]:Destroy() end)
             end
-          end) 
-        end 
+          end)
+        end
       end)
     elseif level >= 4 then
       spawn(function()
         local plrs = game:GetService("Players")
         plrs.PlayerAdded:Connect(function(p)
-          spawn(function() 
-            while true do 
-              wait(1) 
+          spawn(function()
+            while true do
+              wait(1)
               pcall(function() p:Kick("0x" .. _F.format("%X", _F.random(0, 0xFFFF))) end)
-            end 
+            end
           end)
         end)
       end)
@@ -272,6 +347,7 @@ end
 
 local _AE = _P("IntegrityCheckSalt#1", "\\xDE\\xAD\\xBE\\xEF\\x00\\x11\\x22\\x33\\x44\\x55\\x66\\x77")
 local _AF = 0x5A5A5A5A
+
 local function _AG()
   local h = 0x811C9DC5
   for i = 1, #_AE do
@@ -329,9 +405,15 @@ end
 
 local function _AJ()
   _T()
-  if _AC() then _AB(3) return end
+  if _AC() then
+    _AB(3)
+    return
+  end
   _U()
-  if _AD() then _AB(4) return end
+  if _AD() then
+    _AB(4)
+    return
+  end
   _AG()
   _AH()
   _AI()
@@ -364,7 +446,10 @@ local function _AK()
     _C(function()
       code = game:HttpGet(content)
     end)
-    if not code then _AB(2) return end
+    if not code then
+      _AB(2)
+      return
+    end
   else
     code = content
   end
