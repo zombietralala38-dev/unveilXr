@@ -1,4 +1,4 @@
-const HEADER = `--[[ thsi coee its protected by unveilX | https://discord.gg/DU35Mhyhq]]`
+const HEADER = `--[[ ths code its protected by unveilX | https://discord.gg/DU35Mhyhq]]`
 
 const usedNames = new Set()
 function genName(prefix = '') {
@@ -14,7 +14,6 @@ function genName(prefix = '') {
   return name
 }
 
-// Matemática mínima (sólo para ocultar constantes simples)
 function lightMath(n) {
   if (Math.random() < 0.85) return n.toString()
   const a = Math.floor(Math.random() * 21) + 4
@@ -60,7 +59,6 @@ function detectAndApplyMappings(code) {
   return headers + modified
 }
 
-// Junk muy ligero pero con pcall y anti‑decompiler inline
 function generateStrongJunk(lines) {
   let block = ''
   for (let i = 0; i < lines; i++) {
@@ -82,7 +80,6 @@ function generateStrongJunk(lines) {
   return block
 }
 
-// Función para crear bloques de junk con scope aislado
 function junkBlocks(totalLines, blockSize = 30) {
   let full = ''
   for (let i = 0; i < totalLines; i += blockSize) {
@@ -92,7 +89,6 @@ function junkBlocks(totalLines, blockSize = 30) {
   return full
 }
 
-// VM verdadera con cifrado XOR Affine rodante (payload oculto)
 function buildTrueVM(payloadStr) {
   const STACK = genName()
   const chunkSize = 15
@@ -160,7 +156,6 @@ function buildTrueVM(payloadStr) {
   return vmCore
 }
 
-// CFF aplicado a los dispatchers de las capas VM
 function applyCFF(blocks, stateVar) {
   let lua = `local ${stateVar}=${lightMath(1)} `
   lua += `while true do `
@@ -172,7 +167,6 @@ function applyCFF(blocks, stateVar) {
   return lua
 }
 
-// Capa de VM simple con pcall ofuscado
 function buildSingleVM(innerCode, handlerCount) {
   const handlers = []
   const used = new Set()
@@ -187,7 +181,7 @@ function buildSingleVM(innerCode, handlerCount) {
   const DISPATCH = genName('d')
   let out = `local lM={} `
   for (let i = 0; i < handlers.length; i++) {
-    const fakeJunk = junkBlocks(2, 5) // poco junk por capa
+    const fakeJunk = junkBlocks(2, 5)
     if (i === realIdx)
       out += `local ${handlers[i]}=function(lM) local lM=lM ${fakeJunk} ${innerCode} end `
     else
@@ -203,7 +197,6 @@ function buildSingleVM(innerCode, handlerCount) {
   return `do ${out} end`
 }
 
-// Construye 30 capas de VM (más fuerte)
 function build30xVM(payload) {
   let vm = buildTrueVM(payload)
   for (let i = 0; i < 29; i++)
@@ -211,7 +204,9 @@ function build30xVM(payload) {
   return vm
 }
 
-// Protecciones con pcall para cada anti‑técnica
+// =============================================
+// megaProtections SIN el anti‑debug
+// =============================================
 function megaProtections() {
   const checks = [
     // Anti env logger
@@ -226,8 +221,6 @@ function megaProtections() {
     `pcall(function() if getmetatable(_G)~=nil then while true do end end end)`,
     // Anti deobfuscator (si detecta palabras clave)
     `pcall(function() if loadstring then while true do end end end)`,
-    // Anti debug
-    `pcall(function() if debug and debug.getinfo then while true do end end end)`,
     // Anti dump
     `pcall(function() if getgc then while true do end end end)`,
     // Anti hook
@@ -256,7 +249,7 @@ function obfuscate(sourceCode) {
   }
 
   const protections = megaProtections()
-  const junk = junkBlocks(80, 30)   // menos junk, más ligero
+  const junk = junkBlocks(80, 30)
   const vm = build30xVM(payload)
 
   const final = `${HEADER}
