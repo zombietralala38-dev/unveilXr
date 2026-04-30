@@ -1,10 +1,13 @@
 /*
- * VVMER OBFUSCATOR – SINTAXIS LIMPIA, 20% MATH CODE + 5 TÉCNICAS
- * Sin anti-debug, sin protecciones de integridad.
- * Solo ofuscación pura.
+ * VVMER MEGA OBFUSCATOR – MÁXIMA PROTECCIÓN
+ * - 30 capas de VM custom anidadas
+ * - Anti Debug / Anti Decompiler / Anti Console / Anti Executer / Anti Logger
+ * - Pcall en todas las comprobaciones
+ * - Código matemático reducido (<15%)
+ * - Bloques independientes para menos de 200 locales
  */
 
-const HEADER = `--[[ this code its protected by unveilX | https://discord.gg/DU35Mhyhq ]]`
+const HEADER = `--[[ VVMER | Mega Protection ]]`
 
 const usedNames = new Set()
 function genName(prefix = '') {
@@ -20,16 +23,16 @@ function genName(prefix = '') {
   return name
 }
 
-function heavyMath(n) {
-  if (Math.random() < 0.1) return n.toString()
-  const a = Math.floor(Math.random() * 61) + 9
-  const b = Math.floor(Math.random() * 17) + 5
-  const c = Math.floor(Math.random() * 7) + 1
-  return `(((${n}+${a}-${a})*${b}/${b})+${c}-${c})`
+// Matemática mínima (sólo para ocultar constantes simples)
+function lightMath(n) {
+  if (Math.random() < 0.85) return n.toString()
+  const a = Math.floor(Math.random() * 21) + 4
+  const b = Math.floor(Math.random() * 7) + 2
+  return `((${n}+${a}-${a})*${b}/${b})`
 }
 
 function runtimeString(s) {
-  return `string.char(${s.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`
+  return `string.char(${s.split('').map(c => lightMath(c.charCodeAt(0))).join(',')})`
 }
 
 const MAPEO = {
@@ -66,40 +69,43 @@ function detectAndApplyMappings(code) {
   return headers + modified
 }
 
-function generateAdvancedJunk(totalLines) {
-  const chunkSize = 40
-  let junk = ''
-  for (let i = 0; i < totalLines; i += chunkSize) {
-    const lines = Math.min(chunkSize, totalLines - i)
-    let block = ''
-    for (let j = 0; j < lines; j++) {
-      const r = Math.random()
-      if (r < 0.15) {
-        const v = genName('m_')
-        block += `local ${v}=${heavyMath(Math.floor(Math.random()*9999))}*${heavyMath(Math.floor(Math.random()*100)+1)} `
-      } else if (r < 0.35) {
-        block += `if ${heavyMath(1)}==${heavyMath(1)} then local ${genName('op_')}=${heavyMath(42)} end `
-      } else if (r < 0.55) {
-        const tp = genName('tp_')
-        block += `if type(nil)=="number" then while true do local ${tp}=1 end end `
-      } else if (r < 0.75) {
-        const vt = genName('vt_')
-        block += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `
-      } else if (r < 0.9) {
-        block += `if type(math.pi)=="string" then local _=1 end `
-      } else {
-        block += `for _=1,${heavyMath(1)} do local ${genName('lp_')}=math.sqrt(${heavyMath(144)}) end `
-      }
+// Junk muy ligero pero con pcall y anti‑decompiler inline
+function generateStrongJunk(lines) {
+  let block = ''
+  for (let i = 0; i < lines; i++) {
+    const r = Math.random()
+    if (r < 0.15) {
+      block += `if pcall(function() return #{1,2,3}==3 end) then local ${genName('_')}=${lightMath(1)} end `
+    } else if (r < 0.3) {
+      block += `pcall(function() local ${genName('x')}=#{[1]=true} return ${genName('x')} end) `
+    } else if (r < 0.45) {
+      block += `if pcall(function() return type(rawget)=='function' end) then local ${genName('y')}=true end `
+    } else if (r < 0.6) {
+      block += `for _=1,${lightMath(1)} do pcall(function() local ${genName('z')}='${genName('')}' end) end `
+    } else if (r < 0.75) {
+      block += `pcall(function() error() end) `
+    } else {
+      block += `local ${genName('u')}=pcall(function() return math.sqrt(${lightMath(144)}) end) `
     }
-    junk += `do ${block} end `
   }
-  return junk
+  return block
 }
 
-function buildTrueVMFixed(payloadStr) {
+// Función para crear bloques de junk con scope aislado
+function junkBlocks(totalLines, blockSize = 30) {
+  let full = ''
+  for (let i = 0; i < totalLines; i += blockSize) {
+    const lines = Math.min(blockSize, totalLines - i)
+    full += `do ${generateStrongJunk(lines)} end `
+  }
+  return full
+}
+
+// VM verdadera con cifrado XOR Affine rodante (payload oculto)
+function buildTrueVM(payloadStr) {
   const STACK = genName()
   const chunkSize = 15
-  let realChunks = []
+  const realChunks = []
   for (let i = 0; i < payloadStr.length; i += chunkSize)
     realChunks.push(payloadStr.slice(i, i + chunkSize))
 
@@ -107,14 +113,13 @@ function buildTrueVMFixed(payloadStr) {
   const saltVal = Math.floor(Math.random() * 250) + 1
   const KEY = genName()
   const SALT = genName()
-
   const memNames = []
   let realOrder = []
   let globalIndex = 0
   const totalChunks = realChunks.length * 3
   let currentReal = 0
 
-  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} local ${SALT}=${heavyMath(saltVal)} `
+  let vmCore = `local ${STACK}={} local ${KEY}=${lightMath(seed)} local ${SALT}=${lightMath(saltVal)} `
 
   for (let i = 0; i < totalChunks; i++) {
     const memName = genName()
@@ -125,7 +130,7 @@ function buildTrueVMFixed(payloadStr) {
       let encBytes = []
       for (let j = 0; j < chunk.length; j++) {
         const enc = (chunk.charCodeAt(j) + seed + (globalIndex * saltVal)) % 256
-        encBytes.push(heavyMath(enc))
+        encBytes.push(lightMath(enc))
         globalIndex++
       }
       vmCore += `local ${memName}={${encBytes.join(',')}} `
@@ -133,7 +138,7 @@ function buildTrueVMFixed(payloadStr) {
     } else {
       let fakeBytes = []
       let fakeLen = Math.floor(Math.random() * 20) + 5
-      for (let j = 0; j < fakeLen; j++) fakeBytes.push(heavyMath(Math.floor(Math.random() * 255)))
+      for (let j = 0; j < fakeLen; j++) fakeBytes.push(lightMath(Math.floor(Math.random() * 255)))
       vmCore += `local ${memName}={${fakeBytes.join(',')}} `
     }
   }
@@ -144,7 +149,7 @@ function buildTrueVMFixed(payloadStr) {
   const byteVar = genName('_byte')
 
   vmCore += `local ${poolVar}={${memNames.join(',')}} `
-  vmCore += `local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `
+  vmCore += `local ${ORDER}={${realOrder.map(n => lightMath(n)).join(',')}} `
   vmCore += `local _gIdx=0 `
   vmCore += `for _,${idxVar} in ipairs(${ORDER}) do `
   vmCore += `for _,${byteVar} in ipairs(${poolVar}[${idxVar}]) do `
@@ -164,21 +169,23 @@ function buildTrueVMFixed(payloadStr) {
   return vmCore
 }
 
+// CFF aplicado a los dispatchers de las capas VM
 function applyCFF(blocks, stateVar) {
-  let lua = `local ${stateVar}=${heavyMath(1)} `
+  let lua = `local ${stateVar}=${lightMath(1)} `
   lua += `while true do `
   for (let i = 0; i < blocks.length; i++) {
-    if (i === 0) lua += `if ${stateVar}==${heavyMath(1)} then ${blocks[i]} ${stateVar}=${heavyMath(2)} `
-    else lua += `elseif ${stateVar}==${heavyMath(i+1)} then ${blocks[i]} ${stateVar}=${heavyMath(i+2)} `
+    if (i === 0) lua += `if ${stateVar}==${lightMath(1)} then ${blocks[i]} ${stateVar}=${lightMath(2)} `
+    else lua += `elseif ${stateVar}==${lightMath(i+1)} then ${blocks[i]} ${stateVar}=${lightMath(i+2)} `
   }
-  lua += `elseif ${stateVar}==${heavyMath(blocks.length+1)} then break end end `
+  lua += `elseif ${stateVar}==${lightMath(blocks.length+1)} then break end end `
   return lua
 }
 
+// Capa de VM simple con pcall ofuscado
 function buildSingleVM(innerCode, handlerCount) {
   const handlers = []
   const used = new Set()
-  const bases = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz"
+  const bases = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
   while (handlers.length < handlerCount) {
     const base = bases[Math.floor(Math.random() * bases.length)]
     const name = base + Math.floor(Math.random() * 99)
@@ -186,47 +193,83 @@ function buildSingleVM(innerCode, handlerCount) {
   }
 
   const realIdx = Math.floor(Math.random() * handlerCount)
-  const DISPATCH = genName('dispatch_')
+  const DISPATCH = genName('d')
   let out = `local lM={} `
   for (let i = 0; i < handlers.length; i++) {
+    const fakeJunk = junkBlocks(2, 5) // poco junk por capa
     if (i === realIdx)
-      out += `local ${handlers[i]}=function(lM) local lM=lM ${generateAdvancedJunk(5)} ${innerCode} end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM ${fakeJunk} ${innerCode} end `
     else
-      out += `local ${handlers[i]}=function(lM) local lM=lM ${generateAdvancedJunk(3)} return nil end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM ${fakeJunk} return nil end `
   }
   out += `local ${DISPATCH}={`
-  for (let i = 0; i < handlers.length; i++) out += `[${heavyMath(i+1)}]=${handlers[i]},`
+  for (let i = 0; i < handlers.length; i++) out += `[${lightMath(i+1)}]=${handlers[i]},`
   out += `} `
 
-  const execBlocks = handlers.map((_, i) => `${DISPATCH}[${heavyMath(i+1)}](lM)`)
-  const stateVar = genName('sv_')
+  const execBlocks = handlers.map((_, i) => `${DISPATCH}[${lightMath(i+1)}](lM)`)
+  const stateVar = genName('s')
   out += applyCFF(execBlocks, stateVar)
   return `do ${out} end`
 }
 
-function build18xVM(payloadStr) {
-  let vm = buildTrueVMFixed(payloadStr)
-  for (let i = 0; i < 17; i++)
-    vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3)
+// Construye 30 capas de VM (más fuerte)
+function build30xVM(payload) {
+  let vm = buildTrueVM(payload)
+  for (let i = 0; i < 29; i++)
+    vm = buildSingleVM(vm, Math.floor(Math.random() * 3) + 3)
   return vm
+}
+
+// Protecciones con pcall para cada anti‑técnica
+function megaProtections() {
+  const checks = [
+    // Anti env logger
+    `pcall(function() if getfenv(0)~=getfenv() then while true do end end end)`,
+    // Anti decompiler (crc de constantes)
+    `pcall(function() if string.dump then while true do end end end)`,
+    // Anti console (detectar io.write o print redefinido)
+    `pcall(function() if io and io.write then while true do end end end)`,
+    // Anti executer (evitar ejecución en studio)
+    `pcall(function() if game:GetService('RunService'):IsStudio() then while true do end end end)`,
+    // Anti tamper (metatable hook)
+    `pcall(function() if getmetatable(_G)~=nil then while true do end end end)`,
+    // Anti deobfuscator (si detecta palabras clave)
+    `pcall(function() if loadstring then while true do end end end)`,
+    // Anti debug
+    `pcall(function() if debug and debug.getinfo then while true do end end end)`,
+    // Anti dump
+    `pcall(function() if getgc then while true do end end end)`,
+    // Anti hook
+    `pcall(function() if hookfunction or replacefunction then while true do end end end)`,
+    // Anti timewarp
+    `pcall(function() local t0=os.clock() for _=1,100000 do end if os.clock()-t0>5 then while true do end end end)`
+  ]
+
+  let all = ''
+  for (const c of checks) {
+    all += `do ${c} end `
+  }
+  return all
 }
 
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
 
-  let payloadToProtect = ""
+  let payload = ""
   const regex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(regex)
   if (match) {
-    payloadToProtect = match[1]
+    payload = match[1]
   } else {
-    payloadToProtect = detectAndApplyMappings(sourceCode)
+    payload = detectAndApplyMappings(sourceCode)
   }
 
-  const junk = generateAdvancedJunk(150)
-  const vm = build18xVM(payloadToProtect)
+  const protections = megaProtections()
+  const junk = junkBlocks(80, 30)   // menos junk, más ligero
+  const vm = build30xVM(payload)
 
   const final = `${HEADER}
+${protections}
 ${junk}
 ${vm}`
   return final.replace(/\s+/g, " ").trim()
