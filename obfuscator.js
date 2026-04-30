@@ -1,28 +1,28 @@
 /*
- * VVMER XTREME OFUSCATOR – XOR EN TODAS LAS DEFENSAS
- * - Antitamper y pcall cifrados con XOR + clave rodante.
- * - Corrupción silenciosa en cada capa VM.
- * - 30 capas de VM anidadas, CFF y junk ultraligero.
- * - Máximo 200 locales por scope (bloques do…end).
+ * VVMER STEALTH OBFUSCATOR – XOR + RUNTIME DECRYPT + HOOK DETECTION
+ * - Ninguna protección en claro
+ * - Detección de hooks, sandbox, debugger, entorno virtual
+ * - 30 capas VM anidadas con CFF
+ * - 15% matemáticas máximo
  */
 
-const HEADER = `--[[ VVMER | XOR protections ]]`
+const HEADER = `--[[ VVMER Stealth ]]`
 
+// ---- utilidades ----
 const usedNames = new Set()
-function genName(p = '') {
-  let n
+function genName(pref = '') {
+  let name
   do {
-    const c = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_'
-    n = p
-    const l = 5 + Math.floor(Math.random() * 8)
-    for (let i = 0; i < l; i++) n += c[Math.floor(Math.random() * c.length)]
-    n += Math.floor(Math.random() * 99999)
-  } while (usedNames.has(n))
-  usedNames.add(n)
-  return n
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_'
+    name = pref
+    const len = 5 + Math.floor(Math.random() * 8)
+    for (let i = 0; i < len; i++) name += chars[Math.floor(Math.random() * chars.length)]
+    name += Math.floor(Math.random() * 99999)
+  } while (usedNames.has(name))
+  usedNames.add(name)
+  return name
 }
 
-// Mate ligera (<15% del código)
 function lightMath(n) {
   if (Math.random() < 0.85) return n.toString()
   const a = Math.floor(Math.random() * 21) + 4
@@ -30,95 +30,100 @@ function lightMath(n) {
   return `((${n}+${a}-${a})*${b}/${b})`
 }
 
-// Cifrado XOR de strings (devuelve array de bytes cifrados + clave)
-function xorEncrypt(str) {
-  const key = Math.floor(Math.random() * 200) + 33  // clave visible solo una vez
-  const enc = []
-  for (let i = 0; i < str.length; i++) {
-    const byte = (str.charCodeAt(i) ^ key) % 256
-    enc.push(byte)
-  }
-  return { key, bytes: enc }
+function runtimeString(s) {
+  return `string.char(${s.split('').map(c => lightMath(c.charCodeAt(0))).join(',')})`
 }
 
-// Convierte bytes cifrados con XOR en código Lua que descifra
-function xorToString(enc) {
-  const { key, bytes } = enc
-  const arrName = genName('_xor')
-  const kName = genName('_k')
-  const resName = genName('_r')
-  // Crea una tabla con los bytes, luego itera y aplica XOR con la clave
-  let lua = `local ${arrName}={${bytes.join(',')}} local ${resName}="" local ${kName}=${lightMath(key)} `
-  lua += `for _=1,#${arrName} do ${resName}=${resName}..string.char(bit32.bxor(${arrName}[_],${kName})) end `
-  lua += `${resName}`
+// ---- XOR cifrado de string a código ejecutable ----
+function xorBytes(str) {
+  const key = Math.floor(Math.random() * 200) + 33
+  const bytes = []
+  for (let i = 0; i < str.length; i++) {
+    bytes.push((str.charCodeAt(i) ^ key) % 256)
+  }
+  return { key, bytes }
+}
+
+// genera código Lua que descifra y ejecuta el string dado
+function buildEncryptedExecutor(codeStr) {
+  const { key, bytes } = xorBytes(codeStr)
+  const tblName = genName('_e')
+  const keyName = genName('_k')
+  const builderName = genName('_c')
+  // genera el string descifrado
+  let lua = `(function()`
+  lua += `local ${tblName}={${bytes.join(',')}} `
+  lua += `local ${builderName}="" `
+  lua += `local ${keyName}=${lightMath(key)} `
+  lua += `for _=1,#${tblName} do `
+  lua += `${builderName}=${builderName}..string.char(bit32.bxor(${tblName}[_],${keyName})) `
+  lua += `end `
+  // obtiene la función loadstring
+  lua += `local _loader=getfenv()["${runtimeString('loadstring')}"] `
+  lua += `if _loader then `
+  lua += `local _fn=_loader(${builderName}) `
+  lua += `if _fn then _fn() end `
+  lua += `end `
+  lua += `end)()`
   return lua
 }
 
-// Convierte una cadena de código en una expresión que la descifra con XOR
-function xorCode(code) {
-  const enc = xorEncrypt(code)
-  return `(function() ${xorToString(enc)} end)()`
+// pcall ofuscado
+function buildObfuscatedPcall() {
+  const pcallName = genName('_p')
+  // "pcall" en runtimeString
+  return `getfenv()[${runtimeString('pcall')}]`
 }
 
-// Obtiene el string "pcall" ofuscado con XOR
-function xorPcall() {
-  return xorCode('pcall')
-}
-
-// Protecciones mega (todas en XOR)
+// ---- mega protecciones con ejecución XOR + pcall ----
 function megaProtections() {
-  const checks = [
-    // Anti env logger
-    `if getfenv(0)~=getfenv() then while true do end end`,
-    // Anti decompiler
+  // las condiciones ahora son simplemente cadenas de código (se cifrarán)
+  const conditions = [
+    // detección de sandbox/hook por getfenv
+    `if getfenv(0) ~= getfenv() then while true do end end`,
+    // anti decompiler
     `if string.dump then while true do end end`,
-    // Anti console
+    // anti console
     `if io and io.write then while true do end end`,
-    // Anti executer (studio)
+    // anti studio
     `if game:GetService('RunService'):IsStudio() then while true do end end`,
-    // Anti tamper (metatable)
-    `if getmetatable(_G)~=nil then while true do end end`,
-    // Anti deobfuscator
-    `if loadstring then while true do end end`,
-    // Anti debug
+    // anti tamper metatabla
+    `if getmetatable(_G) ~= nil then while true do end end`,
+    // anti deobfuscator
+    `if loadstring or getfenv().loadstring then while true do end end`,
+    // anti debug
     `if debug and debug.getinfo then while true do end end`,
-    // Anti dump
+    // anti dump
     `if getgc then while true do end end`,
-    // Anti hook
-    `if hookfunction or replacefunction then while true do end end`,
-    // Anti timewarp
-    `local ${genName('t')}=os.clock() for _=1,100000 do end if os.clock()-${genName('t')}>5 then while true do end end`
+    // anti hook / hookfunction / replacefunction
+    `if hookfunction or replacefunction or hookmetamethod then while true do end end`,
+    // anti time warp
+    `local _st=os.clock() for _=1,100000 do end if os.clock()-_st>5 then while true do end end`
   ]
 
-  const pc = xorPcall()  // "pcall" ofuscado
-  let all = ''
-  for (const c of checks) {
-    const encCode = xorCode(c)
-    all += `do ${pc}(function() ${encCode} end) end `
+  const obfuscatedPcall = buildObfuscatedPcall()
+  let out = ''
+  for (const cond of conditions) {
+    // cifra el código de la condición y crea el ejecutor
+    const encryptedExecutor = buildEncryptedExecutor(cond)
+    // envuelve en pcall ofuscado
+    out += `do ${obfuscatedPcall}(function() ${encryptedExecutor} end) end `
   }
-  return all
+  return out
 }
 
-// Corrupción silenciosa: pequeña alteración en la clave del VM si detecta algo raro
-function silentCorruption(keyVar) {
-  const cond = Math.random() < 0.5
-    ? `if type(math.pi)=="string" then`
-    : `if #${keyVar}==1 then`
-  return `${cond} ${keyVar}=(${keyVar}+${lightMath(137)})%256 end`
-}
-
-// VM primaria (cifrado XOR-Affine rodante) con corrupción silenciosa
-function buildTrueVM(payloadStr) {
-  const STACK = genName()
+// ---- VM verdadera con corrupción silenciosa (versión mejorada) ----
+function buildTrueVM(payload) {
+  const STACK = genName('_s')
   const chunkSize = 15
   const realChunks = []
-  for (let i = 0; i < payloadStr.length; i += chunkSize)
-    realChunks.push(payloadStr.slice(i, i + chunkSize))
+  for (let i = 0; i < payload.length; i += chunkSize)
+    realChunks.push(payload.slice(i, i + chunkSize))
 
   const seed = Math.floor(Math.random() * 200) + 50
   const saltVal = Math.floor(Math.random() * 250) + 1
-  const KEY = genName('k')
-  const SALT = genName('s')
+  const KEY = genName('_k')
+  const SALT = genName('_t')
   const memNames = []
   let realOrder = []
   let globalIndex = 0
@@ -151,37 +156,28 @@ function buildTrueVM(payloadStr) {
 
   const poolVar = genName('_pool')
   const ORDER = genName('_ord')
-  const idxVar = genName('_idx')
+  const idxVar = genName('_i')
   const byteVar = genName('_b')
 
   vm += `local ${poolVar}={${memNames.join(',')}} `
   vm += `local ${ORDER}={${realOrder.map(n => lightMath(n)).join(',')}} `
   vm += `local _gIdx=0 `
-  // Bucle con corrupción silenciosa
+  // corrupción silenciosa: modifica la clave si se está depurando
   vm += `for _,${idxVar} in ipairs(${ORDER}) do `
   vm += `  for _,${byteVar} in ipairs(${poolVar}[${idxVar}]) do `
-  vm += `    ${silentCorruption(KEY)} `
+  vm += `    if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `
   vm += `    table.insert(${STACK},string.char(math.floor((${byteVar}-${KEY}-_gIdx*${SALT})%256))) `
   vm += `    _gIdx=_gIdx+1 `
   vm += `  end `
   vm += `end `
 
-  vm += `local _e=table.concat(${STACK}) ${STACK}=nil `
-
-  // Llamada final con "assert" y "loadstring" ofuscados vía runtimeString
-  const ASSERT = `getfenv()[${runtimeString("assert")}]`
-  const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`
-  const GAME = `getfenv()[${runtimeString("game")}]`
-  const HTTPGET = runtimeString("HttpGet")
-  if (payloadStr.includes("http"))
-    vm += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME},_e)))() `
-  else
-    vm += `${ASSERT}(${LOADSTRING}(_e))() `
-
+  vm += `local _res=table.concat(${STACK}) ${STACK}=nil `
+  // ejecución segura con assert y loadstring ofuscados
+  vm += `getfenv()["${runtimeString('assert')}"](getfenv()["${runtimeString('loadstring')}"](_res))() `
   return vm
 }
 
-// CFF con estado ofuscado
+// CFF
 function applyCFF(blocks, stateVar) {
   let lua = `local ${stateVar}=${lightMath(1)} `
   lua += `while true do `
@@ -193,7 +189,7 @@ function applyCFF(blocks, stateVar) {
   return lua
 }
 
-// Capa VM envuelta en do…end, con dispatchers ofuscados y corrupción interna
+// Capa VM aislada (con do...end)
 function buildSingleVM(innerCode, handlerCount) {
   const handlers = []
   const used = new Set()
@@ -205,26 +201,25 @@ function buildSingleVM(innerCode, handlerCount) {
   }
 
   const realIdx = Math.floor(Math.random() * handlerCount)
-  const DISPATCH = genName('d')
+  const DISPATCH = genName('_d')
   let out = `local lM={} `
   for (let i = 0; i < handlers.length; i++) {
-    const junk = `local ${genName('_')}=${lightMath(1)}`
+    const miniJunk = `local ${genName('_')}=${lightMath(1)} `
     if (i === realIdx)
-      out += `local ${handlers[i]}=function(lM) local lM=lM ${junk} ${innerCode} end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM ${miniJunk} ${innerCode} end `
     else
-      out += `local ${handlers[i]}=function(lM) local lM=lM ${junk} return nil end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM ${miniJunk} return nil end `
   }
   out += `local ${DISPATCH}={`
   for (let i = 0; i < handlers.length; i++) out += `[${lightMath(i+1)}]=${handlers[i]},`
   out += `} `
-
   const execBlocks = handlers.map((_, i) => `${DISPATCH}[${lightMath(i+1)}](lM)`)
-  const stateVar = genName('s')
+  const stateVar = genName('_s')
   out += applyCFF(execBlocks, stateVar)
   return `do ${out} end`
 }
 
-// 30 capas de VM
+// 30 capas
 function build30xVM(payload) {
   let vm = buildTrueVM(payload)
   for (let i = 0; i < 29; i++)
@@ -232,42 +227,41 @@ function build30xVM(payload) {
   return vm
 }
 
-// Junk muy reducido con pcall ofuscado
-function genJunk(lines) {
+// Junk con pcall ofuscado (poco)
+function genLittleJunk(lines) {
+  const obPcall = buildObfuscatedPcall()
   let block = ''
-  const pc = xorPcall()
   for (let i = 0; i < lines; i++) {
-    block += `do ${pc}(function() local ${genName('_')}=${lightMath(1)} end) end `
+    block += `do ${obPcall}(function() local ${genName('_')}=${lightMath(1)} end) end `
   }
   return block
 }
 
-function junkBlocks(total, each = 30) {
+function junkBlocks(total, each = 25) {
   let res = ''
   for (let i = 0; i < total; i += each) {
-    res += `do ${genJunk(Math.min(each, total - i))} end `
+    res += `do ${genLittleJunk(Math.min(each, total - i))} end `
   }
   return res
 }
 
-function obfuscate(sourceCode) {
-  if (!sourceCode) return '--ERROR'
+// ---- función principal ----
+function obfuscate(source) {
+  if (!source) return '--ERROR'
 
-  let payload = ""
-  const rgx = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
-  const m = sourceCode.match(rgx)
-  if (m) payload = m[1]
-  else payload = sourceCode  // Ya aplicaremos ofuscación de palabras clave si hace falta
+  // extrae URL de HttpGet si existe
+  const match = source.match(/loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i)
+  let payload = match ? match[1] : source
 
   const prot = megaProtections()
-  const junk = junkBlocks(50, 25)
+  const junk = junkBlocks(40, 20)
   const vm = build30xVM(payload)
 
-  const final = `${HEADER}
+  const result = `${HEADER}
 ${prot}
 ${junk}
 ${vm}`
-  return final.replace(/\s+/g, " ").trim()
+  return result.replace(/\s+/g, " ").trim()
 }
 
 module.exports = { obfuscate }
