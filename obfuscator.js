@@ -4,7 +4,7 @@
  * Solo ofuscación pura.
  */
 
-const HEADER = `--[[ VVMER | Clean Syntax | 20% Math + 5 Techs ]]`
+const HEADER = `--[[ this code its protected by unveilX | https://discord.gg/DU35Mhyhq ]]`
 
 const usedNames = new Set()
 function genName(prefix = '') {
