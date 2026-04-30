@@ -1,11 +1,3 @@
-/*
- * VVMER MEGA OBFUSCATOR – 100% OCULTO
- * - Todas las protecciones (pcall, anti-tamper, corrupción silenciosa) se esconden
- *   dentro de las 30 capas de VM anidadas. Nada queda visible.
- * - El script generado contiene únicamente la maquinaria de la VM; el resto se
- *   descifra y ejecuta en tiempo de ejecución.
- */
-
 const HEADER = `--[[ VVMER | Mega Protection ]]`
 
 const usedNames = new Set()
@@ -22,6 +14,7 @@ function genName(prefix = '') {
   return name
 }
 
+// Matemática mínima (sólo para ocultar constantes simples)
 function lightMath(n) {
   if (Math.random() < 0.85) return n.toString()
   const a = Math.floor(Math.random() * 21) + 4
@@ -33,7 +26,6 @@ function runtimeString(s) {
   return `string.char(${s.split('').map(c => lightMath(c.charCodeAt(0))).join(',')})`
 }
 
-// --- Mappings and anti‑tamper inside the VM ---
 const MAPEO = {
   "ScreenGui": "Aggressive Renaming",
   "Frame": "String to Math",
@@ -68,7 +60,7 @@ function detectAndApplyMappings(code) {
   return headers + modified
 }
 
-// Junk ultra‑silencioso (se inserta DENTRO de la cadena que la VM descifrará)
+// Junk muy ligero pero con pcall y anti‑decompiler inline
 function generateStrongJunk(lines) {
   let block = ''
   for (let i = 0; i < lines; i++) {
@@ -90,6 +82,7 @@ function generateStrongJunk(lines) {
   return block
 }
 
+// Función para crear bloques de junk con scope aislado
 function junkBlocks(totalLines, blockSize = 30) {
   let full = ''
   for (let i = 0; i < totalLines; i += blockSize) {
@@ -157,8 +150,12 @@ function buildTrueVM(payloadStr) {
 
   const ASSERT = `getfenv()[${runtimeString("assert")}]`
   const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`
-  // La cadena descifrada _e contiene ya protecciones, junk y el payload real
-  vmCore += `${ASSERT}(${LOADSTRING}(_e))() `
+  const GAME = `getfenv()[${runtimeString("game")}]`
+  const HTTPGET = runtimeString("HttpGet")
+  if (payloadStr.includes("http"))
+    vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME},_e)))() `
+  else
+    vmCore += `${ASSERT}(${LOADSTRING}(_e))() `
 
   return vmCore
 }
@@ -214,18 +211,28 @@ function build30xVM(payload) {
   return vm
 }
 
-// Protecciones con pcall – se inyectan DENTRO de la cadena que la VM descifra
+// Protecciones con pcall para cada anti‑técnica
 function megaProtections() {
   const checks = [
+    // Anti env logger
     `pcall(function() if getfenv(0)~=getfenv() then while true do end end end)`,
+    // Anti decompiler (crc de constantes)
     `pcall(function() if string.dump then while true do end end end)`,
+    // Anti console (detectar io.write o print redefinido)
     `pcall(function() if io and io.write then while true do end end end)`,
+    // Anti executer (evitar ejecución en studio)
     `pcall(function() if game:GetService('RunService'):IsStudio() then while true do end end end)`,
+    // Anti tamper (metatable hook)
     `pcall(function() if getmetatable(_G)~=nil then while true do end end end)`,
+    // Anti deobfuscator (si detecta palabras clave)
     `pcall(function() if loadstring then while true do end end end)`,
+    // Anti debug
     `pcall(function() if debug and debug.getinfo then while true do end end end)`,
+    // Anti dump
     `pcall(function() if getgc then while true do end end end)`,
+    // Anti hook
     `pcall(function() if hookfunction or replacefunction then while true do end end end)`,
+    // Anti timewarp
     `pcall(function() local t0=os.clock() for _=1,100000 do end if os.clock()-t0>5 then while true do end end end)`
   ]
 
@@ -236,40 +243,26 @@ function megaProtections() {
   return all
 }
 
-function escapeLuaString(str) {
-  return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')
-}
-
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
 
-  // 1. Preparar el script interior que la VM descifrará
-  let innerScript = ""
+  let payload = ""
   const regex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(regex)
-
-  const protectionsCode = megaProtections()
-  const junkCode = junkBlocks(80, 30)
-
   if (match) {
-    // Payload desde URL
-    const url = match[1]
-    innerScript = protectionsCode + junkCode +
-      ` loadstring(game:HttpGet("${escapeLuaString(url)}"))() `
+    payload = match[1]
   } else {
-    // Payload como código fuente directo
-    let mapped = detectAndApplyMappings(sourceCode)
-    // Escapamos para insertar en un loadstring
-    innerScript = protectionsCode + junkCode +
-      ` loadstring("${escapeLuaString(mapped)}")() `
+    payload = detectAndApplyMappings(sourceCode)
   }
 
-  // 2. Construir la VM que oculta ese script interior
-  const vm = build30xVM(innerScript)
+  const protections = megaProtections()
+  const junk = junkBlocks(80, 30)   // menos junk, más ligero
+  const vm = build30xVM(payload)
 
   const final = `${HEADER}
+${protections}
+${junk}
 ${vm}`
-  // Eliminamos espacios extra para compacidad (opcional)
   return final.replace(/\s+/g, " ").trim()
 }
 
