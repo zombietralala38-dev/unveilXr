@@ -56,27 +56,29 @@ function generateMathJunk(lines) {
 // Anti-debug limpio (sin ; sueltos)
 function buildEnvScan() {
   const start = genName('tstart')
-  return `
-    if debug and debug.getinfo then while true do end end
-    if getgc then while true do end end
-    local ${start} = os.clock()
-    local function ${genName('tb')}() if os.clock() - ${start} > 3 then while true do end end end
-    ${genName('tb')}()
-  `
+  const tb = genName('tb')
+  return `if debug and debug.getinfo then while true do end end
+if getgc then while true do end end
+local ${start} = os.clock()
+local function ${tb}() if os.clock() - ${start} > 3 then while true do end end end
+${tb}()`
 }
 
 // Integridad básica del entorno
 function integrityCheck() {
-  return `
-    if string.byte(${runtimeString('A')}) ~= 65 then while true do end end
-    if type(table.concat) ~= 'function' then while true do end end
-    if math.pi < 3.14 or math.pi > 3.15 then while true do end end
-  `
+  const checkStr = runtimeString('A')
+  return `if string.byte(${checkStr}) ~= 65 then while true do end end
+if type(table.concat) ~= 'function' then while true do end end
+if math.pi < 3.14 or math.pi > 3.15 then while true do end end`
 }
 
 // VM Core que interpreta bytecode personalizado
 function buildVM(payloadUrl) {
-  const pool = [runtimeString('game'), runtimeString('HttpGet'), payloadUrl]
+  // Escapar comillas en URL
+  const safeUrl = payloadUrl.replace(/"/g, '\\"')
+  
+  const pool = [runtimeString('game'), runtimeString('HttpGet'), `"${safeUrl}"`]
+  
   // Opcodes: 0 = push_const, 1 = get_global, 2 = call, 3 = loadstring, 4 = assert_call, 5 = return
   const bytecode = [
     0,0, 1,0,    // push "game", get global game
@@ -92,7 +94,6 @@ function buildVM(payloadUrl) {
   const sp = genName('sp')
   const stack = genName('stk')
   const state = genName('state')
-  const next = genName('next')
   const op = genName('op')
   const idx = genName('idx')
   const name = genName('name')
@@ -100,67 +101,69 @@ function buildVM(payloadUrl) {
   const args = genName('args')
   const str = genName('str')
   const fn = genName('fn')
+  const nargs = genName('nargs')
+  const _i = genName('_i')
 
-  return `
-    local ${pc} = 1
-    local ${sp} = 0
-    local ${stack} = {}
-    local ${state} = 0
-    local ${next} = 0
-    local _pool = {${pool.join(',')}}
-    local _bytecode = {${bytecode.join(',')}}
-    while true do
-      if ${state} == 0 then
-        local ${op} = _bytecode[${pc}]
-        ${pc} = ${pc} + 1
-        if ${op} == 0 then
-          local ${idx} = _bytecode[${pc}]
-          ${pc} = ${pc} + 1
-          ${sp} = ${sp} + 1
-          ${stack}[${sp}] = _pool[${idx} + 1]
-        elseif ${op} == 1 then
-          local ${idx} = _bytecode[${pc}]
-          ${pc} = ${pc} + 1
-          local ${name} = _pool[${idx} + 1]
-          ${sp} = ${sp} + 1
-          ${stack}[${sp}] = getfenv()[${name}]
-        elseif ${op} == 2 then
-          local nargs = _bytecode[${pc}]
-          ${pc} = ${pc} + 1
-          local ${func} = ${stack}[${sp} - nargs]
-          local ${args} = {}
-          local _i = 1
-          while _i <= nargs do
-            ${args}[_i] = ${stack}[${sp} - nargs + _i]
-            _i = _i + 1
-          end
-          ${stack}[${sp} - nargs] = ${func}(unpack(${args}))
-          ${sp} = ${sp} - nargs
-        elseif ${op} == 3 then
-          local ${str} = ${stack}[${sp}]
-          ${sp} = ${sp} - 1
-          local ${fn} = loadstring(${str})
-          ${sp} = ${sp} + 1
-          ${stack}[${sp}] = ${fn}
-        elseif ${op} == 4 then
-          local ${fn} = ${stack}[${sp}]
-          ${sp} = ${sp} - 1
-          ${fn}()
-        elseif ${op} == 5 then
-          break
-        end
-        ${state} = 1
-      elseif ${state} == 1 then
-        if ${pc} > #_bytecode then
-          ${state} = 2
-        else
-          ${state} = 0
-        end
-      elseif ${state} == 2 then
-        break
+  // Construir VM sin espacios extras ni saltos de línea que rompan sintaxis
+  const vmCode = `local ${pc} = 1
+local ${sp} = 0
+local ${stack} = {}
+local ${state} = 0
+local _pool = {${pool.join(',')}}
+local _bytecode = {${bytecode.join(',')}}
+while true do
+  if ${state} == 0 then
+    local ${op} = _bytecode[${pc}]
+    ${pc} = ${pc} + 1
+    if ${op} == 0 then
+      local ${idx} = _bytecode[${pc}]
+      ${pc} = ${pc} + 1
+      ${sp} = ${sp} + 1
+      ${stack}[${sp}] = _pool[${idx} + 1]
+    elseif ${op} == 1 then
+      local ${idx} = _bytecode[${pc}]
+      ${pc} = ${pc} + 1
+      local ${name} = _pool[${idx} + 1]
+      ${sp} = ${sp} + 1
+      ${stack}[${sp}] = getfenv()[${name}]
+    elseif ${op} == 2 then
+      local ${nargs} = _bytecode[${pc}]
+      ${pc} = ${pc} + 1
+      local ${func} = ${stack}[${sp} - ${nargs}]
+      local ${args} = {}
+      local ${_i} = 1
+      while ${_i} <= ${nargs} do
+        ${args}[${_i}] = ${stack}[${sp} - ${nargs} + ${_i}]
+        ${_i} = ${_i} + 1
       end
+      ${stack}[${sp} - ${nargs}] = ${func}(unpack(${args}))
+      ${sp} = ${sp} - ${nargs}
+    elseif ${op} == 3 then
+      local ${str} = ${stack}[${sp}]
+      ${sp} = ${sp} - 1
+      local ${fn} = loadstring(${str})
+      ${sp} = ${sp} + 1
+      ${stack}[${sp}] = ${fn}
+    elseif ${op} == 4 then
+      local ${fn} = ${stack}[${sp}]
+      ${sp} = ${sp} - 1
+      ${fn}()
+    elseif ${op} == 5 then
+      break
     end
-  `
+    ${state} = 1
+  elseif ${state} == 1 then
+    if ${pc} > #_bytecode then
+      ${state} = 2
+    else
+      ${state} = 0
+    end
+  elseif ${state} == 2 then
+    break
+  end
+end`
+
+  return vmCode
 }
 
 function obfuscate(sourceCode) {
@@ -168,25 +171,25 @@ function obfuscate(sourceCode) {
 
   let url = null
   const match = sourceCode.match(/loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i)
-  if (match) url = match[1]
-
-  if (!url) {
-    // Si no es una URL, envolvemos el código fuente simple en una VM que lo ejecuta con loadstring
-    url = sourceCode
+  if (match) {
+    url = match[1]
+  } else {
+    // Si no es una URL, encodificar el código fuente directamente
+    url = sourceCode.replace(/\\/g, '\\\\').replace(/"/g, '\\"')
   }
 
   const scanner = buildEnvScan()
   const integrity = integrityCheck()
   const vm = buildVM(url)
-  const mathJunk = generateMathJunk(250)  // cantidad de líneas para alcanzar ~20% del total
+  const mathJunk = generateMathJunk(150)
 
   const finalCode = `${HEADER}
-    ${scanner}
-    ${integrity}
-    ${mathJunk}
-    ${vm}
-  `
-  return finalCode.replace(/\s+/g, ' ').trim()
+${scanner}
+${integrity}
+${mathJunk}
+${vm}`
+  
+  return finalCode
 }
 
 module.exports = { obfuscate }
