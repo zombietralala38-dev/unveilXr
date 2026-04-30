@@ -1,4 +1,4 @@
-const HEADER = `--[[ ths code its protected by unveilX | https://discord.gg/DU35Mhyhq]]`
+const HEADER = `--[[ thsi coee its protected by unveilX | https://discord.gg/DU35Mhyhq]]`
 
 const usedNames = new Set()
 function genName(prefix = '') {
@@ -205,35 +205,10 @@ function build30xVM(payload) {
 }
 
 // =============================================
-// megaProtections SIN el anti‑debug
+// megaProtections VACÍA (sin ninguna protección)
 // =============================================
 function megaProtections() {
-  const checks = [
-    // Anti env logger
-    `pcall(function() if getfenv(0)~=getfenv() then while true do end end end)`,
-    // Anti decompiler (crc de constantes)
-    `pcall(function() if string.dump then while true do end end end)`,
-    // Anti console (detectar io.write o print redefinido)
-    `pcall(function() if io and io.write then while true do end end end)`,
-    // Anti executer (evitar ejecución en studio)
-    `pcall(function() if game:GetService('RunService'):IsStudio() then while true do end end end)`,
-    // Anti tamper (metatable hook)
-    `pcall(function() if getmetatable(_G)~=nil then while true do end end end)`,
-    // Anti deobfuscator (si detecta palabras clave)
-    `pcall(function() if loadstring then while true do end end end)`,
-    // Anti dump
-    `pcall(function() if getgc then while true do end end end)`,
-    // Anti hook
-    `pcall(function() if hookfunction or replacefunction then while true do end end end)`,
-    // Anti timewarp
-    `pcall(function() local t0=os.clock() for _=1,100000 do end if os.clock()-t0>5 then while true do end end end)`
-  ]
-
-  let all = ''
-  for (const c of checks) {
-    all += `do ${c} end `
-  }
-  return all
+  return ''
 }
 
 function obfuscate(sourceCode) {
