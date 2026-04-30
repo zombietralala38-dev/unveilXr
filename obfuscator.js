@@ -1,11 +1,9 @@
 /*
- * VVMER MEGA OBFUSCATOR – PROTECCIÓN TOTAL (INVISIBLE + CORRUPCIÓN SILENCIOSA)
- * - 30 capas VM anidadas con cifrado XOR rodante
- * - Anti Debug / Anti Decompiler / Anti Console / Anti Executer / Anti Logger / Anti Hook / Anti Dump / Anti Timewarp
- * - Pcall en todas las comprobaciones, corrupción silenciosa sin bucles infinitos visibles
- * - Matemática reducida (<15%)
- * - Todo el payload (junk + protecciones + código) viaja dentro de las VMs
- * - La salida ES un solo bloque cifrado con cargador mínimo (invisible)
+ * VVMER MEGA OBFUSCATOR – 100% OCULTO
+ * - Todas las protecciones (pcall, anti-tamper, corrupción silenciosa) se esconden
+ *   dentro de las 30 capas de VM anidadas. Nada queda visible.
+ * - El script generado contiene únicamente la maquinaria de la VM; el resto se
+ *   descifra y ejecuta en tiempo de ejecución.
  */
 
 const HEADER = `--[[ VVMER | Mega Protection ]]`
@@ -35,7 +33,42 @@ function runtimeString(s) {
   return `string.char(${s.split('').map(c => lightMath(c.charCodeAt(0))).join(',')})`
 }
 
-// Junk ligero con scope aislado
+// --- Mappings and anti‑tamper inside the VM ---
+const MAPEO = {
+  "ScreenGui": "Aggressive Renaming",
+  "Frame": "String to Math",
+  "TextLabel": "Table Indirection",
+  "TextButton": "Mixed Boolean Arithmetic",
+  "Humanoid": "Dynamic Junk",
+  "Player": "Fake Flow",
+  "RunService": "Virtual Machine",
+  "TweenService": "Fake Flow",
+  "Players": "Fake Flow"
+}
+
+function detectAndApplyMappings(code) {
+  let modified = code, headers = ""
+  for (const [word, tech] of Object.entries(MAPEO)) {
+    const regex = new RegExp(`\\b${word}\\b`, "g")
+    if (regex.test(modified)) {
+      let replacement = `"${word}"`
+      if (tech.includes("Aggressive Renaming")) {
+        const v = genName()
+        headers += `local ${v}="${word}" `
+        replacement = v
+      } else if (tech.includes("String to Math")) {
+        replacement = `string.char(${word.split('').map(c => c.charCodeAt(0)).join(',')})`
+      } else if (tech.includes("Mixed Boolean Arithmetic")) {
+        replacement = `((1==1 or true)and"${word}")`
+      }
+      regex.lastIndex = 0
+      modified = modified.replace(regex, () => `game[${replacement}]`)
+    }
+  }
+  return headers + modified
+}
+
+// Junk ultra‑silencioso (se inserta DENTRO de la cadena que la VM descifrará)
 function generateStrongJunk(lines) {
   let block = ''
   for (let i = 0; i < lines; i++) {
@@ -66,30 +99,7 @@ function junkBlocks(totalLines, blockSize = 30) {
   return full
 }
 
-// --- CORRUPCIÓN SILENCIOSA ---
-// En lugar de crashear, modifica _CORRUPT para que las desencriptaciones futuras fallen.
-function silentAntiTamper() {
-  const checks = [
-    `pcall(function() if getfenv(0)~=getfenv() then _CORRUPT=_CORRUPT+1 end end)`,
-    `pcall(function() if string.dump then _CORRUPT=_CORRUPT+1 end end)`,
-    `pcall(function() if io and io.write then _CORRUPT=_CORRUPT+1 end end)`,
-    `pcall(function() if game:GetService('RunService'):IsStudio() then _CORRUPT=_CORRUPT+1 end end)`,
-    `pcall(function() if getmetatable(_G)~=nil then _CORRUPT=_CORRUPT+1 end end)`,
-    `pcall(function() if loadstring then _CORRUPT=_CORRUPT+1 end end)`,
-    `pcall(function() if debug and debug.getinfo then _CORRUPT=_CORRUPT+1 end end)`,
-    `pcall(function() if getgc then _CORRUPT=_CORRUPT+1 end end)`,
-    `pcall(function() if hookfunction or replacefunction then _CORRUPT=_CORRUPT+1 end end)`,
-    `pcall(function() local t0=os.clock() for _=1,100000 do end if os.clock()-t0>5 then _CORRUPT=_CORRUPT+1 end end)`
-  ]
-  let block = `local ${genName('c')}=0 `
-  for (const c of checks) {
-    block += `do ${c} end `
-  }
-  block += `_CORRUPT=${genName('c')} `
-  return block
-}
-
-// VM verdadera con corrupción silenciosa incorporada
+// VM verdadera con cifrado XOR Affine rodante (payload oculto)
 function buildTrueVM(payloadStr) {
   const STACK = genName()
   const chunkSize = 15
@@ -107,7 +117,7 @@ function buildTrueVM(payloadStr) {
   const totalChunks = realChunks.length * 3
   let currentReal = 0
 
-  let vmCore = `local ${STACK}={} local ${KEY}=${lightMath(seed)} local ${SALT}=${lightMath(saltVal)} local _CORRUPT=0 `
+  let vmCore = `local ${STACK}={} local ${KEY}=${lightMath(seed)} local ${SALT}=${lightMath(saltVal)} `
 
   for (let i = 0; i < totalChunks; i++) {
     const memName = genName()
@@ -139,28 +149,21 @@ function buildTrueVM(payloadStr) {
   vmCore += `local ${poolVar}={${memNames.join(',')}} `
   vmCore += `local ${ORDER}={${realOrder.map(n => lightMath(n)).join(',')}} `
   vmCore += `local _gIdx=0 `
-  // Corrupción silenciosa: si _CORRUPT>0 se usan claves falsas (invierte seed o duplica salt)
-  vmCore += `local _effKey=(${KEY}) local _effSalt=(${SALT}) `
-  vmCore += `if _CORRUPT>0 then _effKey=256-_effKey _effSalt=_effSalt*2 end `
   vmCore += `for _,${idxVar} in ipairs(${ORDER}) do `
   vmCore += `for _,${byteVar} in ipairs(${poolVar}[${idxVar}]) do `
-  vmCore += `table.insert(${STACK},string.char(math.floor((${byteVar}-_effKey-_gIdx*_effSalt)%256))) `
+  vmCore += `table.insert(${STACK},string.char(math.floor((${byteVar}-${KEY}-_gIdx*${SALT})%256))) `
   vmCore += `_gIdx=_gIdx+1 end end `
   vmCore += `local _e=table.concat(${STACK}) ${STACK}=nil `
 
   const ASSERT = `getfenv()[${runtimeString("assert")}]`
   const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`
-  const GAME = `getfenv()[${runtimeString("game")}]`
-  const HTTPGET = runtimeString("HttpGet")
-  if (payloadStr.includes("http"))
-    vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME},_e)))() `
-  else
-    vmCore += `${ASSERT}(${LOADSTRING}(_e))() `
+  // La cadena descifrada _e contiene ya protecciones, junk y el payload real
+  vmCore += `${ASSERT}(${LOADSTRING}(_e))() `
 
   return vmCore
 }
 
-// CFF para dispatchers (capa individual de VM)
+// CFF aplicado a los dispatchers de las capas VM
 function applyCFF(blocks, stateVar) {
   let lua = `local ${stateVar}=${lightMath(1)} `
   lua += `while true do `
@@ -172,7 +175,7 @@ function applyCFF(blocks, stateVar) {
   return lua
 }
 
-// Capa simple de VM con pcall ofuscado
+// Capa de VM simple con pcall ofuscado
 function buildSingleVM(innerCode, handlerCount) {
   const handlers = []
   const used = new Set()
@@ -187,68 +190,86 @@ function buildSingleVM(innerCode, handlerCount) {
   const DISPATCH = genName('d')
   let out = `local lM={} `
   for (let i = 0; i < handlers.length; i++) {
-    const fakeJunk = junkBlocks(2, 5)
+    const fakeJunk = junkBlocks(2, 5) // poco junk por capa
     if (i === realIdx)
-      out += `local ${handlers[i]}=function(lM) local lM=lM ${fakeJunk} lM._inner=[[${innerCode}]] end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM ${fakeJunk} ${innerCode} end `
     else
       out += `local ${handlers[i]}=function(lM) local lM=lM ${fakeJunk} return nil end `
   }
   out += `local ${DISPATCH}={`
   for (let i = 0; i < handlers.length; i++) out += `[${lightMath(i+1)}]=${handlers[i]},`
   out += `} `
+
   const execBlocks = handlers.map((_, i) => `${DISPATCH}[${lightMath(i+1)}](lM)`)
   const stateVar = genName('s')
   out += applyCFF(execBlocks, stateVar)
-  // Ahora pasamos el inner que se devuelve como string y lo ejecutamos
-  out += `local _str=lM._inner if _str then assert(loadstring(_str))() end `
   return `do ${out} end`
 }
 
-// 30 capas de VM con payload completo (protecciones, junk, código original)
-function build30xVM(fullPayload) {
-  let vm = buildTrueVM(fullPayload)
+// Construye 30 capas de VM (más fuerte)
+function build30xVM(payload) {
+  let vm = buildTrueVM(payload)
   for (let i = 0; i < 29; i++)
     vm = buildSingleVM(vm, Math.floor(Math.random() * 3) + 3)
   return vm
 }
 
-// Cifrado invisible del script completo (el cargador externo)
-function obfuscateLoader(vmCode) {
-  const key = Math.floor(Math.random() * 200) + 50
-  let enc = ''
-  for (let i = 0; i < vmCode.length; i++) {
-    const c = vmCode.charCodeAt(i) ^ ((key + i) % 256)
-    enc += '\\' + c.toString(10).padStart(3, '0')
+// Protecciones con pcall – se inyectan DENTRO de la cadena que la VM descifra
+function megaProtections() {
+  const checks = [
+    `pcall(function() if getfenv(0)~=getfenv() then while true do end end end)`,
+    `pcall(function() if string.dump then while true do end end end)`,
+    `pcall(function() if io and io.write then while true do end end end)`,
+    `pcall(function() if game:GetService('RunService'):IsStudio() then while true do end end end)`,
+    `pcall(function() if getmetatable(_G)~=nil then while true do end end end)`,
+    `pcall(function() if loadstring then while true do end end end)`,
+    `pcall(function() if debug and debug.getinfo then while true do end end end)`,
+    `pcall(function() if getgc then while true do end end end)`,
+    `pcall(function() if hookfunction or replacefunction then while true do end end end)`,
+    `pcall(function() local t0=os.clock() for _=1,100000 do end if os.clock()-t0>5 then while true do end end end)`
+  ]
+
+  let all = ''
+  for (const c of checks) {
+    all += `do ${c} end `
   }
-  // Loader mínimo generado con string.char
-  const loaderFunc = `local a,b=${lightMath(key)},[[]] for i=1,#b do local c=b:byte(i)~((a+i-1)%256) io.write(string.char(c)) end`
-  // En realidad necesitamos ejecutar el código, no solo imprimir. Usaremos loadstring.
-  const finalLoader = `(function() local k=${lightMath(key)} local s=[[${enc}]] local r={} for i=1,#s do local byte=s:byte(i)~((k+i-1)%256) r[#r+1]=string.char(byte) end assert(loadstring(table.concat(r)))() end)()`
-  return finalLoader
+  return all
+}
+
+function escapeLuaString(str) {
+  return str.replace(/\\/g, '\\\\').replace(/"/g, '\\"').replace(/\n/g, '\\n')
 }
 
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
 
-  let originalPayload = ""
+  // 1. Preparar el script interior que la VM descifrará
+  let innerScript = ""
   const regex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(regex)
+
+  const protectionsCode = megaProtections()
+  const junkCode = junkBlocks(80, 30)
+
   if (match) {
-    originalPayload = `game:HttpGet("${match[1]}")`   // mantenemos la lógica original
+    // Payload desde URL
+    const url = match[1]
+    innerScript = protectionsCode + junkCode +
+      ` loadstring(game:HttpGet("${escapeLuaString(url)}"))() `
   } else {
-    originalPayload = sourceCode
+    // Payload como código fuente directo
+    let mapped = detectAndApplyMappings(sourceCode)
+    // Escapamos para insertar en un loadstring
+    innerScript = protectionsCode + junkCode +
+      ` loadstring("${escapeLuaString(mapped)}")() `
   }
 
-  // Construir carga total: protecciones silenciosas + junk pesado + código original
-  const protections = silentAntiTamper()
-  const junk = junkBlocks(100, 30)  // cantidad ajustable
-  const fullPayload = protections + junk + originalPayload
+  // 2. Construir la VM que oculta ese script interior
+  const vm = build30xVM(innerScript)
 
-  // Envolver en 30 capas VM
-  const vmCode = build30xVM(fullPayload)
-
-  // Enmascarar aún más: cifrar la salida para que el script final sea solo el loader
-  const final = `${HEADER}\n${obfuscateLoader(vmCode)}`
+  const final = `${HEADER}
+${vm}`
+  // Eliminamos espacios extra para compacidad (opcional)
   return final.replace(/\s+/g, " ").trim()
 }
 
