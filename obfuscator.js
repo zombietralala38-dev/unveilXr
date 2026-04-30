@@ -1,7 +1,7 @@
 /*
  * VVMER OBFUSCATOR – SINTAXIS LIMPIA, 20% MATH CODE + 5 TÉCNICAS
- * Corregido: todos los bloques están en scopes separados (do...end)
- * para evitar el límite de 200 locales por scope en Luau/Roblox.
+ * Sin anti-debug, sin protecciones de integridad.
+ * Solo ofuscación pura.
  */
 
 const HEADER = `--[[ VVMER | Clean Syntax | 20% Math + 5 Techs ]]`
@@ -201,7 +201,7 @@ function buildSingleVM(innerCode, handlerCount) {
   const execBlocks = handlers.map((_, i) => `${DISPATCH}[${heavyMath(i+1)}](lM)`)
   const stateVar = genName('sv_')
   out += applyCFF(execBlocks, stateVar)
-  return `do ${out} end`  // scope separado para no exceder 200 locales
+  return `do ${out} end`
 }
 
 function build18xVM(payloadStr) {
@@ -209,45 +209,6 @@ function build18xVM(payloadStr) {
   for (let i = 0; i < 17; i++)
     vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3)
   return vm
-}
-
-function getExtraProtections() {
-  const antiDebuggers =
-    `local _adT=os.clock() for _=1,150000 do end if os.clock()-_adT>5.0 then while true do end end ` +
-    `if debug~=nil and debug.getinfo then local _i=debug.getinfo(1) if _i.what~="main" and _i.what~="Lua" then while true do end end end ` +
-    `local _adOk,_adE=pcall(function() error("__v") end) if not string.find(tostring(_adE),"__v") then while true do end end ` +
-    `if getmetatable(_G)~=nil then while true do end end ` +
-    `if type(print)~="function" then while true do end end`
-
-  const tamperChecks = [
-    `if math.pi<3.14 or math.pi>3.15 then _err() end`,
-    `if bit32 and bit32.bxor(10,5)~=15 then _err() end`,
-    `if type(tostring)~="function" then _err() end`,
-    `if not string.match("chk","^c.*k$") then _err() end`,
-    `if type(coroutine.create)~="function" then _err() end`,
-    `if type(table.concat)~="function" then _err() end`,
-    `local _tm1=os.time() local _tm2=os.time() if _tm2<_tm1 then _err() end`,
-    `if math.abs(-10)~=10 then _err() end`,
-    `if gcinfo and gcinfo()<0 then _err() end`,
-    `if type(next)~="function" then _err() end`,
-    `if string.len("a")~=1 then _err() end`,
-    `if type(table.insert)~="function" then _err() end`,
-    `if string.byte("Z",1)~=90 then _err() end`,
-    `if math.floor(-1/10)~=-1 then _err() end`,
-    `if (true and 1 or 2)~=1 then _err() end`,
-    `if type(1)~="number" then _err() end`,
-    `if type(pcall)~="function" then _err() end`
-  ]
-
-  let guards = ""
-  for (const t of tamperChecks) {
-    const fn = genName('guard_')
-    const errVar = genName('err_')
-    const inject = t.replace("_err()", `${errVar}("!")`)
-    guards += `do local ${fn}=function() local ${errVar}=error ${inject} end ${fn}() end `
-  }
-
-  return `do ${antiDebuggers} end ` + guards
 }
 
 function obfuscate(sourceCode) {
@@ -262,16 +223,10 @@ function obfuscate(sourceCode) {
     payloadToProtect = detectAndApplyMappings(sourceCode)
   }
 
-  const envScan = `do if delta and delta.getinfo then while true do end end ` +
-                  `if getgc then while true do end end ` +
-                  `local ${genName('t0')}=os.clock() local function ${genName('chk')}() if os.clock()-${genName('t0')}>3 then while true do end end end ${genName('chk')}() end`
-  const extra = getExtraProtections()
   const junk = generateAdvancedJunk(150)
   const vm = build18xVM(payloadToProtect)
 
   const final = `${HEADER}
-${envScan}
-${extra}
 ${junk}
 ${vm}`
   return final.replace(/\s+/g, " ").trim()
