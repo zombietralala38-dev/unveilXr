@@ -88,7 +88,7 @@ function buildGenericVMLayer(innerCode, layers = 4) {
 
 function generateVMExecutor() {
   let inner = `local fn,err=loadstring(code) if fn then fn() else error(err) end`
-  for (let i = 0; i < 30; i++) {
+  for (let i = 0; i < 5; i++) {
     inner = buildGenericVMLayer(inner, 4)
   }
   return inner
@@ -124,27 +124,25 @@ function generateGigaAntiTamper(payloadData, isUrl) {
   const encHex = Array.from(encBytes, c => '\\x' + c.charCodeAt(0).toString(16).padStart(2, '0').toUpperCase()).join('')
 
   const vmExecutorBody = generateVMExecutor()
-  const vmFunc = `local function _VME(code)\n${vmExecutorBody}\nend`
 
-  // Constantes ofuscadas (ejemplo)
+  // Constantes ofuscadas
   const Q = rc4("A!_x2$9*", "\x1F\xA4\x3D\xB2\xCC\x77\xE9\x01\x10\xF0\xDA\x0F\x00")
   const R = rc4("B7!hJpQ", "\xAB\xCD\xEF\x01\x23\x45\x67\x89\xAB\xCD\xEF\x01")
   const S = rc4("z99pLm", "\xDE\xAD\xBE\xEF\x00\x11\x22\x33\x44\x55\x66\x77\x88")
 
-  // Template sin ningún banner adicional
+  // Template CORREGIDO - Todos los ends balanceados
   const antiTamperTemplate = `
 local _A,_B,_C,_D,_E,_F,_G,_H,_I,_J = getfenv,rawget,pcall,debug,error,math,string,table,bit32,os
 local _K = _A()
-local _L,_M,_N,_O = _G.random, _G.format, _C, _D.getinfo
-math.randomseed(tick())
+local _L,_M,_N,_O = _F.random, _F.format, _C, _D.getinfo
+_F.randomseed(tick())
 
--- RC4 engine
 local function _P(key, data)
   local s = {}
   for i = 0, 255 do s[i] = i end
   local j = 0
   for i = 0, 255 do
-    j = (j + s[i] + _F.byte(key, (i % #key) + 1)) % 256
+    j = (j + s[i] + _G.byte(key, (i % #key) + 1)) % 256
     s[i], s[j] = s[j], s[i]
   end
   local i, j = 0, 0
@@ -153,17 +151,15 @@ local function _P(key, data)
     i = (i + 1) % 256
     j = (j + s[i]) % 256
     s[i], s[j] = s[j], s[i]
-    r[k] = _F.char(_I.bxor(_F.byte(data, k), s[(s[i] + s[j]) % 256]))
+    r[k] = _G.char(_I.bxor(_G.byte(data, k), s[(s[i] + s[j]) % 256]))
   end
   return _H.concat(r)
 end
 
--- Encrypted constants
 local _Q = _P("A!_x2$9*", "${Q}")
 local _R = _P("B7!hJpQ", "${R}")
 local _S = _P("z99pLm", "${S}")
 
--- Camuflaje / junk functions
 local function _T()
   for _ = 1, _F.random(1,3) do
     local x = _F.random(1000,9999)
@@ -171,7 +167,7 @@ local function _T()
     local z = {}
     for i = 1, 10 do z[i] = _F.random() end
     _H.sort(z)
-    if #z > 5 then _G.sleep(0) end
+    if #z > 5 then wait(0) end
   end
 end
 
@@ -187,18 +183,16 @@ end
 
 local function _V(n)
   local t = {}
-  for i = 1, n do t[i] = _F.char(_F.random(65,90)) end
+  for i = 1, n do t[i] = _G.char(_F.random(65,90)) end
   return _H.concat(t)
 end
 
--- Estado corrupto y canarios
 local _W = _F.random(1000000,9999999)
 local _X = _F.random(1000000,9999999)
 local _Y = tick()
 local _Z = false
 local _AA = 0
 
--- Corrupción progresiva
 local function _AB(level)
   if _Z then return end
   _Z = true
@@ -214,44 +208,38 @@ local function _AB(level)
       end
       _K.loadstring = function(...) return loadstring("error('tamper')") end
     elseif level == 2 then
-      _C(function() game:GetService("Players").LocalPlayer:Kick("0x" .. _F.format("%08X", _F.random(0, 0xFFFFFFFF))) end)
-      _C(function() game:GetService("CoreGui"):ClearAllChildren() end)
+      _C(function() 
+        local plr = game:GetService("Players").LocalPlayer
+        if plr then plr:Kick("0x" .. _F.format("%08X", _F.random(0, 0xFFFFFFFF))) end
+      end)
     elseif level == 3 then
-      spawn(function() while true do wait(0.5) _C(function()
-        local kids = workspace:GetChildren()
-        if #kids > 0 then kids[_F.random(#kids)]:Destroy() end
-      end) end end)
-    elseif level == 4 then
-      local plrs = game:GetService("Players")
-      plrs.PlayerAdded:Connect(function(p)
-        spawn(function() while true do wait(1) p:Kick("0x" .. _F.format("%X", _F.random(0, 0xFFFF))) end end)
-      end)
-      plrs.PlayerRemoving:Connect(function(p) while true do wait() end end)
-    elseif level >= 5 then
-      spawn(function()
-        local part = Instance.new("Part")
-        part.Anchored = true
-        part.Parent = workspace
-        wait(0.1)
-        while true do
+      spawn(function() 
+        while true do 
+          wait(0.5) 
           _C(function()
-            for i = 1, 5000 do
-              local clone = part:Clone()
-              clone.Parent = workspace
+            local kids = workspace:GetChildren()
+            if #kids > 0 then 
+              pcall(function() kids[_F.random(#kids)]:Destroy() end)
             end
-          end)
-          wait()
-        end
+          end) 
+        end 
       end)
-    end
-    while true do
-      wait(_F.random() * 2 + 0.5)
-      _C(function() error("MEMORY CORRUPTION AT 0x" .. _F.format("%08X", _F.random(0, 0xFFFFFF))) end)
+    elseif level >= 4 then
+      spawn(function()
+        local plrs = game:GetService("Players")
+        plrs.PlayerAdded:Connect(function(p)
+          spawn(function() 
+            while true do 
+              wait(1) 
+              pcall(function() p:Kick("0x" .. _F.format("%X", _F.random(0, 0xFFFF))) end)
+            end 
+          end)
+        end)
+      end)
     end
   end)
 end
 
--- Detección de Sandbox
 local function _AC()
   if _K.syn or _K.scripthook or _K.fluxus or _K.krnl then return true end
   if not _C(function() print(1) end) then return true end
@@ -265,7 +253,6 @@ local function _AC()
   return false
 end
 
--- Detección de Hooks y Loggers
 local function _AD()
   local function probe() return true end
   local ok = _C(function()
@@ -279,17 +266,16 @@ local function _AD()
   if not chunk or type(chunk) ~= "function" then return true end
   local success, val = _C(chunk)
   if not success or val ~= 1 then return true end
-  if not _C(function() return _D.getregistry() end) then return true end
+  if not _C(function() return debug.getregistry() end) then return true end
   return false
 end
 
--- Verificación de integridad del script (checksum)
 local _AE = _P("IntegrityCheckSalt#1", "\\xDE\\xAD\\xBE\\xEF\\x00\\x11\\x22\\x33\\x44\\x55\\x66\\x77")
 local _AF = 0x5A5A5A5A
 local function _AG()
   local h = 0x811C9DC5
   for i = 1, #_AE do
-    local b = _F.byte(_AE, i)
+    local b = _G.byte(_AE, i)
     h = _I.bxor(h, b)
     h = (h * 0x01000193) % 0x100000000
   end
@@ -300,38 +286,25 @@ local function _AG()
   return true
 end
 
--- Verificación de funciones críticas
 local function _AH()
-  local libs = {"loadstring","getfenv","setfenv","pcall","xpcall","debug.getinfo","debug.getupvalue","debug.setupvalue","debug.traceback"}
+  local libs = {"loadstring","getfenv","setfenv","pcall","xpcall","debug.getinfo","debug.getupvalue"}
   for _, lib in ipairs(libs) do
     local parts = {}
-    for seg in _F.gmatch(lib, "[^.]+") do
+    for seg in _G.gmatch(lib, "[^.]+") do
       _H.insert(parts, seg)
     end
     local obj = _K
+    local found = true
     for i = 1, #parts - 1 do
       obj = obj[parts[i]]
       if type(obj) ~= "table" then
-        _AB(4)
-        return false
+        found = false
+        break
       end
     end
-    local fn = obj[parts[#parts]]
-    if type(fn) ~= "function" then
-      _AB(4)
-      return false
-    end
-    local dump = _F.dump(fn)
-    local h = 0
-    for i = 1, #dump do
-      h = _I.bxor(h, _F.byte(dump, i))
-      h = (h * 0x01000193) % 0x100000000
-    end
-    if not _K.__CRIT_HASH then _K.__CRIT_HASH = {} end
-    if not _K.__CRIT_HASH[lib] then
-      _K.__CRIT_HASH[lib] = h
-    else
-      if h ~= _K.__CRIT_HASH[lib] then
+    if found then
+      local fn = obj[parts[#parts]]
+      if type(fn) ~= "function" then
         _AB(4)
         return false
       end
@@ -340,7 +313,6 @@ local function _AH()
   return true
 end
 
--- Detección de pausas y step-over
 local function _AI()
   local now = tick()
   local diff = now - (_Y + _W % 100)
@@ -355,12 +327,11 @@ local function _AI()
   return true
 end
 
--- Verificación maestro
 local function _AJ()
   _T()
-  if _AC() then _AB(3); return end
+  if _AC() then _AB(3) return end
   _U()
-  if _AD() then _AB(4); return end
+  if _AD() then _AB(4) return end
   _AG()
   _AH()
   _AI()
@@ -369,7 +340,6 @@ local function _AJ()
   _T()
 end
 
--- Vigilancia eterna
 spawn(function()
   while not _Z do
     wait(10 + _F.random() * 20)
@@ -377,24 +347,24 @@ spawn(function()
   end
 end)
 
--- ═══════════ VM EXECUTOR ═══════════
-${vmFunc}
+local function _VME(code)
+  ${vmExecutorBody}
+end
 
--- ═══════════ FUNCIÓN DE CARGA FINAL ═══════════
 local function _AK()
   if _Z then return end
   local decrypt = function(cipher)
     return _P("TempKey" .. ${W} .. ${X}, cipher)
   end
   local data = decrypt("${encHex}")
-  local flag = _F.byte(data, 1)
-  local content = _F.sub(data, 2)
+  local flag = _G.byte(data, 1)
+  local content = _G.sub(data, 2)
   local code = nil
   if flag == 1 then
     _C(function()
       code = game:HttpGet(content)
     end)
-    if not code then _AB(2); return end
+    if not code then _AB(2) return end
   else
     code = content
   end
@@ -408,7 +378,6 @@ spawn(function()
   _AK()
 end)
 
--- Auto‑limpieza
 _K._GIGA_ANTITAMPER = nil
 `.trim()
 
@@ -418,6 +387,7 @@ _K._GIGA_ANTITAMPER = nil
 // ═══════════════════ OFUSCADOR PRINCIPAL ═══════════════════════════
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
+  usedNames.clear()
 
   const regex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(regex)
@@ -432,7 +402,7 @@ function obfuscate(sourceCode) {
   }
 
   const finalScript = HEADER + '\n' + generateGigaAntiTamper(payloadData, isUrl)
-  return finalScript.replace(/\s+/g, " ").trim()
+  return finalScript
 }
 
 module.exports = { obfuscate }
