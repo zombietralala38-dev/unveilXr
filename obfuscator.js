@@ -235,27 +235,16 @@ function megaProtections() {
 }
 
 // =============================================
-// VALIDADOR DE BALANCEO DE ENDs (evita scripts rotos)
+// CORRECCIÓN AUTOMÁTICA DE 'end' FALTANTES
 // =============================================
-function isBalancedLua(code) {
-  // Cuenta palabras clave que deben balancearse
-  const patterns = [
-    { open: /\bfunction\b/g, close: /\bend\b/g, type: 'function' },
-    { open: /\bdo\b/g, close: /\bend\b/g, type: 'do' },
-    { open: /\bif\b/g, close: /\bend\b/g, type: 'if' },
-    { open: /\bfor\b/g, close: /\bend\b/g, type: 'for' },
-    { open: /\bwhile\b/g, close: /\bend\b/g, type: 'while' }
-  ]
-  for (const p of patterns) {
-    const openCount = (code.match(p.open) || []).length
-    const closeCount = (code.match(p.close) || []).length
-    // 'end' cierra cualquiera, así que comparamos solo aperturas que no sean solapadas
-    // Método simplificado: contar aperturas totales que requieren end vs total ends
+function fixLuaEnds(code) {
+  const openMatches = code.match(/\b(function|do|if|for|while)\b/g) || []
+  const closeMatches = code.match(/\bend\b/g) || []
+  const needed = openMatches.length - closeMatches.length
+  if (needed > 0) {
+    return code + ' ' + ' end'.repeat(needed)
   }
-  // Método simple general: contar todas las palabras que abren bloque y comparar con total de 'end'
-  const openTotal = (code.match(/\b(function|do|if|for|while)\b/g) || []).length
-  const endTotal = (code.match(/\bend\b/g) || []).length
-  return openTotal === endTotal
+  return code
 }
 
 function obfuscate(sourceCode) {
@@ -270,18 +259,16 @@ function obfuscate(sourceCode) {
     payload = detectAndApplyMappings(sourceCode)
   }
 
-  let final
-  do {
-    const protections = megaProtections()
-    const junk = junkBlocks(80, 30)
-    const vm = build30xVM(payload)
+  const protections = megaProtections()
+  const junk = junkBlocks(80, 30)
+  const vm = build30xVM(payload)
 
-    final = `${HEADER}
+  let final = `${HEADER}
 ${protections}
 ${junk}
 ${vm}`
-    final = final.replace(/\s+/g, " ").trim()
-  } while (!isBalancedLua(final)) // reintenta si está desbalanceado
+  final = final.replace(/\s+/g, " ").trim()
+  final = fixLuaEnds(final)   // <-- arreglamos los end faltantes
 
   return final
 }
