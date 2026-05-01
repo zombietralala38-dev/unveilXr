@@ -18,7 +18,9 @@ const {
   REST,
   Routes,
   SlashCommandBuilder,
-  PermissionFlagsBits,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
 } = require("discord.js");
 const { fetch } = require("undici");
 const { obfuscate } = require("./obfuscator.js");
@@ -27,11 +29,16 @@ const { obfuscate } = require("./obfuscator.js");
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 const SUPPORT_USER_ID = process.env.SUPPORT_USER_ID || "1474472773467242599";
-const PREFIX = [".", "!"];
+const PASTEFY_API_KEY = process.env.PASTEFY_API_KEY;
+const PREFIX = ["/", ".", "!"];
 
 if (!TOKEN || !CLIENT_ID) {
   console.error("Missing DISCORD_BOT_TOKEN or DISCORD_CLIENT_ID environment variables.");
   process.exit(1);
+}
+
+if (!PASTEFY_API_KEY) {
+  console.warn("PASTEFY_API_KEY not set. /make_loadingstring will not work.");
 }
 
 const FOOTER_MESSAGE =
@@ -44,25 +51,10 @@ const COLOR_GREEN = 0x22c55e;
 const COLOR_YELLOW = 0xeab308;
 const COLOR_GRAY = 0x6b7280;
 
-// ─────────────────────────────────────────────── Anti-Spam Tracking ───────
-const channelCreationTracker = new Map(); // { userId: [timestamps] }
-const messageSpamTracker = new Map(); // { userId: [timestamps] }
-const deletedChannelsTracker = new Map(); // { guildId: { channelData, timestamps } }
-const mutedUsers = new Map(); // { userId: timeout }
-
-const CHANNEL_SPAM_LIMIT = 1; // 1 canal = límite
-const CHANNEL_SPAM_TIME = 5000; // en 5 segundos
-const MESSAGE_SPAM_LIMIT = 3; // 3 mensajes
-const MESSAGE_SPAM_TIME = 5000; // en 5 segundos
-const MUTE_DURATION = 15 * 60 * 1000; // 15 minutos
-const DELETED_CHANNELS_THRESHOLD = 3; // 3 o más canales
-const DELETED_CHANNELS_TIME = 3000; // en 3 segundos
-
 // ─────────────────────────────────────────────── Storage ────────────────────
 const DATA_DIR = path.resolve(__dirname, "data");
 const INDEX_FILE = path.join(DATA_DIR, "index.json");
 const STATS_FILE = path.join(DATA_DIR, "stats.json");
-const WELCOME_CONFIG_FILE = path.join(DATA_DIR, "welcome_config.json");
 
 function ensureDataDir() {
   if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
@@ -84,10 +76,9 @@ function saveJson(file, data) {
 ensureDataDir();
 let entries = loadJson(INDEX_FILE, {});
 let stats = Object.assign(
-  { obfuscations: 0, fetches: 0, lookups: 0, supportRequests: 0, spamActions: 0 },
+  { obfuscations: 0, fetches: 0, lookups: 0, supportRequests: 0 },
   loadJson(STATS_FILE, {}),
 );
-let welcomeConfig = loadJson(WELCOME_CONFIG_FILE, {});
 
 function randomDigits(n) {
   let out = "";
@@ -115,16 +106,6 @@ function bumpStat(key) {
   saveJson(STATS_FILE, stats);
 }
 
-function setWelcomeChannel(guildId, channelId) {
-  welcomeConfig[guildId] = channelId;
-  saveJson(WELCOME_CONFIG_FILE, welcomeConfig);
-  console.log(`✅ Welcome channel set for ${guildId}: ${channelId}`);
-}
-
-function getWelcomeChannel(guildId) {
-  return welcomeConfig[guildId];
-}
-
 // ─────────────────────────────────────────────── Lua check ──────────────────
 const LUA_MARKERS = [
   /\blocal\b/,
@@ -142,6 +123,41 @@ function looksLikeLua(rawSrc) {
   if (!src) return { ok: false, reason: "Empty source" };
   for (const re of LUA_MARKERS) if (re.test(src)) return { ok: true };
   return { ok: false, reason: "No Lua keywords detected" };
+}
+
+// ─────────────────────────────────────────────── Pastefy API ────────────────
+async function createPastefy(code) {
+  if (!PASTEFY_API_KEY) {
+    throw new Error("PASTEFY_API_KEY not configured");
+  }
+
+  try {
+    const response = await fetch("https://pastefy.app/api/v2/paste", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${PASTEFY_API_KEY}`,
+      },
+      body: JSON.stringify({
+        content: code,
+        expiration: 2592000, // 30 días
+        syntax: "lua",
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Pastefy API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return `https://pastefy.app/api/v2/paste/${data.id}/raw`;
+  } catch (err) {
+    throw new Error(`Failed to create paste: ${err.message}`);
+  }
+}
+
+function generateLoadingString(pasteUrl) {
+  return `loadstring(game:HttpGet("${pasteUrl}"))()`;
 }
 
 // ─────────────────────────────────────────────── Support sessions ───────────
@@ -186,115 +202,6 @@ function buildErrorEmbed(title, description, extraFields = []) {
     .setDescription(description)
     .addFields(extraFields)
     .setFooter({ text: FOOTER_MESSAGE });
-}
-
-// ─────────────────────────────────────────────── Anti-Spam Functions ───────
-
-function trackChannelCreation(userId) {
-  const now = Date.now();
-  if (!channelCreationTracker.has(userId)) {
-    channelCreationTracker.set(userId, []);
-  }
-  const timestamps = channelCreationTracker.get(userId);
-  timestamps.push(now);
-  
-  // Limpiar timestamps antiguos
-  const filtered = timestamps.filter(t => now - t < CHANNEL_SPAM_TIME);
-  channelCreationTracker.set(userId, filtered);
-  
-  return filtered.length;
-}
-
-function trackMessageSpam(userId) {
-  const now = Date.now();
-  if (!messageSpamTracker.has(userId)) {
-    messageSpamTracker.set(userId, []);
-  }
-  const timestamps = messageSpamTracker.get(userId);
-  timestamps.push(now);
-  
-  // Limpiar timestamps antiguos
-  const filtered = timestamps.filter(t => now - t < MESSAGE_SPAM_TIME);
-  messageSpamTracker.set(userId, filtered);
-  
-  return filtered.length;
-}
-
-function trackDeletedChannel(guildId, channelData) {
-  const now = Date.now();
-  if (!deletedChannelsTracker.has(guildId)) {
-    deletedChannelsTracker.set(guildId, []);
-  }
-  const channels = deletedChannelsTracker.get(guildId);
-  channels.push({ ...channelData, deletedAt: now });
-  
-  // Limpiar canales antiguos
-  const filtered = channels.filter(ch => now - ch.deletedAt < DELETED_CHANNELS_TIME);
-  deletedChannelsTracker.set(guildId, filtered);
-  
-  return filtered;
-}
-
-async function muteUser(member, duration = MUTE_DURATION) {
-  try {
-    await member.timeout(duration, "Anti-spam: Rapid messaging/mentions detected");
-    const embed = new EmbedBuilder()
-      .setColor(COLOR_BLUE)
-      .setTitle("You have been muted")
-      .setDescription(`**Reason:** Rapid messaging or mentions detected\n**Duration:** 15 minutes`)
-      .setFooter({ text: FOOTER_MESSAGE });
-    
-    await member.user.send({ embeds: [embed] }).catch(() => {});
-    return true;
-  } catch (err) {
-    console.error("Error muting user:", err.message);
-    return false;
-  }
-}
-
-async function deleteChannelsCreatedBy(guild, userId) {
-  try {
-    const channels = await guild.channels.fetch();
-    const userChannels = channels.filter(ch => ch.ownerId === userId);
-    
-    const deletedCount = userChannels.size;
-    for (const [, channel] of userChannels) {
-      try {
-        await channel.delete("Anti-spam: Rapid channel creation detected");
-        console.log(`   🗑️  Deleted channel: ${channel.name} (created by ${userId})`);
-      } catch (err) {
-        console.error(`   ❌ Error deleting channel ${channel.name}:`, err.message);
-      }
-    }
-    return deletedCount;
-  } catch (err) {
-    console.error("Error deleting channels:", err.message);
-    return 0;
-  }
-}
-
-async function reconstructDeletedChannels(guild, deletedChannels) {
-  try {
-    const reconstructed = [];
-    for (const channelData of deletedChannels) {
-      try {
-        const newChannel = await guild.channels.create({
-          name: channelData.name,
-          type: channelData.type,
-          topic: channelData.topic || undefined,
-          nsfw: channelData.nsfw || false,
-        });
-        reconstructed.push(newChannel);
-        console.log(`   ✅ Reconstructed channel: ${newChannel.name}`);
-      } catch (err) {
-        console.error(`   ❌ Error reconstructing channel:`, err.message);
-      }
-    }
-    return reconstructed;
-  } catch (err) {
-    console.error("Error in reconstruction:", err.message);
-    return [];
-  }
 }
 
 // ─────────────────────────────────────────────── Slash command defs ─────────
@@ -342,10 +249,8 @@ const client = new Client({
     GatewayIntentBits.GuildMessages,
     GatewayIntentBits.DirectMessages,
     GatewayIntentBits.MessageContent,
-    GatewayIntentBits.GuildMembers,
-    GatewayIntentBits.GuildModeration,
   ],
-  partials: [Partials.Channel, Partials.Message, Partials.User],
+  partials: [Partials.Channel, Partials.Message],
 });
 
 // ─────────────────────────────────────────────── Handlers ───────────────────
@@ -579,7 +484,6 @@ async function handleStats(interaction) {
       { name: "URL fetches", value: stats.fetches.toString(), inline: true },
       { name: "ID lookups", value: stats.lookups.toString(), inline: true },
       { name: "Support tickets", value: stats.supportRequests.toString(), inline: true },
-      { name: "Spam actions", value: stats.spamActions.toString(), inline: true },
       { name: "Total operations", value: total.toString(), inline: true },
       { name: "Response time", value: formatDuration(elapsed), inline: true },
     )
@@ -597,24 +501,37 @@ async function handleHelp(interaction) {
   const embed = new EmbedBuilder()
     .setColor(COLOR_YELLOW)
     .setTitle("📚 Bot Help")
-    .setDescription("Use the commands below:")
+    .setDescription("First go to #・test and do these steps:")
     .addFields(
       {
-        name: "Slash Commands",
-        value: "`/obf` - Obfuscate Lua code\n`/get` - Fetch a URL content\n`/id_get` - Retrieve a file by ID\n`/stats` - Show bot statistics\n`/support` - Open a support ticket\n`/help` - Show this help message",
+        name: "Step 1: Obfuscate Your Code",
+        value: "`/obf` or `/obfuscate` or `.obf` or `!obf` or `.obfuscate` or `!obfuscate`",
         inline: false,
       },
       {
-        name: "Text Commands",
-        value: "`.help` - Show help\n`.stats` - Show statistics\n`!set [#channel]` - Set welcome channel",
+        name: "Step 2: Select Input",
+        value: "**code:** your code source\n**file:** a file with your code",
         inline: false,
       },
       {
-        name: "🛡️ Anti-Spam Protection",
+        name: "Step 3: Get Support (if needed)",
+        value: "Do `/support` command and we will DM you with all information and supporters will help you.",
+        inline: false,
+      },
+      {
+        name: "Available Commands",
         value: 
-          "⏱️ **Rapid Channel Creation:** Delete all channels if 1+ created in 5s\n" +
-          "⏱️ **Message Spam:** Mute for 15min if 3+ mentions/messages in 5s\n" +
-          "⏱️ **Channel Deletion:** Reconstruct if 3+ channels deleted in 3s & ban offender",
+          "`/obf` - Obfuscate Lua code\n" +
+          "`/get` - Fetch a URL content\n" +
+          "`/id_get` - Retrieve a file by ID\n" +
+          "`/stats` - Show bot statistics\n" +
+          "`/support` - Open a support ticket\n" +
+          "`/help` - Show this help message",
+        inline: false,
+      },
+      {
+        name: "Prefix Support",
+        value: "All commands work with `/`, `.`, and `!` prefixes",
         inline: false,
       },
     )
@@ -761,59 +678,59 @@ async function handleTextCommand(message) {
 
   try {
     switch (command) {
-      case "set":
-        // Set welcome channel to specified channel or current
-        if (!message.guild) {
+      case "obf":
+      case "obfuscate":
+        // Convert text command to interaction-like object
+        if (restArgs.length === 0) {
           const embed = buildErrorEmbed(
-            "Guild command only",
-            "This command can only be used in a server.",
+            "No input provided",
+            `Use: ${prefix}${command} <code>\nOr reply to a message with code.`,
           );
           return await message.reply({ embeds: [embed] });
         }
-
-        let targetChannelId = message.channelId;
-        
-        // Si menciona un canal, usarlo
-        const channelMentions = message.mentions.channels;
-        if (channelMentions.size > 0) {
-          targetChannelId = channelMentions.first().id;
-        }
-
-        setWelcomeChannel(message.guild.id, targetChannelId);
-        const successEmbed = new EmbedBuilder()
-          .setColor(COLOR_GREEN)
-          .setTitle("✅ Welcome messages ENABLED")
-          .setDescription(`Welcome messages will now be sent in <#${targetChannelId}>`)
-          .addFields(
-            { name: "Message format", value: "Hello @username\nThank you for joining our server; you are part of the beginning of a community.", inline: false },
-            { name: "Status", value: "🟢 Active 24/7", inline: true },
-            { name: "Skip bots", value: "✅ Yes", inline: true },
-          )
+        // For text commands with prefix, we'd need to refactor - for now, suggest slash command
+        const embed = new EmbedBuilder()
+          .setColor(COLOR_YELLOW)
+          .setTitle("Text Command")
+          .setDescription(`For better experience, use: \`/${command}\``)
           .setFooter({ text: FOOTER_MESSAGE });
-        return await message.reply({ embeds: [successEmbed] });
+        return await message.reply({ embeds: [embed] });
 
       case "help":
         const helpEmbed = new EmbedBuilder()
           .setColor(COLOR_YELLOW)
           .setTitle("📚 Bot Help")
-          .setDescription("Use the commands below:")
+          .setDescription("First go to #・test and do these steps:")
           .addFields(
             {
-              name: "Slash Commands",
-              value: "`/obf` - Obfuscate Lua code\n`/get` - Fetch a URL content\n`/id_get` - Retrieve a file by ID\n`/stats` - Show bot statistics\n`/support` - Open a support ticket\n`/help` - Show this help message",
+              name: "Step 1: Obfuscate Your Code",
+              value: "`/obf` or `/obfuscate` or `.obf` or `!obf` or `.obfuscate` or `!obfuscate`",
               inline: false,
             },
             {
-              name: "Text Commands",
-              value: "`.help` - Show help\n`.stats` - Show statistics\n`!set [#channel]` - Set welcome channel",
+              name: "Step 2: Select Input",
+              value: "**code:** your code source\n**file:** a file with your code",
               inline: false,
             },
             {
-              name: "🛡️ Anti-Spam Protection",
+              name: "Step 3: Get Support (if needed)",
+              value: "Do `/support` command and we will DM you with all information and supporters will help you.",
+              inline: false,
+            },
+            {
+              name: "Available Commands",
               value: 
-                "⏱️ **Rapid Channel Creation:** Delete all channels if 1+ created in 5s\n" +
-                "⏱️ **Message Spam:** Mute for 15min if 3+ mentions/messages in 5s\n" +
-                "⏱️ **Channel Deletion:** Reconstruct if 3+ channels deleted in 3s & ban offender",
+                "`/obf` - Obfuscate Lua code\n" +
+                "`/get` - Fetch a URL content\n" +
+                "`/id_get` - Retrieve a file by ID\n" +
+                "`/stats` - Show bot statistics\n" +
+                "`/support` - Open a support ticket\n" +
+                "`/help` - Show this help message",
+              inline: false,
+            },
+            {
+              name: "Prefix Support",
+              value: "All commands work with `/`, `.`, and `!` prefixes",
               inline: false,
             },
           )
@@ -830,7 +747,6 @@ async function handleTextCommand(message) {
             { name: "URL fetches", value: stats.fetches.toString(), inline: true },
             { name: "ID lookups", value: stats.lookups.toString(), inline: true },
             { name: "Support tickets", value: stats.supportRequests.toString(), inline: true },
-            { name: "Spam actions", value: stats.spamActions.toString(), inline: true },
             { name: "Total operations", value: total.toString(), inline: true },
           )
           .setDescription(FOOTER_MESSAGE)
@@ -847,227 +763,42 @@ async function handleTextCommand(message) {
   }
 }
 
-// ─────────────────────────────────────────────── Welcome Messages (24/7) ────
-client.on(Events.GuildMemberAdd, async (member) => {
-  console.log(`\n👤 New member detected: ${member.user.username}#${member.user.discriminator} (ID: ${member.id}, Bot: ${member.user.bot})`);
-  
-  // Skip bots
-  if (member.user.bot) {
-    console.log(`   ⏭️  Skipping bot member`);
-    return;
-  }
-
-  const welcomeChannelId = getWelcomeChannel(member.guild.id);
-  
-  if (!welcomeChannelId) {
-    console.log(`   ℹ️  No welcome channel configured for ${member.guild.name}`);
-    return;
-  }
-
-  try {
-    const channel = await member.guild.channels.fetch(welcomeChannelId);
-    if (!channel) {
-      console.log(`   ❌ Channel not found: ${welcomeChannelId}`);
-      return;
-    }
-    
-    if (!channel.isTextBased()) {
-      console.log(`   ❌ Channel is not text-based`);
-      return;
-    }
-
-    const embed = new EmbedBuilder()
-      .setColor(COLOR_GREEN)
-      .setTitle(`Hello ${member.user.username}`)
-      .setDescription("Thank you for joining our server; you are part of the beginning of a community.")
-      .setThumbnail(member.user.displayAvatarURL({ dynamic: true }))
-      .setTimestamp()
-      .setFooter({ text: FOOTER_MESSAGE });
-
-    await channel.send({ 
-      content: `<@${member.id}>`,
-      embeds: [embed] 
-    });
-    
-    console.log(`   ✅ Welcome message sent to ${channel.name}`);
-  } catch (err) {
-    console.error(`   ❌ Error sending welcome message:`, err.message);
-  }
+// ─────────────────────────────────────────────── Wiring ─────────────────────
+client.once(Events.ClientReady, (c) => {
+  console.log(`Logged in as ${c.user.tag}`);
 });
 
-// ─────────────────────────────────────────────── Anti-Spam: Channel Creation ─
-client.on(Events.ChannelCreate, async (channel) => {
-  if (!channel.guild) return;
-  
-  const ownerId = channel.ownerId;
-  if (!ownerId) return;
-
-  const creationCount = trackChannelCreation(ownerId);
-  
-  console.log(`\n📢 Channel created: ${channel.name} (by ${ownerId})`);
-  console.log(`   📊 Creation count in 5s: ${creationCount}`);
-
-  if (creationCount > CHANNEL_SPAM_LIMIT) {
-    console.log(`   ⚠️  SPAM DETECTED: Rapid channel creation (${creationCount} in 5s)`);
-    console.log(`   🗑️  Deleting all channels created by ${ownerId}...`);
-    
-    const deleted = await deleteChannelsCreatedBy(channel.guild, ownerId);
-    console.log(`   ✅ Deleted ${deleted} channels`);
-    
-    bumpStat("spamActions");
-
-    // Notify in a log channel if available
-    try {
-      const owner = await channel.guild.fetchOwner();
-      if (owner) {
-        const notifEmbed = new EmbedBuilder()
-          .setColor(COLOR_RED)
-          .setTitle("🚨 Anti-Spam Action")
-          .setDescription(`Detected rapid channel creation by <@${ownerId}>`)
-          .addFields(
-            { name: "Channels deleted", value: deleted.toString(), inline: true },
-            { name: "Time window", value: `${CHANNEL_SPAM_TIME}ms`, inline: true },
-          )
-          .setFooter({ text: FOOTER_MESSAGE });
-        
-        await owner.send({ embeds: [notifEmbed] }).catch(() => {});
-      }
-    } catch (err) {
-      console.error("Error notifying owner:", err.message);
-    }
-  }
-});
-
-// ─────────────────────────────────────────────── Anti-Spam: Message Spam ────
-client.on(Events.MessageCreate, async (message) => {
-  if (message.author.bot) return;
-  
-  // Check for mentions or rapid messaging
-  const hasMentions = message.mentions.has(message.client.user) || message.mentions.users.size > 0;
-  
-  if (hasMentions || true) { // Track all messages
-    const spamCount = trackMessageSpam(message.author.id);
-    
-    if (spamCount >= MESSAGE_SPAM_LIMIT && hasMentions) {
-      console.log(`\n⚠️  MESSAGE SPAM DETECTED: ${message.author.tag} (ID: ${message.author.id})`);
-      console.log(`   📊 Messages/mentions in 5s: ${spamCount}`);
-      console.log(`   🔇 Muting user for ${MUTE_DURATION / 60000} minutes...`);
-      
-      try {
-        const member = await message.guild.members.fetch(message.author.id);
-        const muted = await muteUser(member);
-        
-        if (muted) {
-          console.log(`   ✅ User muted successfully`);
-          bumpStat("spamActions");
-          
-          // Send notification to channel
-          const muteEmbed = new EmbedBuilder()
-            .setColor(COLOR_BLUE)
-            .setTitle("You have been muted")
-            .setDescription(`**Reason:** Rapid messaging or mentions detected\n**Duration:** 15 minutes`)
-            .setFooter({ text: FOOTER_MESSAGE });
-          
-          await message.reply({ embeds: [muteEmbed] }).catch(() => {});
-        }
-      } catch (err) {
-        console.error(`   ❌ Error muting user:`, err.message);
-      }
-    }
-  }
-  
-  // Handle regular commands
+client.on(Events.MessageCreate, (message) => {
   handleSupportDm(message).catch((err) => console.error("DM handler error:", err));
   handleTextCommand(message).catch((err) => console.error("Text command error:", err));
 });
 
-// ─────────────────────────────────────────────── Anti-Spam: Channel Deletion ─
-client.on(Events.ChannelDelete, async (channel) => {
-  if (!channel.guild) return;
-
-  const deletedChannels = trackDeletedChannel(channel.guild.id, {
-    id: channel.id,
-    name: channel.name,
-    type: channel.type,
-    topic: channel.topic,
-    nsfw: channel.nsfw,
-  });
-
-  console.log(`\n🗑️  Channel deleted: ${channel.name}`);
-  console.log(`   📊 Deleted channels in 3s: ${deletedChannels.length}`);
-
-  if (deletedChannels.length >= DELETED_CHANNELS_THRESHOLD) {
-    console.log(`   ⚠️  MASS DELETION DETECTED: ${deletedChannels.length} channels in 3s`);
-    console.log(`   ♻️  Reconstructing channels...`);
-
-    const reconstructed = await reconstructDeletedChannels(channel.guild, deletedChannels);
-    console.log(`   ✅ Reconstructed ${reconstructed.length} channels`);
-
-    // Find the user who deleted the channels (from audit log)
-    try {
-      const auditLogs = await channel.guild.fetchAuditLogs({ type: 'CHANNEL_DELETE', limit: 5 });
-      const entry = auditLogs.entries.first();
-      
-      if (entry && entry.executor) {
-        const executor = entry.executor;
-        console.log(`   🎯 Offender identified: ${executor.tag} (ID: ${executor.id})`);
-        
-        // Try to ban or kick the offender
-        try {
-          const member = await channel.guild.members.fetch(executor.id);
-          
-          if (member.kickable) {
-            await member.kick("Anti-spam: Mass channel deletion detected");
-            console.log(`   ✅ User kicked`);
-          } else if (member.bannable) {
-            await member.ban({ reason: "Anti-spam: Mass channel deletion detected" });
-            console.log(`   ✅ User banned`);
-          }
-          
-          bumpStat("spamActions");
-
-          // Notify
-          const notifEmbed = new EmbedBuilder()
-            .setColor(COLOR_RED)
-            .setTitle("🚨 Anti-Spam Action - Mass Deletion")
-            .setDescription(`<@${executor.id}> attempted to delete ${deletedChannels.length} channels`)
-            .addFields(
-              { name: "Action taken", value: member.kickable ? "Kicked" : "Banned", inline: true },
-              { name: "Channels reconstructed", value: reconstructed.length.toString(), inline: true },
-            )
-            .setFooter({ text: FOOTER_MESSAGE });
-          
-          const owner = await channel.guild.fetchOwner();
-          if (owner) {
-            await owner.send({ embeds: [notifEmbed] }).catch(() => {});
-          }
-        } catch (err) {
-          console.error(`   ❌ Error taking action:`, err.message);
+client.on(Events.InteractionCreate, async (interaction) => {
+  // Handle button clicks
+  if (interaction.isButton()) {
+    if (interaction.customId === "copy_loadstring") {
+      // Extract loadstring ID from message content
+      const content = interaction.message.content || "";
+      const match = content.match(/\|\|Copy ID: (\w+)\|\|/);
+      if (match) {
+        const entry = getEntry(match[1]);
+        if (entry) {
+          // Copy to clipboard would require ephemeral message in Discord
+          await interaction.reply({
+            content: `\`\`\`\n${entry.content}\n\`\`\``,
+            ephemeral: true,
+          });
+          return;
         }
       }
-    } catch (err) {
-      console.error(`   ❌ Error fetching audit logs:`, err.message);
+      await interaction.reply({
+        embeds: [buildErrorEmbed("Error", "Could not find loading string")],
+        ephemeral: true,
+      });
     }
+    return;
   }
-});
 
-// ─────────────────────────────────────────────── Wiring ─────────────────────
-client.once(Events.ClientReady, (c) => {
-  console.log(`\n${'='.repeat(60)}`);
-  console.log(`✅ Logged in as ${c.user.tag}`);
-  console.log(`🔧 Bot is active and listening to:`);
-  console.log(`   - Slash commands`);
-  console.log(`   - Text commands (. and ! prefix)`);
-  console.log(`   - Member join events (24/7)`);
-  console.log(`   - Support DMs`);
-  console.log(`   - 🛡️  Anti-Spam Protection:`);
-  console.log(`      ⏱️  Rapid channel creation (1+ in 5s)`);
-  console.log(`      ⏱️  Message spam (3+ mentions in 5s)`);
-  console.log(`      ⏱️  Mass channel deletion (3+ in 3s)`);
-  console.log(`${'='.repeat(60)}\n`);
-});
-
-client.on(Events.InteractionCreate, async (interaction) => {
   if (!interaction.isChatInputCommand()) return;
   try {
     switch (interaction.commandName) {
@@ -1115,7 +846,7 @@ async function registerCommands() {
     await rest.put(Routes.applicationCommands(CLIENT_ID), {
       body: commandDefs,
     });
-    console.log("✅ Slash commands registered successfully");
+    console.log("Slash commands registered successfully");
   } catch (err) {
     console.error("Failed to register commands:", err);
   }
