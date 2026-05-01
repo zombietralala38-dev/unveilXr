@@ -1,159 +1,147 @@
 /**
- * UnveilX Ultra Max - THE FINAL OBFUSCATOR
- * Todas las técnicas integradas: 30 capas, CFF, VM, Anti-Env, Global Mapping.
+ * UnveilX Obfuscator Engine
+ * Sistema de protección multi-capa con Anti-Environment Logging
+ * - Reducción del 30% en código matemático innecesario
  */
 
 const HEADER = `--[[ this code its protected by unveilX | https://discord.gg/DU35Mhyhq]]`;
 
-class UnveilXUltra {
-    constructor() {
-        this.usedNames = new Set();
-        // El script de validación que proporcionaste para el bot
-        this.antiEnvScript = `
-            local _ok = true
-            local function _f() _ok = false end
-            local _p = game:GetService('Players')
-            local _lp = _p.LocalPlayer
-            if not _lp or typeof(_lp) ~= 'Instance' then _f() end
-            if _ok then
-                local _s = Instance.new('Part'):GetPropertyChangedSignal('Name')
-                local _c = _s:Connect(function() end)
-                if not _c or _c.Connected ~= true then _f() end
-                _c:Disconnect()
-                if _c.Connected ~= false then _f() end
-            end
-            if _ok then
-                local _rs = game:GetService('RunService')
-                if not _rs or not _rs.Heartbeat then _f() end
-            end
-            return _ok
-        `;
+class UnveilXObfuscator {
+  constructor() {
+    this.usedNames = new Set();
+    
+    // Probabilidad de omitir la ofuscación matemática (30% menos)
+    this.mathSkipProbability = 0.3;
+
+    // Script Anti-Env mejorado (basado en el test de fallos silenciosos)
+    this.antiEnvScript = `
+      local _anti_pass = true
+      local function fail(msg) _anti_pass = false return nil end
+      local ok
+      local Players = game:GetService('Players')
+      local lp = Players.LocalPlayer
+      if typeof(lp) ~= 'Instance' then fail(101) end
+      if type(lp.Kick) ~= 'function' then fail(102) end
+      ok = pcall(function() lp:Kick('m') end); if not ok then fail(103) end
+      ok = pcall(lp.Kick, lp, 'm2'); if not ok then fail(104) end
+      ok = pcall(function() lp:Kick() end); if not ok then fail(105) end
+      ok = xpcall(function() lp:Kick('x') end, function(e) return e end); if not ok then fail(106) end
+      ok = pcall(function() game:GetService('Players').LocalPlayer:Kick('chained') end); if not ok then fail(107) end
+      local part = Instance.new('Part')
+      local sig = part:GetPropertyChangedSignal('Name')
+      if typeof(sig) ~= 'RBXScriptSignal' then fail(201) end
+      if type(sig.Connect) ~= 'function' then fail(202) end
+      local con = sig:Connect(function() end)
+      if typeof(con) ~= 'RBXScriptConnection' then fail(203) end
+      if con.Connected ~= true then fail(204) end
+      con:Disconnect()
+      if con.Connected ~= false then fail(206) end
+      local rs = game:GetService('RunService')
+      if typeof(rs.Heartbeat) ~= 'RBXScriptSignal' then fail(501) end
+      local uis = game:GetService('UserInputService')
+      if typeof(uis.InputBegan) ~= 'RBXScriptSignal' then fail(506) end
+      if typeof(game) ~= 'Instance' then fail(801) end
+      return _anti_pass
+    `;
+  }
+
+  genName(prefix = '') {
+    let name;
+    do {
+      const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_';
+      name = prefix;
+      const len = 8 + Math.floor(Math.random() * 10);
+      for (let i = 0; i < len; i++) name += chars[Math.floor(Math.random() * chars.length)];
+      name += Math.floor(Math.random() * 99999);
+    } while (this.usedNames.has(name));
+    this.usedNames.add(name);
+    return name;
+  }
+
+  // Nueva versión con reducción del 30% de código matemático
+  lightMath(n) {
+    // Decidir si se omite la ofuscación (30% de probabilidad)
+    if (Math.random() < this.mathSkipProbability) {
+      return n.toString(); // número limpio, sin operaciones extra
+    }
+    const a = Math.floor(Math.random() * 50) + 5;
+    const b = Math.floor(Math.random() * 5) + 2;
+    return `((${n}+${a}-${a})*${b}/${b})`;
+  }
+
+  runtimeString(s) {
+    return `string.char(${s.split('').map(c => this.lightMath(c.charCodeAt(0))).join(',')})`;
+  }
+
+  // Genera bloques de código inútil para confundir deobfuscators
+  generateJunk(count) {
+    let junk = '';
+    for (let i = 0; i < count; i++) {
+      const v = this.genName('j_');
+      const r = Math.random();
+      if (r < 0.3) junk += `local ${v} = pcall(function() return math.sin(${this.lightMath(10)}) end) `;
+      else if (r < 0.6) junk += `if (1==0) then local ${v} = "${this.genName()}" end `;
+      else junk += `do local ${v} = #{${this.lightMath(1)}, ${this.lightMath(2)}} end `;
+    }
+    return junk;
+  }
+
+  // Crea la Máquina Virtual de desencriptación
+  buildVM(luaPayload) {
+    const stackName = this.genName('stack');
+    const key = Math.floor(Math.random() * 100) + 20;
+    const salt = Math.floor(Math.random() * 10) + 1;
+    
+    // Encriptación simple de bytes (ahora con menos ruido matemático)
+    let encryptedBytes = [];
+    for (let i = 0; i < luaPayload.length; i++) {
+      encryptedBytes.push(this.lightMath((luaPayload.charCodeAt(i) + key + (i * salt)) % 256));
     }
 
-    // Generador de nombres ilegibles (Barcodes)
-    genName() {
-        const chars = 'Il1';
-        let name;
-        do {
-            name = '_';
-            for (let i = 0; i < 15; i++) name += chars[Math.floor(Math.random() * chars.length)];
-        } while (this.usedNames.has(name));
-        this.usedNames.add(name);
-        return name;
+    return `
+      local ${stackName} = {}
+      local data = {${encryptedBytes.join(',')}}
+      for i, b in ipairs(data) do
+        table.insert(${stackName}, string.char((b - ${key} - (i-1) * ${salt}) % 256))
+      end
+      local _run = loadstring(table.concat(${stackName}))
+      ${stackName} = nil
+      if _run then _run() end
+    `;
+  }
+
+  // Función principal de ofuscación
+  obfuscate(sourceCode) {
+    if (!sourceCode) return "-- Error: No source provided";
+
+    // 1. Limpiamos nombres usados
+    this.usedNames.clear();
+
+    // 2. Preparamos el código del usuario para ser cargado
+    const escapedCode = sourceCode
+      .replace(/\\/g, '\\\\')
+      .replace(/\n/g, '\\n')
+      .replace(/"/g, '\\"');
+
+    // 3. Creamos la lógica de ejecución condicionada al Anti-Env
+    const protectedPayload = `
+      local _auth = (function() ${this.antiEnvScript} end)()
+      if _auth == true then
+        local _s, _e = pcall(function()
+          ${this.buildVM(sourceCode)}
+        end)
+      end
+    `;
+
+    // 4. Aplicamos múltiples capas de VM (recursividad simulada)
+    let finalCode = protectedPayload;
+    for (let i = 0; i < 5; i++) {
+        finalCode = `(function() ${this.generateJunk(5)} ${finalCode} end)()`
     }
 
-    // Ofuscación de números mediante expresiones matemáticas complejas
-    obfNum(n) {
-        const r = Math.random();
-        const k = Math.floor(Math.random() * 500) + 1;
-        if (r < 0.33) return `((${n + k}-${k}))`;
-        if (r < 0.66) return `((${n}*${k})/${k})`;
-        return `(function() return ${n} end)()`;
-    }
-
-    // Convierte strings en byte arrays dinámicos
-    obfString(s) {
-        const bytes = s.split('').map(c => this.obfNum(c.charCodeAt(0)));
-        return `string.char(${bytes.join(',')})`;
-    }
-
-    // Generación de Junk Code (Código basura) para inflar el archivo
-    generateJunk(amount) {
-        let junk = "";
-        for (let i = 0; i < amount; i++) {
-            const n = this.genName();
-            const r = Math.random();
-            if (r < 0.25) junk += `local ${n} = pcall(function() return game:GetService(${this.obfString("Workspace")}) end); `;
-            else if (r < 0.5) junk += `for _=${this.obfNum(1)}, ${this.obfNum(1)} do local ${n} = ${this.obfNum(i)} end; `;
-            else if (r < 0.75) junk += `if (not(1==0)) then local ${n} = #{[1]=true,[2]=false} end; `;
-            else junk += `pcall(function() error("${this.genName()}") end); `;
-        }
-        return junk;
-    }
-
-    // Control Flow Flattening (CFF) - Aplana el flujo del código
-    applyCFF(blocks) {
-        const state = this.genName();
-        let lua = `local ${state} = ${this.obfNum(1)} while true do `;
-        blocks.forEach((block, i) => {
-            lua += `if ${state} == ${this.obfNum(i + 1)} then ${block} ${state} = ${this.obfNum(i + 2)} `;
-        });
-        lua += `elseif ${state} == ${this.obfNum(blocks.length + 1)} then break end end `;
-        return lua;
-    }
-
-    // Virtualización (VM): Convierte el código en un intérprete de bytecode
-    buildVM(source) {
-        const stack = this.genName();
-        const key = Math.floor(Math.random() * 255);
-        const encrypted = source.split('').map(c => c.charCodeAt(0) ^ key);
-        
-        return `
-            local ${stack} = {}
-            local _key = ${this.obfNum(key)}
-            for _, _b in ipairs({${encrypted.join(',')}}) do
-                table.insert(${stack}, string.char(bit32.bxor(_b, _key)))
-            end
-            local _exec, _err = loadstring(table.concat(${stack}))
-            if _exec then _exec() end
-        `;
-    }
-
-    // Mapeo de Globales: game.Players -> game[string.char(80...)]
-    mapGlobals(code) {
-        return code.replace(/\bgame\.(\w+)\b/g, (match, p1) => {
-            return `game[${this.obfString(p1)}]`;
-        });
-    }
-
-    // Aplicación de las 30 Capas de Protección
-    apply30Layers(code) {
-        let current = code;
-        for (let i = 0; i < 30; i++) {
-            const junk = this.generateJunk(3);
-            const r = Math.random();
-            if (r < 0.4) {
-                // Capa CFF
-                current = this.applyCFF([junk, current, this.generateJunk(2)]);
-            } else if (r < 0.7) {
-                // Capa de Función con Upvalues
-                const up = this.genName();
-                current = `local ${up} = function() ${junk} ${current} end; ${up}();`;
-            } else {
-                // Capa de Bloque Do-End
-                current = `do ${junk} ${current} ${this.generateJunk(2)} end`;
-            }
-        }
-        return current;
-    }
-
-    // Función Principal de Ofuscación
-    obfuscate(source) {
-        if (!source) return "-- [Error: Código vacío]";
-        this.usedNames.clear();
-
-        // 1. Mapeo inicial
-        let stage1 = this.mapGlobals(source);
-
-        // 2. Construcción de la VM núcleo
-        let stage2 = this.buildVM(stage1);
-
-        // 3. Integración de Anti-Env Silencioso
-        let stage3 = `
-            local _env_pass = (function() 
-                ${this.antiEnvScript} 
-            end)()
-            if _env_pass then 
-                ${stage2} 
-            end
-        `;
-
-        // 4. Aplicación de las 30 capas de tortura
-        let finalCode = this.apply30Layers(stage3);
-
-        // 5. Compresión y Header
-        return `${HEADER}\n${finalCode.replace(/\s+/g, ' ').trim()}`;
-    }
+    // 5. Construcción final con Header
+    return `${HEADER}\n${finalCode.replace(/\s+/g, ' ').trim()}`;
+  }
 }
 
-module.exports = UnveilXUltra;
+module.exports = UnveilXObfuscator;
