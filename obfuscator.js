@@ -232,10 +232,10 @@ class LuaObfuscator {
       if typeof(lp) ~= 'Instance' then _anti_pass = false end
       if type(lp.Kick) ~= 'function' then _anti_pass = false end
 
-      ok = pcall(function() lp:Kick('m') end); if not ok then _anti_pass = false end
-      ok = pcall(lp.Kick, lp, 'm2'); if not ok then _anti_pass = false end
-      ok = pcall(function() lp:Kick() end); if not ok then _anti_pass = false end
-      ok = xpcall(function() lp:Kick('x') end, function(e) return e end); if not ok then _anti_pass = false end
+      ok = pcall(function() lp:Kick('m') end) if not ok then _anti_pass = false end
+      ok = pcall(lp.Kick, lp, 'm2') if not ok then _anti_pass = false end
+      ok = pcall(function() lp:Kick() end) if not ok then _anti_pass = false end
+      ok = xpcall(function() lp:Kick('x') end, function(e) return e end) if not ok then _anti_pass = false end
       ok = pcall(function() game:GetService('Players').LocalPlayer:Kick('chained') end)
       if not ok then _anti_pass = false end
 
@@ -255,10 +255,10 @@ class LuaObfuscator {
       if con == con2 then _anti_pass = false end
       if con2.Connected ~= true then _anti_pass = false end
 
-      ok = pcall(con2.Disconnect, con2); if not ok then _anti_pass = false end
+      ok = pcall(con2.Disconnect, con2) if not ok then _anti_pass = false end
       if con2.Connected ~= false then _anti_pass = false end
 
-      ok = pcall(function() con2:Disconnect() end); if not ok then _anti_pass = false end
+      ok = pcall(function() con2:Disconnect() end) if not ok then _anti_pass = false end
 
       local con3 = sig:Once(function() end)
       if typeof(con3) ~= 'RBXScriptConnection' then _anti_pass = false end
@@ -332,8 +332,8 @@ class LuaObfuscator {
 
       if ff.ClassName ~= 'ForceField' then _anti_pass = false end
 
-      ok = pcall(function() return ff.Parent end); if not ok then _anti_pass = false end
-      ok = pcall(function() ff.Visible = true end); if not ok then _anti_pass = false end
+      ok = pcall(function() return ff.Parent end) if not ok then _anti_pass = false end
+      ok = pcall(function() ff.Visible = true end) if not ok then _anti_pass = false end
       local r1, r2 = pcall(function() return ff.ClassName end)
       if not r1 or r2 ~= 'ForceField' then _anti_pass = false end
 
@@ -341,29 +341,25 @@ class LuaObfuscator {
     `
   }
 
-  // Envuelve el código del usuario con la verificación anti‑env
+  // Envuelve el código del usuario con la verificación anti‑env (sin comentarios)
   obfuscate(luaCode) {
     const escapedUserCode = luaCode
       .replace(/\\/g, '\\\\')
       .replace(/\n/g, '\\n')
       .replace(/"/g, '\\"')
 
-    return `
--- Wrapper anti‑env silencioso
-(function()
+    return `(function()
   local anti_ok, anti_pass = pcall(function()
     ${this.antiEnvScript}
   end)
 
-  if not anti_ok or not anti_pass then return end  -- Entorno alterado, salimos
+  if not anti_ok or not anti_pass then return end
 
-  -- Ejecutamos el payload real
   local user_ok, user_err = pcall(function()
     local fn, err = loadstring("${escapedUserCode}")
     if fn then fn() end
   end)
-end)();
-`
+end)()`
   }
 }
 
@@ -392,7 +388,8 @@ function obfuscate(sourceCode) {
   const obf = new LuaObfuscator()
   const wrapped = obf.obfuscate(finalPayload)
 
-  return `${HEADER}\n${wrapped}`.replace(/\s+/g, " ").trim()
+  // Unir con el HEADER y colapsar solo espacios repetidos, sin eliminar saltos de línea
+  return `${HEADER}\n${wrapped}`.replace(/[ \t]+/g, ' ').replace(/\n\s*\n/g, '\n').trim()
 }
 
 module.exports = { obfuscate }
