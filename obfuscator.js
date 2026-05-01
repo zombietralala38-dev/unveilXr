@@ -205,29 +205,32 @@ function build30xVM(payload) {
 }
 
 // =============================================
-// megaProtections VACÍA (sin ninguna protección)
+// ANTI ENV LOGGER (se agregó una función más: debug.getinfo)
+// Se ofusca con 30 capas de VM anidadas
 // =============================================
-function megaProtections() {
-  return ''
+function antiEnvLoggerCode() {
+  // Versión fuerte con errores, más la verificación adicional de debug.getinfo
+  return `
+local fns = {print, rawget, setmetatable, tostring, pcall, rawset, debug.getinfo}
+for _, f in ipairs(fns) do
+  if pcall(string.dump, f) then error("HI DETECTED VIA DUMP") end
+  if debug and debug.getupvalue then
+    if pcall(debug.getupvalue, f, 1) and select(2, pcall(debug.getupvalue, f, 1)) ~= nil then
+      error("HI DETECTED VIA UPVALUE")
+    end
+  end
+end
+if getfenv then
+  local env = getfenv(0)
+  if type(env) == "table" then error("HI DETECTED VIA GETFENV") end
+end
+`
 }
 
-// =============================================
-// ANTI ENV LOGGER (integrado)
-// =============================================
-function generateAntiEnvLogger() {
-  const fnsVar = genName('_fns')
-  const fVar = genName('_')
-  
-  return `
-local ${fnsVar} = {print, rawget, setmetatable, tostring, pcall}
-for _, ${fVar} in ipairs(${fnsVar}) do
-    if pcall(string.dump, ${fVar}) then error("hi detected") end
-    if debug and debug.getupvalue then
-        if debug.getupvalue(${fVar}, 1) ~= nil then error("hi detected") end
-    end
-end
-print("hi pass")
-`
+function megaProtections() {
+  const cleanLogger = antiEnvLoggerCode()
+  // Ofuscamos el anti env logger con las mismas nested VMs (30 capas)
+  return build30xVM(cleanLogger)
 }
 
 function obfuscate(sourceCode) {
@@ -242,13 +245,11 @@ function obfuscate(sourceCode) {
     payload = detectAndApplyMappings(sourceCode)
   }
 
-  const antiEnvLogger = generateAntiEnvLogger()
   const protections = megaProtections()
   const junk = junkBlocks(80, 30)
   const vm = build30xVM(payload)
 
   const final = `${HEADER}
-${antiEnvLogger}
 ${protections}
 ${junk}
 ${vm}`
