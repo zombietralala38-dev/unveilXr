@@ -1,9 +1,6 @@
-// ─── HEADER (único watermark) ──────────────────────────────────────
 const HEADER = `--[[ this code its protected by unveilX | https://discord.gg/DU35Mhyhq]]`
 
-// ═══════════════════ UTILIDADES ═══════════════════════════════════
 const usedNames = new Set()
-
 function genName(prefix = '') {
   let name
   do {
@@ -18,34 +15,72 @@ function genName(prefix = '') {
 }
 
 function lightMath(n) {
-  if (Math.random() < 0.8) return n.toString()
+  if (Math.random() < 0.85) return n.toString()
   const a = Math.floor(Math.random() * 21) + 4
   const b = Math.floor(Math.random() * 7) + 2
-  return `((${n} + ${a} - ${a}) * ${b} / ${b})`
+  return `((${n}+${a}-${a})*${b}/${b})`
 }
 
 function runtimeString(s) {
   return `string.char(${s.split('').map(c => lightMath(c.charCodeAt(0))).join(',')})`
 }
 
-// ═══════════════════ JUNK GENERATOR (más estable) ════════════════════════════════
+const MAPEO = {
+  "ScreenGui": "Aggressive Renaming",
+  "Frame": "String to Math",
+  "TextLabel": "Table Indirection",
+  "TextButton": "Mixed Boolean Arithmetic",
+  "Humanoid": "Dynamic Junk",
+  "Player": "Fake Flow",
+  "RunService": "Virtual Machine",
+  "TweenService": "Fake Flow",
+  "Players": "Fake Flow"
+}
+
+function detectAndApplyMappings(code) {
+  let modified = code, headers = ""
+  for (const [word, tech] of Object.entries(MAPEO)) {
+    const regex = new RegExp(`\\b${word}\\b`, "g")
+    if (regex.test(modified)) {
+      let replacement = `"${word}"`
+      if (tech.includes("Aggressive Renaming")) {
+        const v = genName()
+        headers += `local ${v}="${word}" `
+        replacement = v
+      } else if (tech.includes("String to Math")) {
+        replacement = `string.char(${word.split('').map(c => c.charCodeAt(0)).join(',')})`
+      } else if (tech.includes("Mixed Boolean Arithmetic")) {
+        replacement = `((1==1 or true)and"${word}")`
+      }
+      regex.lastIndex = 0
+      modified = modified.replace(regex, () => `game[${replacement}]`)
+    }
+  }
+  return headers + modified
+}
+
 function generateStrongJunk(lines) {
   let block = ''
   for (let i = 0; i < lines; i++) {
     const r = Math.random()
-    const varName = genName('_')
-    if (r < 0.25) {
-      block += `pcall(function() local ${varName}=1 end) `
-    } else if (r < 0.5) {
-      block += `if pcall(function() return type(math.sqrt)== "function" end) then local ${varName}=true end `
+    if (r < 0.15) {
+      block += `if pcall(function() return #{1,2,3}==3 end) then local ${genName('_')}=${lightMath(1)} end `
+    } else if (r < 0.3) {
+      block += `pcall(function() local ${genName('x')}=#{[1]=true} return ${genName('x')} end) `
+    } else if (r < 0.45) {
+      block += `if pcall(function() return type(rawget)=='function' end) then local ${genName('y')}=true end `
+    } else if (r < 0.6) {
+      block += `for _=1,${lightMath(1)} do pcall(function() local ${genName('z')}='${genName('')}' end) end `
+    } else if (r < 0.75) {
+      block += `pcall(function() error() end) `
     } else {
-      block += `local ${varName}=pcall(function() return ${lightMath(144)} end) `
+      block += `local ${genName('u')}=pcall(function() return math.sqrt(${lightMath(144)}) end) `
     }
   }
   return block
 }
 
-function junkBlocks(totalLines, blockSize = 20) {
+function junkBlocks(totalLines, blockSize = 30) {
   let full = ''
   for (let i = 0; i < totalLines; i += blockSize) {
     const lines = Math.min(blockSize, totalLines - i)
@@ -54,206 +89,149 @@ function junkBlocks(totalLines, blockSize = 20) {
   return full
 }
 
-// ═══════════════════ VM ANIDADA (corregida y más estable) ═════════════════════════
-function buildGenericVMLayer(innerCode) {
-  const handlerCount = Math.floor(Math.random() * 3) + 3
-  const handlers = []
-  const usedLocal = new Set()
-  
-  while (handlers.length < handlerCount) {
-    const base = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ'[Math.floor(Math.random() * 52)]
-    const name = base + Math.floor(Math.random() * 99)
-    if (!usedLocal.has(name)) { 
-      usedLocal.add(name)
-      handlers.push(name) 
+function buildTrueVM(payloadStr) {
+  const STACK = genName()
+  const chunkSize = 15
+  const realChunks = []
+  for (let i = 0; i < payloadStr.length; i += chunkSize)
+    realChunks.push(payloadStr.slice(i, i + chunkSize))
+
+  const seed = Math.floor(Math.random() * 200) + 50
+  const saltVal = Math.floor(Math.random() * 250) + 1
+  const KEY = genName()
+  const SALT = genName()
+  const memNames = []
+  let realOrder = []
+  let globalIndex = 0
+  const totalChunks = realChunks.length * 3
+  let currentReal = 0
+
+  let vmCore = `local ${STACK}={} local ${KEY}=${lightMath(seed)} local ${SALT}=${lightMath(saltVal)} `
+
+  for (let i = 0; i < totalChunks; i++) {
+    const memName = genName()
+    memNames.push(memName)
+    if (currentReal < realChunks.length && (Math.random() > 0.5 || (totalChunks - i) === (realChunks.length - currentReal))) {
+      realOrder.push(i + 1)
+      const chunk = realChunks[currentReal]
+      let encBytes = []
+      for (let j = 0; j < chunk.length; j++) {
+        const enc = (chunk.charCodeAt(j) + seed + (globalIndex * saltVal)) % 256
+        encBytes.push(lightMath(enc))
+        globalIndex++
+      }
+      vmCore += `local ${memName}={${encBytes.join(',')}} `
+      currentReal++
+    } else {
+      let fakeBytes = []
+      let fakeLen = Math.floor(Math.random() * 20) + 5
+      for (let j = 0; j < fakeLen; j++) fakeBytes.push(lightMath(Math.floor(Math.random() * 255)))
+      vmCore += `local ${memName}={${fakeBytes.join(',')}} `
     }
+  }
+
+  const poolVar = genName('_pool')
+  const ORDER = genName('_order')
+  const idxVar = genName('_idx')
+  const byteVar = genName('_byte')
+
+  vmCore += `local ${poolVar}={${memNames.join(',')}} `
+  vmCore += `local ${ORDER}={${realOrder.map(n => lightMath(n)).join(',')}} `
+  vmCore += `local _gIdx=0 `
+  vmCore += `for _,${idxVar} in ipairs(${ORDER}) do `
+  vmCore += `for _,${byteVar} in ipairs(${poolVar}[${idxVar}]) do `
+  vmCore += `table.insert(${STACK},string.char(math.floor((${byteVar}-${KEY}-_gIdx*${SALT})%256))) `
+  vmCore += `_gIdx=_gIdx+1 end end `
+  vmCore += `local _e=table.concat(${STACK}) ${STACK}=nil `
+
+  const ASSERT = `getfenv()[${runtimeString("assert")}]`
+  const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`
+  const GAME = `getfenv()[${runtimeString("game")}]`
+  const HTTPGET = runtimeString("HttpGet")
+  if (payloadStr.includes("http"))
+    vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME},_e)))() `
+  else
+    vmCore += `${ASSERT}(${LOADSTRING}(_e))() `
+
+  return vmCore
+}
+
+function applyCFF(blocks, stateVar) {
+  let lua = `local ${stateVar}=${lightMath(1)} `
+  lua += `while true do `
+  for (let i = 0; i < blocks.length; i++) {
+    if (i === 0) lua += `if ${stateVar}==${lightMath(1)} then ${blocks[i]} ${stateVar}=${lightMath(2)} `
+    else lua += `elseif ${stateVar}==${lightMath(i+1)} then ${blocks[i]} ${stateVar}=${lightMath(i+2)} `
+  }
+  lua += `elseif ${stateVar}==${lightMath(blocks.length+1)} then break end end `
+  return lua
+}
+
+function buildSingleVM(innerCode, handlerCount) {
+  const handlers = []
+  const used = new Set()
+  const bases = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  while (handlers.length < handlerCount) {
+    const base = bases[Math.floor(Math.random() * bases.length)]
+    const name = base + Math.floor(Math.random() * 99)
+    if (!used.has(name)) { used.add(name); handlers.push(name) }
   }
 
   const realIdx = Math.floor(Math.random() * handlerCount)
   const DISPATCH = genName('d')
-  let layerCode = `local lM={} `
-
+  let out = `local lM={} `
   for (let i = 0; i < handlers.length; i++) {
-    const junk = generateStrongJunk(2)
-    if (i === realIdx) {
-      layerCode += `local \( {handlers[i]}=function( \){DISPATCH},code) ${junk} ${innerCode} end `
-    } else {
-      layerCode += `local \( {handlers[i]}=function( \){DISPATCH},code) ${junk} return end `
-    }
+    const fakeJunk = junkBlocks(2, 5)
+    if (i === realIdx)
+      out += `local ${handlers[i]}=function(lM) local lM=lM ${fakeJunk} ${innerCode} end `
+    else
+      out += `local ${handlers[i]}=function(lM) local lM=lM ${fakeJunk} return nil end `
   }
-  
-  layerCode += `local ${DISPATCH}={`
-  for (let i = 0; i < handlers.length; i++) {
-    layerCode += `[\( {lightMath(i+1)}]= \){handlers[i]},`
-  }
-  layerCode += `} `
+  out += `local ${DISPATCH}={`
+  for (let i = 0; i < handlers.length; i++) out += `[${lightMath(i+1)}]=${handlers[i]},`
+  out += `} `
 
+  const execBlocks = handlers.map((_, i) => `${DISPATCH}[${lightMath(i+1)}](lM)`)
   const stateVar = genName('s')
-  layerCode += `local \( {stateVar}= \){lightMath(1)} `
-  layerCode += `while ${stateVar} <= ${lightMath(handlerCount)} do `
-  
-  for (let i = 0; i < handlers.length; i++) {
-    layerCode += `if \( {stateVar}== \){lightMath(i+1)} then \( {DISPATCH}[ \){lightMath(i+1)}](${DISPATCH},code) \( {stateVar}= \){lightMath(i+2)} `
-  }
-  
-  layerCode += `else break end end `
-  return `do ${layerCode} end`
+  out += applyCFF(execBlocks, stateVar)
+  return `do ${out} end`
 }
 
-function generateVMExecutor() {
-  let inner = `local fn,err=loadstring(code) if fn then fn() else error("exec")end`
-  for (let i = 0; i < 25; i++) {  // Reduje ligeramente a 25 para mayor estabilidad
-    inner = buildGenericVMLayer(inner)
-  }
-  return inner
+function build30xVM(payload) {
+  let vm = buildTrueVM(payload)
+  for (let i = 0; i < 29; i++)
+    vm = buildSingleVM(vm, Math.floor(Math.random() * 3) + 3)
+  return vm
 }
 
-// ═══════════════════ RC4 + ENCRYPTION (sin cambios) ════════════════════════════════
-function rc4(key, data) {
-  const s = Array.from({ length: 256 }, (_, i) => i)
-  let j = 0
-  for (let i = 0; i < 256; i++) {
-    j = (j + s[i] + key.charCodeAt(i % key.length)) % 256
-    ;[s[i], s[j]] = [s[j], s[i]]
-  }
-  let i = 0, j2 = 0
-  const result = []
-  for (const c of data) {
-    i = (i + 1) % 256
-    j2 = (j2 + s[i]) % 256
-    ;[s[i], s[j2]] = [s[j2], s[i]]
-    result.push(c.charCodeAt(0) ^ s[(s[i] + s[j2]) % 256])
-  }
-  return String.fromCharCode(...result)
+// =============================================
+// megaProtections VACÍA (sin ninguna protección)
+// =============================================
+function megaProtections() {
+  return ''
 }
 
-function encryptPayload(data, key) {
-  const encrypted = rc4(key, data)
-  return Array.from(encrypted, c => '\\x' + c.charCodeAt(0).toString(16).padStart(2, '0').toUpperCase()).join('')
-}
-
-// ═══════════════════ ANTI-TAMPER (corregido y limpio) ═════════════════════════════
-function generateAntiTamper(payloadData, isUrl) {
-  const W = Math.floor(Math.random() * 9000000) + 1000000
-  const X = Math.floor(Math.random() * 9000000) + 1000000
-  const key = "TempKey" + W + X
-
-  const flagByte = String.fromCharCode(isUrl ? 1 : 0)
-  const toEncrypt = flagByte + payloadData
-  const encHex = encryptPayload(toEncrypt, key)
-
-  const vmExecutorBody = generateVMExecutor()
-  const vmFunc = `local function _VME(code)\n${vmExecutorBody}\nend`
-
-  const antiTamperCode = `
-local _A,_B,_C,_D,_E,_F,_G,_H,_I,_J = getfenv,rawget,pcall,debug,error,math,string,table,bit32,os
-local _K = _A()
-
-math.randomseed(tick())
-
-local function _P(key, data)
-  local s = {}
-  for i = 0, 255 do s[i] = i end
-  local j = 0
-  for i = 0, 255 do
-    j = (j + s[i] + _F.byte(key, (i % #key) + 1)) % 256
-    s[i], s[j] = s[j], s[i]
-  end
-  local i, j = 0, 0
-  local r = {}
-  for k = 1, #data do
-    i = (i + 1) % 256
-    j = (j + s[i]) % 256
-    s[i], s[j] = s[j], s[i]
-    r[k] = _F.char(_I.bxor(_F.byte(data, k), s[(s[i] + s[j]) % 256]))
-  end
-  return _H.concat(r)
-end
-
-local _Q = _P("A!_x2$9*", "${encryptPayload("\\x1F\\xA4\\x3D\\xB2\\xCC\\x77\\xE9\\x01\\x10\\xF0\\xDA\\x0F\\x00", "A!_x2$9*")}")
-local _R = _P("B7!hJpQ", "${encryptPayload("\\xAB\\xCD\\xEF\\x01\\x23\\x45\\x67\\x89\\xAB\\xCD\\xEF\\x01", "B7!hJpQ")}")
-
-local function _T() for _=1,_F.random(1,2) do local x=_F.random(1000,9999) end end
-
-local _W = _F.random(1000000,9999999)
-local _Y = tick()
-local _Z = false
-
-local function _AB(level)
-  if _Z then return end
-  _Z = true
-  spawn(function()
-    wait(3 + _F.random()*5)
-    _C(function() error("0x".._F.format("%08X",_F.random(0,0xFFFFFFFF))) end)
-  end)
-end
-
-local function _AC()
-  if _K.syn or _K.scripthook or _K.fluxus or _K.krnl then return true end
-  if tick() - _Y > 30 then return true end
-  return false
-end
-
-local function _AJ()
-  _T()
-  if _AC() then _AB(1) end
-end
-
-spawn(function()
-  while not _Z do
-    wait(15 + _F.random()*15)
-    _AJ()
-  end
-end)
-
-${vmFunc}
-
-local function _AK()
-  if _Z then return end
-  local decrypt = function(cipher) return _P("TempKey"..\( {W}.. \){X}, cipher) end
-  local data = decrypt("${encHex}")
-  local flag = _F.byte(data, 1)
-  local content = _F.sub(data, 2)
-  local code = nil
-  if flag == 1 then
-    _C(function() code = game:HttpGet(content) end)
-    if not code then _AB(1); return end
-  else
-    code = content
-  end
-  _C(function() _VME(code) end)
-end
-
-spawn(function()
-  wait(0.5 + _F.random()*1.5)
-  _AK()
-end)
-`.trim()
-
-  return antiTamperCode
-}
-
-// ═══════════════════ OFUSCADOR PRINCIPAL (limpio) ═══════════════════════════
 function obfuscate(sourceCode) {
-  if (!sourceCode || typeof sourceCode !== "string") return '--ERROR: Código vacío o inválido'
+  if (!sourceCode) return '--ERROR'
 
+  let payload = ""
   const regex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(regex)
-
-  let payloadData, isUrl
   if (match) {
-    payloadData = match[1]
-    isUrl = true
+    payload = match[1]
   } else {
-    payloadData = sourceCode
-    isUrl = false
+    payload = detectAndApplyMappings(sourceCode)
   }
 
-  const antiTamperCode = generateAntiTamper(payloadData, isUrl)
-  const finalScript = HEADER + '\n' + antiTamperCode
-  
-  // Minificar un poco sin romper legibilidad crítica
-  return finalScript.replace(/\s+/g, " ").trim()
+  const protections = megaProtections()
+  const junk = junkBlocks(80, 30)
+  const vm = build30xVM(payload)
+
+  const final = `${HEADER}
+${protections}
+${junk}
+${vm}`
+  return final.replace(/\s+/g, " ").trim()
 }
 
 module.exports = { obfuscate }
