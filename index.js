@@ -695,7 +695,7 @@ async function handleTextCommand(message) {
             },
             {
               name: "Text Commands",
-              value: "`.help` - Show help\n`.stats` - Show statistics\n`.secr` - Enable welcome messages",
+              value: "`.help` - Show help\n`.stats` - Show statistics\n`!r` - Enable welcome messages",
               inline: false,
             },
           )
