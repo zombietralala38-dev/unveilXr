@@ -1,6 +1,6 @@
-// Obfuscador UnveilX con anti-env logger integrado
+// ofuscador.js - unveilX Obfuscator (sin mensajes internos)
 
-const HEADER = `--[[ this code is protected by unveilX | https://discord.gg/DU35Mhyhq ]]`
+const HEADER = `--[[ this code its protected by unveilX | https://discord.gg/DU35Mhyhq]]`
 
 const usedNames = new Set()
 function genName(prefix = '') {
@@ -37,6 +37,42 @@ const MAPEO = {
   "RunService": "Virtual Machine",
   "TweenService": "Fake Flow",
   "Players": "Fake Flow"
+}
+
+// =============================================
+// LIMPIADOR DE COMENTARIOS Y MENSAJES INTERNOS
+// =============================================
+function stripAllComments(code) {
+  // Elimina comentarios de bloque: --[[ ... ]]
+  code = code.replace(/--\[\[[\s\S]*?\]\]/g, '')
+  // Elimina comentarios de línea: -- ... (excepto --[[)
+  code = code.replace(/--(?!\[\[)[^\n\r]*/g, '')
+  // Elimina líneas vacías múltiples
+  code = code.replace(/^\s*[\r\n]/gm, '')
+  // Elimina espacios múltiples (pero no dentro de strings)
+  return code
+}
+
+// Elimina cualquier referencia a hooks o herramientas de debugging
+function removeHookReferences(code) {
+  const patterns = [
+    /getgenv\s*\(\s*\)/gi,
+    /getrenv\s*\(\s*\)/gi,
+    /getgc\s*\(\s*\)/gi,
+    /getreg\s*\(\s*\)/gi,
+    /getsenv\s*\(\s*\)/gi,
+    /debug\./gi,
+    /hookfunction\s*\(/gi,
+    /hookmetamethod\s*\(/gi,
+    /newcclosure\s*\(/gi,
+    /replaceclosure\s*\(/gi,
+    /loadstring\s*\(\s*game\s*:/gi
+  ]
+  let cleaned = code
+  for (const pattern of patterns) {
+    cleaned = cleaned.replace(pattern, '--[[' + pattern.source + ']]')
+  }
+  return cleaned
 }
 
 function detectAndApplyMappings(code) {
@@ -207,80 +243,30 @@ function build30xVM(payload) {
 }
 
 // =============================================
-// megaProtections - Anti-Env Logger & Integrity Checks
+// megaProtections VACÍA (sin mensajes ni hooks)
 // =============================================
 function megaProtections() {
-  return `
-local function antiEnv()
-    -- 1. getgenv hook (muy común en executors)
-    local hasGG = false
-    pcall(function()
-        if rawget and rawget(getfenv and getfenv() or _G, "getgenv") ~= nil then
-            hasGG = true
-        end
-    end)
-    if hasGG then error("E1") end
-
-    -- 2. game.PlaceId debe funcionar sin errores
-    if not pcall(function() return game.PlaceId end) then error("E2") end
-    if type(game) ~= "userdata" or game.ClassName ~= "DataModel" then error("E3") end
-
-    -- 3. Players/GetNameFromUserIdAsync (detecta proxies falsos)
-    local ok, name = pcall(function()
-        return game:GetService("Players"):GetNameFromUserIdAsync(1)
-    end)
-    if ok then
-        local lp = game.Players.LocalPlayer
-        if lp and lp.Name ~= name then error("E4") end
-    else
-        error("E5")
-    end
-
-    -- 4. Time‑based detection (task.wait / os.clock)
-    if pcall(function() return os.clock end) and pcall(function() return task end) then
-        local t = os.clock()
-        task.wait(0.1)
-        if (os.clock() - t) < 0.05 then
-            error("E6")  -- wait demasiado corto -> hook en task
-        end
-    end
-
-    -- 5. Funciones críticas sin reemplazar
-    local crit = {"pcall","xpcall","error","loadstring","getfenv","rawget","type","select"}
-    for _, fn in ipairs(crit) do
-        local f = rawget and rawget(_G, fn) or _G[fn]
-        if f and type(f) ~= "function" then error("E7") end
-    end
-
-    -- 6. Servicios básicos y tipos de datos coherentes
-    local check = true
-    pcall(function()
-        local r = game:GetService("ReplicatedStorage")
-        local b = game:GetService("Lighting").Brightness
-        if type(b) ~= "number" then check = false end
-        local ts = game:GetService("TextService"):GetTextSize("X", 14, Enum.Font.Arial, Vector2.new(100, 0))
-        if typeof(ts) ~= "Vector2" or ts.X <= 0 then check = false end
-        local guiInset = game:GetService("GuiService"):GetGuiInset()
-        if typeof(guiInset) ~= "Vector2" then check = false end
-    end)
-    if not check then error("E8") end
-
-    return true
-end
-
-local anti_ok, anti_err = pcall(antiEnv)
-if not anti_ok then
-    error("Env tampered: " .. tostring(anti_err), 0)
-end
-`;
+  return ''
 }
 
 // =============================================
-// Obfuscate principal
+// FUNCIÓN PRINCIPAL DE OFUSCACIÓN
 // =============================================
 function obfuscate(sourceCode) {
-  if (!sourceCode) return '--ERROR'
+  if (!sourceCode) return '--ERROR: No se proporcionó código fuente'
+  
+  // PASO 1: Eliminar TODOS los comentarios y mensajes
+  sourceCode = stripAllComments(sourceCode)
+  
+  // PASO 2: Eliminar referencias a hooks/herramientas de debugging
+  sourceCode = removeHookReferences(sourceCode)
+  
+  // PASO 3: Limpiar líneas vacías y espacios excesivos
+  sourceCode = sourceCode.replace(/^\s*[\r\n]/gm, '')
+  sourceCode = sourceCode.replace(/\n\s*\n/g, '\n')
+  sourceCode = sourceCode.trim()
 
+  // PASO 4: Extraer payload (HttpGet o código directo)
   let payload = ""
   const regex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(regex)
@@ -290,6 +276,7 @@ function obfuscate(sourceCode) {
     payload = detectAndApplyMappings(sourceCode)
   }
 
+  // PASO 5: Construir ofuscación final
   const protections = megaProtections()
   const junk = junkBlocks(80, 30)
   const vm = build30xVM(payload)
@@ -298,7 +285,35 @@ function obfuscate(sourceCode) {
 ${protections}
 ${junk}
 ${vm}`
+  
+  // Limpiar espacios excesivos para compactar
   return final.replace(/\s+/g, " ").trim()
+}
+
+// =============================================
+// EJEMPLO DE USO
+// =============================================
+if (require.main === module) {
+  const fs = require('fs')
+  const path = require('path')
+  
+  const inputFile = process.argv[2] || 'input.lua'
+  const outputFile = process.argv[3] || 'output.lua'
+  
+  try {
+    const sourceCode = fs.readFileSync(inputFile, 'utf8')
+    console.log(`Ofuscando: ${inputFile}`)
+    console.log(`Tamaño original: ${sourceCode.length} bytes`)
+    
+    const obfuscatedCode = obfuscate(sourceCode)
+    
+    fs.writeFileSync(outputFile, obfuscatedCode)
+    console.log(`Ofuscado guardado en: ${outputFile}`)
+    console.log(`Tamaño ofuscado: ${obfuscatedCode.length} bytes`)
+    console.log('✅ Completado - Solo contiene la watermark, sin mensajes internos')
+  } catch (error) {
+    console.error('❌ Error:', error.message)
+  }
 }
 
 module.exports = { obfuscate }
