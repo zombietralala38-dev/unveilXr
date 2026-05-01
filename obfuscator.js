@@ -1,4 +1,4 @@
-const HEADER = `--[[ this code its protected by unveilX | https://discord.gg/DU35Mhyhq]]`
+const HEADER = `--[[ thsi coee its protected by unveilX | https://discord.gg/DU35Mhyhq]]`
 
 const usedNames = new Set()
 function genName(prefix = '') {
