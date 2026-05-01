@@ -1,7 +1,7 @@
 /**
  * UnveilX Obfuscator Engine
  * Sistema de protección multi-capa con Anti-Environment Logging
- * - Reducción del 30% en código matemático innecesario
+ * Exporta directamente la función obfuscate()
  */
 
 const HEADER = `--[[ this code its protected by unveilX | https://discord.gg/DU35Mhyhq]]`;
@@ -9,11 +9,8 @@ const HEADER = `--[[ this code its protected by unveilX | https://discord.gg/DU3
 class UnveilXObfuscator {
   constructor() {
     this.usedNames = new Set();
-    
-    // Probabilidad de omitir la ofuscación matemática (30% menos)
-    this.mathSkipProbability = 0.3;
+    this.mathSkipProbability = 0.3; // 30% menos de operaciones matemáticas
 
-    // Script Anti-Env mejorado (basado en el test de fallos silenciosos)
     this.antiEnvScript = `
       local _anti_pass = true
       local function fail(msg) _anti_pass = false return nil end
@@ -58,22 +55,16 @@ class UnveilXObfuscator {
     return name;
   }
 
-  // Nueva versión con reducción del 30% de código matemático
   lightMath(n) {
-    // Decidir si se omite la ofuscación (30% de probabilidad)
+    // Reducción del 30%: omite ofuscación matemática
     if (Math.random() < this.mathSkipProbability) {
-      return n.toString(); // número limpio, sin operaciones extra
+      return n.toString();
     }
     const a = Math.floor(Math.random() * 50) + 5;
     const b = Math.floor(Math.random() * 5) + 2;
     return `((${n}+${a}-${a})*${b}/${b})`;
   }
 
-  runtimeString(s) {
-    return `string.char(${s.split('').map(c => this.lightMath(c.charCodeAt(0))).join(',')})`;
-  }
-
-  // Genera bloques de código inútil para confundir deobfuscators
   generateJunk(count) {
     let junk = '';
     for (let i = 0; i < count; i++) {
@@ -86,13 +77,11 @@ class UnveilXObfuscator {
     return junk;
   }
 
-  // Crea la Máquina Virtual de desencriptación
   buildVM(luaPayload) {
     const stackName = this.genName('stack');
     const key = Math.floor(Math.random() * 100) + 20;
     const salt = Math.floor(Math.random() * 10) + 1;
-    
-    // Encriptación simple de bytes (ahora con menos ruido matemático)
+
     let encryptedBytes = [];
     for (let i = 0; i < luaPayload.length; i++) {
       encryptedBytes.push(this.lightMath((luaPayload.charCodeAt(i) + key + (i * salt)) % 256));
@@ -110,20 +99,10 @@ class UnveilXObfuscator {
     `;
   }
 
-  // Función principal de ofuscación
   obfuscate(sourceCode) {
     if (!sourceCode) return "-- Error: No source provided";
-
-    // 1. Limpiamos nombres usados
     this.usedNames.clear();
 
-    // 2. Preparamos el código del usuario para ser cargado
-    const escapedCode = sourceCode
-      .replace(/\\/g, '\\\\')
-      .replace(/\n/g, '\\n')
-      .replace(/"/g, '\\"');
-
-    // 3. Creamos la lógica de ejecución condicionada al Anti-Env
     const protectedPayload = `
       local _auth = (function() ${this.antiEnvScript} end)()
       if _auth == true then
@@ -133,15 +112,17 @@ class UnveilXObfuscator {
       end
     `;
 
-    // 4. Aplicamos múltiples capas de VM (recursividad simulada)
     let finalCode = protectedPayload;
     for (let i = 0; i < 5; i++) {
-        finalCode = `(function() ${this.generateJunk(5)} ${finalCode} end)()`
+      finalCode = `(function() ${this.generateJunk(5)} ${finalCode} end)()`;
     }
 
-    // 5. Construcción final con Header
     return `${HEADER}\n${finalCode.replace(/\s+/g, ' ').trim()}`;
   }
 }
 
-module.exports = UnveilXObfuscator;
+// Exportamos directamente la función para que sea compatible con tu bot
+const obfuscator = new UnveilXObfuscator();
+module.exports = function obfuscate(sourceCode) {
+  return obfuscator.obfuscate(sourceCode);
+};
