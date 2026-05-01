@@ -116,39 +116,13 @@ const LUA_MARKERS = [
   /\bthen\b/,
   /\brequire\b/,
   /\bpcall\b/,
-  /\bfor\b/,
-  /\bwhile\b/,
-  /\bif\b/,
-  /\belse\b/,
-  /\bdo\b/,
-  /\brepeat\b/,
-  /\buntil\b/,
-  /\breturn\b/,
 ];
 
 function looksLikeLua(rawSrc) {
   const src = (rawSrc || "").trim();
   if (!src) return { ok: false, reason: "Empty source" };
-  if (src.length < 10) return { ok: false, reason: "Code too short (minimum 10 characters)" };
-  
-  // Contar cuántas palabras clave Lua encontramos
-  let keywordCount = 0;
-  for (const re of LUA_MARKERS) {
-    if (re.test(src)) keywordCount++;
-  }
-  
-  // Requiere al menos 1 palabra clave Lua para pasar
-  if (keywordCount === 0) {
-    return { ok: false, reason: "No Lua keywords detected. Must contain: local, function, for, if, print, etc." };
-  }
-  
-  // Detectar texto completamente basura
-  const suspicious = /^[a-z]+$/i.test(src); // Solo letras sin espacios
-  if (suspicious && src.length < 50) {
-    return { ok: false, reason: "Text looks like random characters, not Lua code" };
-  }
-  
-  return { ok: true, keywordCount };
+  for (const re of LUA_MARKERS) if (re.test(src)) return { ok: true };
+  return { ok: false, reason: "No Lua keywords detected" };
 }
 
 // ─────────────────────────────────────────────── Pastefy API ────────────────
@@ -440,15 +414,14 @@ async function handleMakeLoadingString(interaction) {
     });
   }
 
-  // VALIDACIÓN ESTRICTA: Debe tener 2+ palabras clave Lua o ser muy sospechoso
   const luaCheck = looksLikeLua(source);
   if (!luaCheck.ok) {
     const elapsed = Date.now() - startedAt;
     return await interaction.editReply({
       embeds: [
         buildErrorEmbed(
-          "❌ Not valid Lua code",
-          `This doesn't look like real Lua code. This command is only for Lua scripts.\n\nReason: ${luaCheck.reason}\n\nMake sure your code contains Lua keywords like: \`local\`, \`function\`, \`for\`, \`if\`, \`print\`, \`require\`, etc.`,
+          "Not Lua code",
+          `This doesn't look like Lua code. Reason: ${luaCheck.reason}`,
           [
             { name: "Status", value: "rejected", inline: true },
             { name: "Time", value: formatDuration(elapsed), inline: true },
@@ -474,7 +447,7 @@ async function handleMakeLoadingString(interaction) {
 
     const embed = new EmbedBuilder()
       .setColor(COLOR_GRAY)
-      .setTitle("✅ Loading String Generated")
+      .setTitle("Loading String Generated")
       .setDescription(`\`\`\`\n${loadingString}\n\`\`\``)
       .addFields(
         { name: "Status", value: "success", inline: true },
@@ -501,7 +474,7 @@ async function handleMakeLoadingString(interaction) {
     });
   } catch (err) {
     const elapsed = Date.now() - startedAt;
-    const embed = buildErrorEmbed("❌ Loading String generation failed", err.message || String(err), [
+    const embed = buildErrorEmbed("Loading String generation failed", err.message || String(err), [
       { name: "Status", value: "rejected", inline: true },
       { name: "Time", value: formatDuration(elapsed), inline: true },
     ]);
@@ -522,45 +495,6 @@ async function handleGet(interaction) {
           { name: "Status", value: "rejected", inline: true },
           { name: "Time", value: formatDuration(elapsed), inline: true },
         ]),
-      ],
-    });
-  }
-
-  // Validar que sea una URL de un sitio conocido/seguro
-  const ALLOWED_DOMAINS = [
-    "pastebin.com",
-    "pastefy.app",
-    "raw.githubusercontent.com",
-    "gist.githubusercontent.com",
-    "robloxscripts.com",
-    "github.com",
-    "hastebin.com",
-    "bin.codingislove.com",
-    "paste.ubuntu.com",
-    "paste.ee",
-    "dpaste.com",
-    "pastepaste.io",
-    "cdn.jsdelivr.net",
-    "rawcdn.githack.com",
-  ];
-
-  const urlObj = new URL(url);
-  const isAllowed = ALLOWED_DOMAINS.some(domain => 
-    urlObj.hostname === domain || urlObj.hostname.endsWith("." + domain)
-  );
-
-  if (!isAllowed) {
-    const elapsed = Date.now() - startedAt;
-    return await interaction.editReply({
-      embeds: [
-        buildErrorEmbed(
-          "❌ Domain not allowed",
-          `This domain is not whitelisted for security reasons.\n\nAllowed domains:\n${ALLOWED_DOMAINS.join(", ")}`,
-          [
-            { name: "Status", value: "rejected", inline: true },
-            { name: "Time", value: formatDuration(elapsed), inline: true },
-          ],
-        ),
       ],
     });
   }
@@ -587,7 +521,7 @@ async function handleGet(interaction) {
 
     const embed = new EmbedBuilder()
       .setColor(COLOR_GREEN)
-      .setTitle("✅ Fetch successful")
+      .setTitle("Fetch successful")
       .addFields(
         { name: "Status", value: "accepted", inline: true },
         { name: "ID", value: `\`${id}\``, inline: true },
@@ -602,7 +536,7 @@ async function handleGet(interaction) {
     await interaction.editReply({ embeds: [embed], files: [attachment] });
   } catch (err) {
     const elapsed = Date.now() - startedAt;
-    const embed = buildErrorEmbed("❌ Could not fetch URL", err.message || String(err), [
+    const embed = buildErrorEmbed("Could not fetch URL", err.message || String(err), [
       { name: "Status", value: "rejected", inline: true },
       { name: "URL", value: `\`${url}\``, inline: true },
       { name: "Time", value: formatDuration(elapsed), inline: true },
