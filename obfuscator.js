@@ -1,4 +1,4 @@
-const HEADER = `--[[ this code its protected by unveilX | https://discord.gg/DU35Mhyhq ]]`
+const HEADER = `--[[ this code its protected by unveilX | https://discord.gg/DU35Mhyhq]]`
 
 const usedNames = new Set()
 function genName(prefix = '') {
@@ -211,6 +211,25 @@ function megaProtections() {
   return ''
 }
 
+// =============================================
+// ANTI ENV LOGGER (integrado)
+// =============================================
+function generateAntiEnvLogger() {
+  const fnsVar = genName('_fns')
+  const fVar = genName('_')
+  
+  return `
+local ${fnsVar} = {print, rawget, setmetatable, tostring, pcall}
+for _, ${fVar} in ipairs(${fnsVar}) do
+    if pcall(string.dump, ${fVar}) then error("hi detected") end
+    if debug and debug.getupvalue then
+        if debug.getupvalue(${fVar}, 1) ~= nil then error("hi detected") end
+    end
+end
+print("hi pass")
+`
+}
+
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
 
@@ -223,11 +242,13 @@ function obfuscate(sourceCode) {
     payload = detectAndApplyMappings(sourceCode)
   }
 
+  const antiEnvLogger = generateAntiEnvLogger()
   const protections = megaProtections()
   const junk = junkBlocks(80, 30)
   const vm = build30xVM(payload)
 
   const final = `${HEADER}
+${antiEnvLogger}
 ${protections}
 ${junk}
 ${vm}`
