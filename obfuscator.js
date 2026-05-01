@@ -1,6 +1,4 @@
-// ofuscador.js - unveilX Obfuscator (sin mensajes internos)
-
-const HEADER = `--[[ this code its protected by unveilX | https://discord.gg/DU35Mhyhq]]`
+const HEADER = `--[[ thsi coee its protected by unveilX | https://discord.gg/DU35Mhyhq]]`
 
 const usedNames = new Set()
 function genName(prefix = '') {
@@ -37,42 +35,6 @@ const MAPEO = {
   "RunService": "Virtual Machine",
   "TweenService": "Fake Flow",
   "Players": "Fake Flow"
-}
-
-// =============================================
-// LIMPIADOR DE COMENTARIOS Y MENSAJES INTERNOS
-// =============================================
-function stripAllComments(code) {
-  // Elimina comentarios de bloque: --[[ ... ]]
-  code = code.replace(/--\[\[[\s\S]*?\]\]/g, '')
-  // Elimina comentarios de línea: -- ... (excepto --[[)
-  code = code.replace(/--(?!\[\[)[^\n\r]*/g, '')
-  // Elimina líneas vacías múltiples
-  code = code.replace(/^\s*[\r\n]/gm, '')
-  // Elimina espacios múltiples (pero no dentro de strings)
-  return code
-}
-
-// Elimina cualquier referencia a hooks o herramientas de debugging
-function removeHookReferences(code) {
-  const patterns = [
-    /getgenv\s*\(\s*\)/gi,
-    /getrenv\s*\(\s*\)/gi,
-    /getgc\s*\(\s*\)/gi,
-    /getreg\s*\(\s*\)/gi,
-    /getsenv\s*\(\s*\)/gi,
-    /debug\./gi,
-    /hookfunction\s*\(/gi,
-    /hookmetamethod\s*\(/gi,
-    /newcclosure\s*\(/gi,
-    /replaceclosure\s*\(/gi,
-    /loadstring\s*\(\s*game\s*:/gi
-  ]
-  let cleaned = code
-  for (const pattern of patterns) {
-    cleaned = cleaned.replace(pattern, '--[[' + pattern.source + ']]')
-  }
-  return cleaned
 }
 
 function detectAndApplyMappings(code) {
@@ -243,30 +205,15 @@ function build30xVM(payload) {
 }
 
 // =============================================
-// megaProtections VACÍA (sin mensajes ni hooks)
+// megaProtections VACÍA (sin ninguna protección)
 // =============================================
 function megaProtections() {
   return ''
 }
 
-// =============================================
-// FUNCIÓN PRINCIPAL DE OFUSCACIÓN
-// =============================================
 function obfuscate(sourceCode) {
-  if (!sourceCode) return '--ERROR: No se proporcionó código fuente'
-  
-  // PASO 1: Eliminar TODOS los comentarios y mensajes
-  sourceCode = stripAllComments(sourceCode)
-  
-  // PASO 2: Eliminar referencias a hooks/herramientas de debugging
-  sourceCode = removeHookReferences(sourceCode)
-  
-  // PASO 3: Limpiar líneas vacías y espacios excesivos
-  sourceCode = sourceCode.replace(/^\s*[\r\n]/gm, '')
-  sourceCode = sourceCode.replace(/\n\s*\n/g, '\n')
-  sourceCode = sourceCode.trim()
+  if (!sourceCode) return '--ERROR'
 
-  // PASO 4: Extraer payload (HttpGet o código directo)
   let payload = ""
   const regex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(regex)
@@ -276,7 +223,6 @@ function obfuscate(sourceCode) {
     payload = detectAndApplyMappings(sourceCode)
   }
 
-  // PASO 5: Construir ofuscación final
   const protections = megaProtections()
   const junk = junkBlocks(80, 30)
   const vm = build30xVM(payload)
@@ -285,35 +231,7 @@ function obfuscate(sourceCode) {
 ${protections}
 ${junk}
 ${vm}`
-  
-  // Limpiar espacios excesivos para compactar
   return final.replace(/\s+/g, " ").trim()
-}
-
-// =============================================
-// EJEMPLO DE USO
-// =============================================
-if (require.main === module) {
-  const fs = require('fs')
-  const path = require('path')
-  
-  const inputFile = process.argv[2] || 'input.lua'
-  const outputFile = process.argv[3] || 'output.lua'
-  
-  try {
-    const sourceCode = fs.readFileSync(inputFile, 'utf8')
-    console.log(`Ofuscando: ${inputFile}`)
-    console.log(`Tamaño original: ${sourceCode.length} bytes`)
-    
-    const obfuscatedCode = obfuscate(sourceCode)
-    
-    fs.writeFileSync(outputFile, obfuscatedCode)
-    console.log(`Ofuscado guardado en: ${outputFile}`)
-    console.log(`Tamaño ofuscado: ${obfuscatedCode.length} bytes`)
-    console.log('✅ Completado - Solo contiene la watermark, sin mensajes internos')
-  } catch (error) {
-    console.error('❌ Error:', error.message)
-  }
 }
 
 module.exports = { obfuscate }
