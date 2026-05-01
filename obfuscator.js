@@ -1,10 +1,5 @@
-// ============================================================
-// LuaObfuscator + Anti‑Env & 30‑capas VM  –  unveilX style
-// ============================================================
-
 const HEADER = `--[[ this code its protected by unveilX | https://discord.gg/DU35Mhyhq]]`
 
-// ----------  Nombres aleatorios  ----------
 const usedNames = new Set()
 function genName(prefix = '') {
   let name
@@ -19,7 +14,6 @@ function genName(prefix = '') {
   return name
 }
 
-// ----------  Expresiones matemáticas ligeras  ----------
 function lightMath(n) {
   if (Math.random() < 0.85) return n.toString()
   const a = Math.floor(Math.random() * 21) + 4
@@ -31,7 +25,6 @@ function runtimeString(s) {
   return `string.char(${s.split('').map(c => lightMath(c.charCodeAt(0))).join(',')})`
 }
 
-// ----------  Mapeo de palabras clave comunes  ----------
 const MAPEO = {
   "ScreenGui": "Aggressive Renaming",
   "Frame": "String to Math",
@@ -66,7 +59,6 @@ function detectAndApplyMappings(code) {
   return headers + modified
 }
 
-// ----------  Generación de bloques basura  ----------
 function generateStrongJunk(lines) {
   let block = ''
   for (let i = 0; i < lines; i++) {
@@ -97,7 +89,6 @@ function junkBlocks(totalLines, blockSize = 30) {
   return full
 }
 
-// ----------  Máquina virtual de 30 capas  ----------
 function buildTrueVM(payloadStr) {
   const STACK = genName()
   const chunkSize = 15
@@ -213,161 +204,16 @@ function build30xVM(payload) {
   return vm
 }
 
-// (Vacía – se pueden añadir protecciones extra aquí)
+// =============================================
+// megaProtections VACÍA (sin ninguna protección)
+// =============================================
 function megaProtections() {
   return ''
 }
 
-// =====================  LuaObfuscator (Anti‑Env silencioso)  =====================
-class LuaObfuscator {
-  constructor() {
-    // --- Comprobaciones del entorno sin ningún mensaje que delate qué se verifica ---
-    this.antiEnvScript = `
-      local _anti_pass = true
-      local ok
-
-      local Players = game:GetService('Players')
-      local lp = Players.LocalPlayer
-
-      if typeof(lp) ~= 'Instance' then _anti_pass = false end
-      if type(lp.Kick) ~= 'function' then _anti_pass = false end
-
-      ok = pcall(function() lp:Kick('m') end) if not ok then _anti_pass = false end
-      ok = pcall(lp.Kick, lp, 'm2') if not ok then _anti_pass = false end
-      ok = pcall(function() lp:Kick() end) if not ok then _anti_pass = false end
-      ok = xpcall(function() lp:Kick('x') end, function(e) return e end) if not ok then _anti_pass = false end
-      ok = pcall(function() game:GetService('Players').LocalPlayer:Kick('chained') end)
-      if not ok then _anti_pass = false end
-
-      local part = Instance.new('Part')
-      local sig = part:GetPropertyChangedSignal('Name')
-      if typeof(sig) ~= 'RBXScriptSignal' then _anti_pass = false end
-      if type(sig.Connect) ~= 'function' then _anti_pass = false end
-
-      local con = sig:Connect(function() end)
-      if typeof(con) ~= 'RBXScriptConnection' then _anti_pass = false end
-      if con.Connected ~= true then _anti_pass = false end
-      if type(con.Disconnect) ~= 'function' then _anti_pass = false end
-      con:Disconnect()
-      if con.Connected ~= false then _anti_pass = false end
-
-      local con2 = sig:Connect(function() end)
-      if con == con2 then _anti_pass = false end
-      if con2.Connected ~= true then _anti_pass = false end
-
-      ok = pcall(con2.Disconnect, con2) if not ok then _anti_pass = false end
-      if con2.Connected ~= false then _anti_pass = false end
-
-      ok = pcall(function() con2:Disconnect() end) if not ok then _anti_pass = false end
-
-      local con3 = sig:Once(function() end)
-      if typeof(con3) ~= 'RBXScriptConnection' then _anti_pass = false end
-      if con3.Connected ~= true then _anti_pass = false end
-      con3:Disconnect()
-      if con3.Connected ~= false then _anti_pass = false end
-
-      local con4 = sig:ConnectParallel(function() end)
-      if typeof(con4) ~= 'RBXScriptConnection' then _anti_pass = false end
-      if con4.Connected ~= true then _anti_pass = false end
-      con4:Disconnect()
-      if con4.Connected ~= false then _anti_pass = false end
-
-      local rs = game:GetService('RunService')
-      local hb = rs.Heartbeat
-      if typeof(hb) ~= 'RBXScriptSignal' then _anti_pass = false end
-      local con5 = hb:Connect(function() end)
-      if typeof(con5) ~= 'RBXScriptConnection' then _anti_pass = false end
-      con5:Disconnect()
-      if con5.Connected ~= false then _anti_pass = false end
-
-      local stepped = rs.Stepped
-      if typeof(stepped) ~= 'RBXScriptSignal' then _anti_pass = false end
-      local con6 = stepped:Connect(function() end)
-      if typeof(con6) ~= 'RBXScriptConnection' then _anti_pass = false end
-      con6:Disconnect()
-
-      local uis = game:GetService('UserInputService')
-      local ib = uis.InputBegan
-      if typeof(ib) ~= 'RBXScriptSignal' then _anti_pass = false end
-      local con7 = ib:Connect(function() end)
-      if typeof(con7) ~= 'RBXScriptConnection' then _anti_pass = false end
-      if con7.Connected ~= true then _anti_pass = false end
-      con7:Disconnect()
-      if con7.Connected ~= false then _anti_pass = false end
-
-      local conA = sig:Connect(function() end)
-      local conB = sig:Connect(function() end)
-      conA:Disconnect()
-      if conA.Connected ~= false then _anti_pass = false end
-      if conB.Connected ~= true then _anti_pass = false end
-      conB:Disconnect()
-      if conB.Connected ~= false then _anti_pass = false end
-
-      if con ~= con then _anti_pass = false end
-      local conC = sig:Connect(function() end)
-      if conC == con then _anti_pass = false end
-      conC:Disconnect()
-
-      if typeof(game) ~= 'Instance' then _anti_pass = false end
-      if typeof(workspace) ~= 'Instance' then _anti_pass = false end
-      if typeof(part) ~= 'Instance' then _anti_pass = false end
-      if typeof(true) ~= 'boolean' then _anti_pass = false end
-      if typeof(false) ~= 'boolean' then _anti_pass = false end
-      if typeof('a') ~= 'string' then _anti_pass = false end
-      if typeof(1) ~= 'number' then _anti_pass = false end
-      if typeof(nil) ~= 'nil' then _anti_pass = false end
-      if typeof({}) ~= 'table' then _anti_pass = false end
-
-      local ff = Instance.new('ForceField')
-      ff.Visible = true
-      if ff.Visible ~= true then _anti_pass = false end
-      ff.Visible = false
-      if ff.Visible ~= false then _anti_pass = false end
-      ff.Name = 'Custom'
-      if ff.Name ~= 'Custom' then _anti_pass = false end
-
-      local att = Instance.new('Attachment')
-      ff.Parent = att
-      if ff.Parent ~= att then _anti_pass = false end
-
-      if ff.ClassName ~= 'ForceField' then _anti_pass = false end
-
-      ok = pcall(function() return ff.Parent end) if not ok then _anti_pass = false end
-      ok = pcall(function() ff.Visible = true end) if not ok then _anti_pass = false end
-      local r1, r2 = pcall(function() return ff.ClassName end)
-      if not r1 or r2 ~= 'ForceField' then _anti_pass = false end
-
-      return _anti_pass
-    `
-  }
-
-  // Envuelve el código del usuario con la verificación anti‑env (sin comentarios)
-  obfuscate(luaCode) {
-    const escapedUserCode = luaCode
-      .replace(/\\/g, '\\\\')
-      .replace(/\n/g, '\\n')
-      .replace(/"/g, '\\"')
-
-    return `(function()
-  local anti_ok, anti_pass = pcall(function()
-    ${this.antiEnvScript}
-  end)
-
-  if not anti_ok or not anti_pass then return end
-
-  local user_ok, user_err = pcall(function()
-    local fn, err = loadstring("${escapedUserCode}")
-    if fn then fn() end
-  end)
-end)()`
-  }
-}
-
-// =====================  OFUSCADOR PRINCIPAL  =====================
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
 
-  // Extraer URL si es un loader típico
   let payload = ""
   const regex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(regex)
@@ -381,15 +227,11 @@ function obfuscate(sourceCode) {
   const junk = junkBlocks(80, 30)
   const vm = build30xVM(payload)
 
-  // Código ofuscado final (sin anti‑env aún)
-  const finalPayload = `${protections}\n${junk}\n${vm}`
-
-  // Envolver con el comprobador de entorno
-  const obf = new LuaObfuscator()
-  const wrapped = obf.obfuscate(finalPayload)
-
-  // Unir con el HEADER y colapsar solo espacios repetidos, sin eliminar saltos de línea
-  return `${HEADER}\n${wrapped}`.replace(/[ \t]+/g, ' ').replace(/\n\s*\n/g, '\n').trim()
+  const final = `${HEADER}
+${protections}
+${junk}
+${vm}`
+  return final.replace(/\s+/g, " ").trim()
 }
 
 module.exports = { obfuscate }
