@@ -15,7 +15,8 @@ function genName(prefix = '') {
 }
 
 function lightMath(n) {
-  if (Math.random() < 0.85) return n.toString()
+  // 50% menos envolturas matemáticas (7.5% probabilidad en lugar de 15%)
+  if (Math.random() < 0.925) return n.toString()
   const a = Math.floor(Math.random() * 21) + 4
   const b = Math.floor(Math.random() * 7) + 2
   return `((${n}+${a}-${a})*${b}/${b})`
@@ -157,13 +158,16 @@ function buildTrueVM(payloadStr) {
 }
 
 function applyCFF(blocks, stateVar) {
-  let lua = `local ${stateVar}=${lightMath(1)} `
-  lua += `while true do `
+  // Espacios asegurados alrededor de palabras clave para evitar 'endelse' pegado
+  let lua = `local ${stateVar}=${lightMath(1)} ; while true do `
   for (let i = 0; i < blocks.length; i++) {
-    if (i === 0) lua += `if ${stateVar}==${lightMath(1)} then ${blocks[i]} ${stateVar}=${lightMath(2)} `
-    else lua += `elseif ${stateVar}==${lightMath(i+1)} then ${blocks[i]} ${stateVar}=${lightMath(i+2)} `
+    if (i === 0) {
+      lua += `if ${stateVar}==${lightMath(1)} then ${blocks[i]} ${stateVar}=${lightMath(2)} `
+    } else {
+      lua += `elseif ${stateVar}==${lightMath(i+1)} then ${blocks[i]} ${stateVar}=${lightMath(i+2)} `
+    }
   }
-  lua += `elseif ${stateVar}==${lightMath(blocks.length+1)} then break end end `
+  lua += `elseif ${stateVar}==${lightMath(blocks.length+1)} then break end end ` // cierra if y while
   return lua
 }
 
@@ -183,9 +187,9 @@ function buildSingleVM(innerCode, handlerCount) {
   for (let i = 0; i < handlers.length; i++) {
     const fakeJunk = junkBlocks(2, 5)
     if (i === realIdx)
-      out += `local ${handlers[i]}=function(lM) local lM=lM ${fakeJunk} ${innerCode} end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM ; ${fakeJunk} ${innerCode} end `
     else
-      out += `local ${handlers[i]}=function(lM) local lM=lM ${fakeJunk} return nil end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM ; ${fakeJunk} return nil end `
   }
   out += `local ${DISPATCH}={`
   for (let i = 0; i < handlers.length; i++) out += `[${lightMath(i+1)}]=${handlers[i]},`
@@ -205,11 +209,9 @@ function build30xVM(payload) {
 }
 
 // =============================================
-// ANTI ENV LOGGER (se agregó una función más: debug.getinfo)
-// Se ofusca con 30 capas de VM anidadas
+// ANTI ENV LOGGER (función extra: debug.getinfo)
 // =============================================
 function antiEnvLoggerCode() {
-  // Versión fuerte con errores, más la verificación adicional de debug.getinfo
   return `
 local fns = {print, rawget, setmetatable, tostring, pcall, rawset, debug.getinfo}
 for _, f in ipairs(fns) do
@@ -229,8 +231,31 @@ end
 
 function megaProtections() {
   const cleanLogger = antiEnvLoggerCode()
-  // Ofuscamos el anti env logger con las mismas nested VMs (30 capas)
   return build30xVM(cleanLogger)
+}
+
+// =============================================
+// VALIDADOR DE BALANCEO DE ENDs (evita scripts rotos)
+// =============================================
+function isBalancedLua(code) {
+  // Cuenta palabras clave que deben balancearse
+  const patterns = [
+    { open: /\bfunction\b/g, close: /\bend\b/g, type: 'function' },
+    { open: /\bdo\b/g, close: /\bend\b/g, type: 'do' },
+    { open: /\bif\b/g, close: /\bend\b/g, type: 'if' },
+    { open: /\bfor\b/g, close: /\bend\b/g, type: 'for' },
+    { open: /\bwhile\b/g, close: /\bend\b/g, type: 'while' }
+  ]
+  for (const p of patterns) {
+    const openCount = (code.match(p.open) || []).length
+    const closeCount = (code.match(p.close) || []).length
+    // 'end' cierra cualquiera, así que comparamos solo aperturas que no sean solapadas
+    // Método simplificado: contar aperturas totales que requieren end vs total ends
+  }
+  // Método simple general: contar todas las palabras que abren bloque y comparar con total de 'end'
+  const openTotal = (code.match(/\b(function|do|if|for|while)\b/g) || []).length
+  const endTotal = (code.match(/\bend\b/g) || []).length
+  return openTotal === endTotal
 }
 
 function obfuscate(sourceCode) {
@@ -245,15 +270,20 @@ function obfuscate(sourceCode) {
     payload = detectAndApplyMappings(sourceCode)
   }
 
-  const protections = megaProtections()
-  const junk = junkBlocks(80, 30)
-  const vm = build30xVM(payload)
+  let final
+  do {
+    const protections = megaProtections()
+    const junk = junkBlocks(80, 30)
+    const vm = build30xVM(payload)
 
-  const final = `${HEADER}
+    final = `${HEADER}
 ${protections}
 ${junk}
 ${vm}`
-  return final.replace(/\s+/g, " ").trim()
+    final = final.replace(/\s+/g, " ").trim()
+  } while (!isBalancedLua(final)) // reintenta si está desbalanceado
+
+  return final
 }
 
 module.exports = { obfuscate }
