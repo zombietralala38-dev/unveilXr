@@ -2,33 +2,33 @@
 // LuaObfuscator + Anti‑Env & 30‑capas VM  –  unveilX style
 // ============================================================
 
-const HEADER = `--[[ this code its protected by unveilX | https://discord.gg/DU35Mhyhq]]`;
+const HEADER = `--[[ this code its protected by unveilX | https://discord.gg/DU35Mhyhq]]`
 
 // ----------  Nombres aleatorios  ----------
-const usedNames = new Set();
+const usedNames = new Set()
 function genName(prefix = '') {
-  let name;
+  let name
   do {
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_';
-    name = prefix;
-    const len = 5 + Math.floor(Math.random() * 8);
-    for (let i = 0; i < len; i++) name += chars[Math.floor(Math.random() * chars.length)];
-    name += Math.floor(Math.random() * 99999);
-  } while (usedNames.has(name));
-  usedNames.add(name);
-  return name;
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_'
+    name = prefix
+    const len = 5 + Math.floor(Math.random() * 8)
+    for (let i = 0; i < len; i++) name += chars[Math.floor(Math.random() * chars.length)]
+    name += Math.floor(Math.random() * 99999)
+  } while (usedNames.has(name))
+  usedNames.add(name)
+  return name
 }
 
 // ----------  Expresiones matemáticas ligeras  ----------
 function lightMath(n) {
-  if (Math.random() < 0.85) return n.toString();
-  const a = Math.floor(Math.random() * 21) + 4;
-  const b = Math.floor(Math.random() * 7) + 2;
-  return `((${n}+${a}-${a})*${b}/${b})`;
+  if (Math.random() < 0.85) return n.toString()
+  const a = Math.floor(Math.random() * 21) + 4
+  const b = Math.floor(Math.random() * 7) + 2
+  return `((${n}+${a}-${a})*${b}/${b})`
 }
 
 function runtimeString(s) {
-  return `string.char(${s.split('').map(c => lightMath(c.charCodeAt(0))).join(',')})`;
+  return `string.char(${s.split('').map(c => lightMath(c.charCodeAt(0))).join(',')})`
 }
 
 // ----------  Mapeo de palabras clave comunes  ----------
@@ -42,180 +42,180 @@ const MAPEO = {
   "RunService": "Virtual Machine",
   "TweenService": "Fake Flow",
   "Players": "Fake Flow"
-};
+}
 
 function detectAndApplyMappings(code) {
-  let modified = code, headers = "";
+  let modified = code, headers = ""
   for (const [word, tech] of Object.entries(MAPEO)) {
-    const regex = new RegExp(`\\b${word}\\b`, "g");
+    const regex = new RegExp(`\\b${word}\\b`, "g")
     if (regex.test(modified)) {
-      let replacement = `"${word}"`;
+      let replacement = `"${word}"`
       if (tech.includes("Aggressive Renaming")) {
-        const v = genName();
-        headers += `local ${v}="${word}" `;
-        replacement = v;
+        const v = genName()
+        headers += `local ${v}="${word}" `
+        replacement = v
       } else if (tech.includes("String to Math")) {
-        replacement = `string.char(${word.split('').map(c => c.charCodeAt(0)).join(',')})`;
+        replacement = `string.char(${word.split('').map(c => c.charCodeAt(0)).join(',')})`
       } else if (tech.includes("Mixed Boolean Arithmetic")) {
-        replacement = `((1==1 or true)and"${word}")`;
+        replacement = `((1==1 or true)and"${word}")`
       }
-      regex.lastIndex = 0;
-      modified = modified.replace(regex, () => `game[${replacement}]`);
+      regex.lastIndex = 0
+      modified = modified.replace(regex, () => `game[${replacement}]`)
     }
   }
-  return headers + modified;
+  return headers + modified
 }
 
 // ----------  Generación de bloques basura  ----------
 function generateStrongJunk(lines) {
-  let block = '';
+  let block = ''
   for (let i = 0; i < lines; i++) {
-    const r = Math.random();
+    const r = Math.random()
     if (r < 0.15) {
-      block += `if pcall(function() return #{1,2,3}==3 end) then local ${genName('_')}=${lightMath(1)} end `;
+      block += `if pcall(function() return #{1,2,3}==3 end) then local ${genName('_')}=${lightMath(1)} end `
     } else if (r < 0.3) {
-      block += `pcall(function() local ${genName('x')}=#{[1]=true} return ${genName('x')} end) `;
+      block += `pcall(function() local ${genName('x')}=#{[1]=true} return ${genName('x')} end) `
     } else if (r < 0.45) {
-      block += `if pcall(function() return type(rawget)=='function' end) then local ${genName('y')}=true end `;
+      block += `if pcall(function() return type(rawget)=='function' end) then local ${genName('y')}=true end `
     } else if (r < 0.6) {
-      block += `for _=1,${lightMath(1)} do pcall(function() local ${genName('z')}='${genName('')}' end) end `;
+      block += `for _=1,${lightMath(1)} do pcall(function() local ${genName('z')}='${genName('')}' end) end `
     } else if (r < 0.75) {
-      block += `pcall(function() error() end) `;
+      block += `pcall(function() error() end) `
     } else {
-      block += `local ${genName('u')}=pcall(function() return math.sqrt(${lightMath(144)}) end) `;
+      block += `local ${genName('u')}=pcall(function() return math.sqrt(${lightMath(144)}) end) `
     }
   }
-  return block;
+  return block
 }
 
 function junkBlocks(totalLines, blockSize = 30) {
-  let full = '';
+  let full = ''
   for (let i = 0; i < totalLines; i += blockSize) {
-    const lines = Math.min(blockSize, totalLines - i);
-    full += `do ${generateStrongJunk(lines)} end `;
+    const lines = Math.min(blockSize, totalLines - i)
+    full += `do ${generateStrongJunk(lines)} end `
   }
-  return full;
+  return full
 }
 
 // ----------  Máquina virtual de 30 capas  ----------
 function buildTrueVM(payloadStr) {
-  const STACK = genName();
-  const chunkSize = 15;
-  const realChunks = [];
+  const STACK = genName()
+  const chunkSize = 15
+  const realChunks = []
   for (let i = 0; i < payloadStr.length; i += chunkSize)
-    realChunks.push(payloadStr.slice(i, i + chunkSize));
+    realChunks.push(payloadStr.slice(i, i + chunkSize))
 
-  const seed = Math.floor(Math.random() * 200) + 50;
-  const saltVal = Math.floor(Math.random() * 250) + 1;
-  const KEY = genName();
-  const SALT = genName();
-  const memNames = [];
-  let realOrder = [];
-  let globalIndex = 0;
-  const totalChunks = realChunks.length * 3;
-  let currentReal = 0;
+  const seed = Math.floor(Math.random() * 200) + 50
+  const saltVal = Math.floor(Math.random() * 250) + 1
+  const KEY = genName()
+  const SALT = genName()
+  const memNames = []
+  let realOrder = []
+  let globalIndex = 0
+  const totalChunks = realChunks.length * 3
+  let currentReal = 0
 
-  let vmCore = `local ${STACK}={} local ${KEY}=${lightMath(seed)} local ${SALT}=${lightMath(saltVal)} `;
+  let vmCore = `local ${STACK}={} local ${KEY}=${lightMath(seed)} local ${SALT}=${lightMath(saltVal)} `
 
   for (let i = 0; i < totalChunks; i++) {
-    const memName = genName();
-    memNames.push(memName);
+    const memName = genName()
+    memNames.push(memName)
     if (currentReal < realChunks.length && (Math.random() > 0.5 || (totalChunks - i) === (realChunks.length - currentReal))) {
-      realOrder.push(i + 1);
-      const chunk = realChunks[currentReal];
-      let encBytes = [];
+      realOrder.push(i + 1)
+      const chunk = realChunks[currentReal]
+      let encBytes = []
       for (let j = 0; j < chunk.length; j++) {
-        const enc = (chunk.charCodeAt(j) + seed + (globalIndex * saltVal)) % 256;
-        encBytes.push(lightMath(enc));
-        globalIndex++;
+        const enc = (chunk.charCodeAt(j) + seed + (globalIndex * saltVal)) % 256
+        encBytes.push(lightMath(enc))
+        globalIndex++
       }
-      vmCore += `local ${memName}={${encBytes.join(',')}} `;
-      currentReal++;
+      vmCore += `local ${memName}={${encBytes.join(',')}} `
+      currentReal++
     } else {
-      let fakeBytes = [];
-      let fakeLen = Math.floor(Math.random() * 20) + 5;
-      for (let j = 0; j < fakeLen; j++) fakeBytes.push(lightMath(Math.floor(Math.random() * 255)));
-      vmCore += `local ${memName}={${fakeBytes.join(',')}} `;
+      let fakeBytes = []
+      let fakeLen = Math.floor(Math.random() * 20) + 5
+      for (let j = 0; j < fakeLen; j++) fakeBytes.push(lightMath(Math.floor(Math.random() * 255)))
+      vmCore += `local ${memName}={${fakeBytes.join(',')}} `
     }
   }
 
-  const poolVar = genName('_pool');
-  const ORDER = genName('_order');
-  const idxVar = genName('_idx');
-  const byteVar = genName('_byte');
+  const poolVar = genName('_pool')
+  const ORDER = genName('_order')
+  const idxVar = genName('_idx')
+  const byteVar = genName('_byte')
 
-  vmCore += `local ${poolVar}={${memNames.join(',')}} `;
-  vmCore += `local ${ORDER}={${realOrder.map(n => lightMath(n)).join(',')}} `;
-  vmCore += `local _gIdx=0 `;
-  vmCore += `for _,${idxVar} in ipairs(${ORDER}) do `;
-  vmCore += `for _,${byteVar} in ipairs(${poolVar}[${idxVar}]) do `;
-  vmCore += `table.insert(${STACK},string.char(math.floor((${byteVar}-${KEY}-_gIdx*${SALT})%256))) `;
-  vmCore += `_gIdx=_gIdx+1 end end `;
-  vmCore += `local _e=table.concat(${STACK}) ${STACK}=nil `;
+  vmCore += `local ${poolVar}={${memNames.join(',')}} `
+  vmCore += `local ${ORDER}={${realOrder.map(n => lightMath(n)).join(',')}} `
+  vmCore += `local _gIdx=0 `
+  vmCore += `for _,${idxVar} in ipairs(${ORDER}) do `
+  vmCore += `for _,${byteVar} in ipairs(${poolVar}[${idxVar}]) do `
+  vmCore += `table.insert(${STACK},string.char(math.floor((${byteVar}-${KEY}-_gIdx*${SALT})%256))) `
+  vmCore += `_gIdx=_gIdx+1 end end `
+  vmCore += `local _e=table.concat(${STACK}) ${STACK}=nil `
 
-  const ASSERT = `getfenv()[${runtimeString("assert")}]`;
-  const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`;
-  const GAME = `getfenv()[${runtimeString("game")}]`;
-  const HTTPGET = runtimeString("HttpGet");
+  const ASSERT = `getfenv()[${runtimeString("assert")}]`
+  const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`
+  const GAME = `getfenv()[${runtimeString("game")}]`
+  const HTTPGET = runtimeString("HttpGet")
   if (payloadStr.includes("http"))
-    vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME},_e)))() `;
+    vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME},_e)))() `
   else
-    vmCore += `${ASSERT}(${LOADSTRING}(_e))() `;
+    vmCore += `${ASSERT}(${LOADSTRING}(_e))() `
 
-  return vmCore;
+  return vmCore
 }
 
 function applyCFF(blocks, stateVar) {
-  let lua = `local ${stateVar}=${lightMath(1)} `;
-  lua += `while true do `;
+  let lua = `local ${stateVar}=${lightMath(1)} `
+  lua += `while true do `
   for (let i = 0; i < blocks.length; i++) {
-    if (i === 0) lua += `if ${stateVar}==${lightMath(1)} then ${blocks[i]} ${stateVar}=${lightMath(2)} `;
-    else lua += `elseif ${stateVar}==${lightMath(i+1)} then ${blocks[i]} ${stateVar}=${lightMath(i+2)} `;
+    if (i === 0) lua += `if ${stateVar}==${lightMath(1)} then ${blocks[i]} ${stateVar}=${lightMath(2)} `
+    else lua += `elseif ${stateVar}==${lightMath(i+1)} then ${blocks[i]} ${stateVar}=${lightMath(i+2)} `
   }
-  lua += `elseif ${stateVar}==${lightMath(blocks.length+1)} then break end end `;
-  return lua;
+  lua += `elseif ${stateVar}==${lightMath(blocks.length+1)} then break end end `
+  return lua
 }
 
 function buildSingleVM(innerCode, handlerCount) {
-  const handlers = [];
-  const used = new Set();
-  const bases = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  const handlers = []
+  const used = new Set()
+  const bases = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
   while (handlers.length < handlerCount) {
-    const base = bases[Math.floor(Math.random() * bases.length)];
-    const name = base + Math.floor(Math.random() * 99);
-    if (!used.has(name)) { used.add(name); handlers.push(name); }
+    const base = bases[Math.floor(Math.random() * bases.length)]
+    const name = base + Math.floor(Math.random() * 99)
+    if (!used.has(name)) { used.add(name); handlers.push(name) }
   }
 
-  const realIdx = Math.floor(Math.random() * handlerCount);
-  const DISPATCH = genName('d');
-  let out = `local lM={} `;
+  const realIdx = Math.floor(Math.random() * handlerCount)
+  const DISPATCH = genName('d')
+  let out = `local lM={} `
   for (let i = 0; i < handlers.length; i++) {
-    const fakeJunk = junkBlocks(2, 5);
+    const fakeJunk = junkBlocks(2, 5)
     if (i === realIdx)
-      out += `local ${handlers[i]}=function(lM) local lM=lM ${fakeJunk} ${innerCode} end `;
+      out += `local ${handlers[i]}=function(lM) local lM=lM ${fakeJunk} ${innerCode} end `
     else
-      out += `local ${handlers[i]}=function(lM) local lM=lM ${fakeJunk} return nil end `;
+      out += `local ${handlers[i]}=function(lM) local lM=lM ${fakeJunk} return nil end `
   }
-  out += `local ${DISPATCH}={`;
-  for (let i = 0; i < handlers.length; i++) out += `[${lightMath(i+1)}]=${handlers[i]},`;
-  out += `} `;
+  out += `local ${DISPATCH}={`
+  for (let i = 0; i < handlers.length; i++) out += `[${lightMath(i+1)}]=${handlers[i]},`
+  out += `} `
 
-  const execBlocks = handlers.map((_, i) => `${DISPATCH}[${lightMath(i+1)}](lM)`);
-  const stateVar = genName('s');
-  out += applyCFF(execBlocks, stateVar);
-  return `do ${out} end`;
+  const execBlocks = handlers.map((_, i) => `${DISPATCH}[${lightMath(i+1)}](lM)`)
+  const stateVar = genName('s')
+  out += applyCFF(execBlocks, stateVar)
+  return `do ${out} end`
 }
 
 function build30xVM(payload) {
-  let vm = buildTrueVM(payload);
+  let vm = buildTrueVM(payload)
   for (let i = 0; i < 29; i++)
-    vm = buildSingleVM(vm, Math.floor(Math.random() * 3) + 3);
-  return vm;
+    vm = buildSingleVM(vm, Math.floor(Math.random() * 3) + 3)
+  return vm
 }
 
 // (Vacía – se pueden añadir protecciones extra aquí)
 function megaProtections() {
-  return '';
+  return ''
 }
 
 // =====================  LuaObfuscator (Anti‑Env silencioso)  =====================
@@ -338,7 +338,7 @@ class LuaObfuscator {
       if not r1 or r2 ~= 'ForceField' then _anti_pass = false end
 
       return _anti_pass
-    `;
+    `
   }
 
   // Envuelve el código del usuario con la verificación anti‑env
@@ -346,7 +346,7 @@ class LuaObfuscator {
     const escapedUserCode = luaCode
       .replace(/\\/g, '\\\\')
       .replace(/\n/g, '\\n')
-      .replace(/"/g, '\\"');
+      .replace(/"/g, '\\"')
 
     return `
 -- Wrapper anti‑env silencioso
@@ -363,36 +363,36 @@ class LuaObfuscator {
     if fn then fn() end
   end)
 end)();
-`;
+`
   }
 }
 
 // =====================  OFUSCADOR PRINCIPAL  =====================
 function obfuscate(sourceCode) {
-  if (!sourceCode) return '--ERROR';
+  if (!sourceCode) return '--ERROR'
 
   // Extraer URL si es un loader típico
-  let payload = "";
-  const regex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
-  const match = sourceCode.match(regex);
+  let payload = ""
+  const regex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
+  const match = sourceCode.match(regex)
   if (match) {
-    payload = match[1];
+    payload = match[1]
   } else {
-    payload = detectAndApplyMappings(sourceCode);
+    payload = detectAndApplyMappings(sourceCode)
   }
 
-  const protections = megaProtections();
-  const junk = junkBlocks(80, 30);
-  const vm = build30xVM(payload);
+  const protections = megaProtections()
+  const junk = junkBlocks(80, 30)
+  const vm = build30xVM(payload)
 
   // Código ofuscado final (sin anti‑env aún)
-  const finalPayload = `${protections}\n${junk}\n${vm}`;
+  const finalPayload = `${protections}\n${junk}\n${vm}`
 
   // Envolver con el comprobador de entorno
-  const obf = new LuaObfuscator();
-  const wrapped = obf.obfuscate(finalPayload);
+  const obf = new LuaObfuscator()
+  const wrapped = obf.obfuscate(finalPayload)
 
-  return `${HEADER}\n${wrapped}`.replace(/\s+/g, " ").trim();
+  return `${HEADER}\n${wrapped}`.replace(/\s+/g, " ").trim()
 }
 
-module.exports = { obfuscate };
+module.exports = { obfuscate }
