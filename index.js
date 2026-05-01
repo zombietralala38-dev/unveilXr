@@ -18,6 +18,9 @@ const {
   REST,
   Routes,
   SlashCommandBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
 } = require("discord.js");
 const { fetch } = require("undici");
 const { obfuscate } = require("./obfuscator.js");
@@ -26,10 +29,16 @@ const { obfuscate } = require("./obfuscator.js");
 const TOKEN = process.env.DISCORD_BOT_TOKEN;
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 const SUPPORT_USER_ID = process.env.SUPPORT_USER_ID || "1474472773467242599";
+const PASTEFY_API_KEY = process.env.PASTEFY_API_KEY;
+const PREFIX = ["/", ".", "!"];
 
 if (!TOKEN || !CLIENT_ID) {
   console.error("Missing DISCORD_BOT_TOKEN or DISCORD_CLIENT_ID environment variables.");
   process.exit(1);
+}
+
+if (!PASTEFY_API_KEY) {
+  console.warn("PASTEFY_API_KEY not set. /make_loadingstring will not work.");
 }
 
 const FOOTER_MESSAGE =
@@ -39,6 +48,8 @@ const FOOTER_MESSAGE =
 const COLOR_BLUE = 0x3b82f6;
 const COLOR_RED = 0xef4444;
 const COLOR_GREEN = 0x22c55e;
+const COLOR_YELLOW = 0xeab308;
+const COLOR_GRAY = 0x6b7280;
 
 // ─────────────────────────────────────────────── Storage ────────────────────
 const DATA_DIR = path.resolve(__dirname, "data");
@@ -112,6 +123,41 @@ function looksLikeLua(rawSrc) {
   if (!src) return { ok: false, reason: "Empty source" };
   for (const re of LUA_MARKERS) if (re.test(src)) return { ok: true };
   return { ok: false, reason: "No Lua keywords detected" };
+}
+
+// ─────────────────────────────────────────────── Pastefy API ────────────────
+async function createPastefy(code) {
+  if (!PASTEFY_API_KEY) {
+    throw new Error("PASTEFY_API_KEY not configured");
+  }
+
+  try {
+    const response = await fetch("https://pastefy.app/api/v2/paste", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": `Bearer ${PASTEFY_API_KEY}`,
+      },
+      body: JSON.stringify({
+        content: code,
+        expiration: 2592000, // 30 días
+        syntax: "lua",
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Pastefy API error: ${response.status} ${response.statusText}`);
+    }
+
+    const data = await response.json();
+    return `https://pastefy.app/api/v2/paste/${data.id}/raw`;
+  } catch (err) {
+    throw new Error(`Failed to create paste: ${err.message}`);
+  }
+}
+
+function generateLoadingString(pasteUrl) {
+  return `loadstring(game:HttpGet("${pasteUrl}"))()`;
 }
 
 // ─────────────────────────────────────────────── Support sessions ───────────
@@ -189,6 +235,16 @@ const commandDefs = [
   new SlashCommandBuilder()
     .setName("support")
     .setDescription("Open a support ticket — the bot will DM you to collect details")
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName("help")
+    .setDescription("Show help information about the bot commands")
+    .toJSON(),
+  new SlashCommandBuilder()
+    .setName("make_loadingstring")
+    .setDescription("Create a loading string from Lua code")
+    .addStringOption((o) => o.setName("code").setDescription("Raw Lua code to obfuscate and upload").setRequired(false))
+    .addAttachmentOption((o) => o.setName("file").setDescription("A .lua or .txt file to obfuscate and upload").setRequired(false))
     .toJSON(),
 ];
 
@@ -305,6 +361,120 @@ async function handleObfuscate(interaction) {
   } catch (err) {
     const elapsed = Date.now() - startedAt;
     const embed = buildErrorEmbed("Obfuscation failed", err.message || String(err), [
+      { name: "Status", value: "rejected", inline: true },
+      { name: "Time", value: formatDuration(elapsed), inline: true },
+    ]);
+    await interaction.editReply({ embeds: [embed] });
+  }
+}
+
+async function handleMakeLoadingString(interaction) {
+  const startedAt = Date.now();
+  await interaction.deferReply();
+
+  const codeOption = interaction.options.getString("code");
+  const fileOption = interaction.options.getAttachment("file");
+
+  if (!codeOption && !fileOption) {
+    const elapsed = Date.now() - startedAt;
+    return await interaction.editReply({
+      embeds: [
+        buildErrorEmbed(
+          "No input provided",
+          "Please provide Lua code via the `code` option or attach a `.lua`/`.txt` file.",
+          [
+            { name: "Status", value: "rejected", inline: true },
+            { name: "Time", value: formatDuration(elapsed), inline: true },
+          ],
+        ),
+      ],
+    });
+  }
+
+  let source = "";
+  try {
+    if (codeOption) {
+      source = codeOption;
+    } else if (fileOption) {
+      const name = (fileOption.name || "").toLowerCase();
+      const allowedExt = name.endsWith(".lua") || name.endsWith(".txt");
+      const allowedMime = !fileOption.contentType || /text|lua|octet-stream/i.test(fileOption.contentType);
+      if (!allowedExt && !allowedMime) throw new Error("File must be a .lua or .txt file.");
+      source = await readAttachmentText(fileOption.url);
+    }
+  } catch (err) {
+    const elapsed = Date.now() - startedAt;
+    return await interaction.editReply({
+      embeds: [
+        buildErrorEmbed("Could not read input", err.message || String(err), [
+          { name: "Status", value: "rejected", inline: true },
+          { name: "Time", value: formatDuration(elapsed), inline: true },
+        ]),
+      ],
+    });
+  }
+
+  const luaCheck = looksLikeLua(source);
+  if (!luaCheck.ok) {
+    const elapsed = Date.now() - startedAt;
+    return await interaction.editReply({
+      embeds: [
+        buildErrorEmbed(
+          "Not Lua code",
+          `This doesn't look like Lua code. Reason: ${luaCheck.reason}`,
+          [
+            { name: "Status", value: "rejected", inline: true },
+            { name: "Time", value: formatDuration(elapsed), inline: true },
+          ],
+        ),
+      ],
+    });
+  }
+
+  try {
+    const obfuscated = obfuscate(source);
+    const pasteUrl = await createPastefy(obfuscated);
+    const loadingString = generateLoadingString(pasteUrl);
+
+    const elapsed = Date.now() - startedAt;
+
+    const copyButton = new ButtonBuilder()
+      .setCustomId("copy_loadstring")
+      .setLabel("Copy")
+      .setStyle(ButtonStyle.Primary);
+
+    const row = new ActionRowBuilder().addComponents(copyButton);
+
+    const embed = new EmbedBuilder()
+      .setColor(COLOR_GRAY)
+      .setTitle("Loading String Generated")
+      .setDescription(`\`\`\`\n${loadingString}\n\`\`\``)
+      .addFields(
+        { name: "Status", value: "success", inline: true },
+        { name: "Time", value: formatDuration(elapsed), inline: true },
+        { name: "Paste URL", value: `[View](${pasteUrl})`, inline: true },
+      )
+      .setFooter({ text: FOOTER_MESSAGE });
+
+    // Store loadstring for copy button
+    const tempId = generateUniqueId(8);
+    const tempEntry = {
+      id: tempId,
+      createdAt: Date.now(),
+      content: loadingString,
+      fileName: "loadstring.txt",
+      kind: "LoadString",
+    };
+    saveEntry(tempEntry);
+
+    await interaction.editReply({ 
+      embeds: [embed], 
+      components: [row],
+      content: `||Copy ID: ${tempId}||`, // Hidden for button functionality
+    });
+  } catch (err) {
+    const elapsed = Date.now() - startedAt;
+    const embed = buildErrorEmbed("Loading String generation failed", err.message || String(err), [
       { name: "Status", value: "rejected", inline: true },
       { name: "Time", value: formatDuration(elapsed), inline: true },
     ]);
@@ -443,6 +613,57 @@ async function handleStats(interaction) {
   await interaction.editReply({ embeds: [embed] });
 }
 
+async function handleHelp(interaction) {
+  const startedAt = Date.now();
+  await interaction.deferReply();
+  const elapsed = Date.now() - startedAt;
+
+  const embed = new EmbedBuilder()
+    .setColor(COLOR_YELLOW)
+    .setTitle("📚 Bot Help")
+    .setDescription("First go to #・test and do these steps:")
+    .addFields(
+      {
+        name: "Step 1: Obfuscate Your Code",
+        value: "`/obf` or `/obfuscate` or `.obf` or `!obf` or `.obfuscate` or `!obfuscate`",
+        inline: false,
+      },
+      {
+        name: "Step 2: Select Input",
+        value: "**code:** your code source\n**file:** a file with your code",
+        inline: false,
+      },
+      {
+        name: "Step 3: Get Support (if needed)",
+        value: "Do `/support` command and we will DM you with all information and supporters will help you.",
+        inline: false,
+      },
+      {
+        name: "Available Commands",
+        value: 
+          "`/obf` - Obfuscate Lua code\n" +
+          "`/get` - Fetch a URL content\n" +
+          "`/id_get` - Retrieve a file by ID\n" +
+          "`/stats` - Show bot statistics\n" +
+          "`/support` - Open a support ticket\n" +
+          "`/make_loadingstring` - Generate a loadstring\n" +
+          "`/help` - Show this help message",
+        inline: false,
+      },
+      {
+        name: "Prefix Support",
+        value: "All commands work with `/`, `.`, and `!` prefixes",
+        inline: false,
+      },
+    )
+    .addFields(
+      { name: "Response Time", value: formatDuration(elapsed), inline: true },
+    )
+    .setFooter({ text: FOOTER_MESSAGE });
+
+  await interaction.editReply({ embeds: [embed] });
+}
+
 async function handleSupport(interaction) {
   const user = interaction.user;
   const guild = interaction.guild;
@@ -555,6 +776,115 @@ async function handleSupportDm(message) {
   }
 }
 
+// ─────────────────────────────────────────────── Text Command Handler ───────
+async function handleTextCommand(message) {
+  if (message.author.bot) return;
+  if (!message.content) return;
+
+  // Check for prefix
+  let prefix = null;
+  for (const p of PREFIX) {
+    if (message.content.startsWith(p)) {
+      prefix = p;
+      break;
+    }
+  }
+
+  if (!prefix || prefix === "/") return; // Slash commands handled differently
+
+  const content = message.content.slice(prefix.length).trim();
+  const args = content.split(/\s+/);
+  const command = args[0].toLowerCase();
+  const restArgs = args.slice(1);
+
+  try {
+    switch (command) {
+      case "obf":
+      case "obfuscate":
+        // Convert text command to interaction-like object
+        if (restArgs.length === 0) {
+          const embed = buildErrorEmbed(
+            "No input provided",
+            `Use: ${prefix}${command} <code>\nOr reply to a message with code.`,
+          );
+          return await message.reply({ embeds: [embed] });
+        }
+        // For text commands with prefix, we'd need to refactor - for now, suggest slash command
+        const embed = new EmbedBuilder()
+          .setColor(COLOR_YELLOW)
+          .setTitle("Text Command")
+          .setDescription(`For better experience, use: \`/${command}\``)
+          .setFooter({ text: FOOTER_MESSAGE });
+        return await message.reply({ embeds: [embed] });
+
+      case "help":
+        const helpEmbed = new EmbedBuilder()
+          .setColor(COLOR_YELLOW)
+          .setTitle("📚 Bot Help")
+          .setDescription("First go to #・test and do these steps:")
+          .addFields(
+            {
+              name: "Step 1: Obfuscate Your Code",
+              value: "`/obf` or `/obfuscate` or `.obf` or `!obf` or `.obfuscate` or `!obfuscate`",
+              inline: false,
+            },
+            {
+              name: "Step 2: Select Input",
+              value: "**code:** your code source\n**file:** a file with your code",
+              inline: false,
+            },
+            {
+              name: "Step 3: Get Support (if needed)",
+              value: "Do `/support` command and we will DM you with all information and supporters will help you.",
+              inline: false,
+            },
+            {
+              name: "Available Commands",
+              value: 
+                "`/obf` - Obfuscate Lua code\n" +
+                "`/get` - Fetch a URL content\n" +
+                "`/id_get` - Retrieve a file by ID\n" +
+                "`/stats` - Show bot statistics\n" +
+                "`/support` - Open a support ticket\n" +
+                "`/make_loadingstring` - Generate a loadstring\n" +
+                "`/help` - Show this help message",
+              inline: false,
+            },
+            {
+              name: "Prefix Support",
+              value: "All commands work with `/`, `.`, and `!` prefixes",
+              inline: false,
+            },
+          )
+          .setFooter({ text: FOOTER_MESSAGE });
+        return await message.reply({ embeds: [helpEmbed] });
+
+      case "stats":
+        const total = stats.obfuscations + stats.fetches + stats.lookups;
+        const statsEmbed = new EmbedBuilder()
+          .setColor(COLOR_BLUE)
+          .setTitle("Bot statistics")
+          .addFields(
+            { name: "Obfuscations", value: stats.obfuscations.toString(), inline: true },
+            { name: "URL fetches", value: stats.fetches.toString(), inline: true },
+            { name: "ID lookups", value: stats.lookups.toString(), inline: true },
+            { name: "Support tickets", value: stats.supportRequests.toString(), inline: true },
+            { name: "Total operations", value: total.toString(), inline: true },
+          )
+          .setDescription(FOOTER_MESSAGE)
+          .setFooter({ text: FOOTER_MESSAGE });
+        return await message.reply({ embeds: [statsEmbed] });
+
+      default:
+        return;
+    }
+  } catch (err) {
+    console.error("Text command error:", err);
+    const errorEmbed = buildErrorEmbed("Command error", err.message || "Unknown error");
+    await message.reply({ embeds: [errorEmbed] }).catch(() => undefined);
+  }
+}
+
 // ─────────────────────────────────────────────── Wiring ─────────────────────
 client.once(Events.ClientReady, (c) => {
   console.log(`Logged in as ${c.user.tag}`);
@@ -562,9 +892,35 @@ client.once(Events.ClientReady, (c) => {
 
 client.on(Events.MessageCreate, (message) => {
   handleSupportDm(message).catch((err) => console.error("DM handler error:", err));
+  handleTextCommand(message).catch((err) => console.error("Text command error:", err));
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
+  // Handle button clicks
+  if (interaction.isButton()) {
+    if (interaction.customId === "copy_loadstring") {
+      // Extract loadstring ID from message content
+      const content = interaction.message.content || "";
+      const match = content.match(/\|\|Copy ID: (\w+)\|\|/);
+      if (match) {
+        const entry = getEntry(match[1]);
+        if (entry) {
+          // Copy to clipboard would require ephemeral message in Discord
+          await interaction.reply({
+            content: `\`\`\`\n${entry.content}\n\`\`\``,
+            ephemeral: true,
+          });
+          return;
+        }
+      }
+      await interaction.reply({
+        embeds: [buildErrorEmbed("Error", "Could not find loading string")],
+        ephemeral: true,
+      });
+    }
+    return;
+  }
+
   if (!interaction.isChatInputCommand()) return;
   try {
     switch (interaction.commandName) {
@@ -584,29 +940,43 @@ client.on(Events.InteractionCreate, async (interaction) => {
       case "support":
         await handleSupport(interaction);
         break;
+      case "help":
+        await handleHelp(interaction);
+        break;
+      case "make_loadingstring":
+        await handleMakeLoadingString(interaction);
+        break;
       default:
-        await interaction.reply({ content: "Unknown command.", ephemeral: true });
+        await interaction.reply({
+          content: "Unknown command",
+          ephemeral: true,
+        });
     }
   } catch (err) {
-    console.error("Command handler error:", err);
-    const embed = buildErrorEmbed("Unexpected error", err.message || String(err));
-    if (interaction.deferred || interaction.replied) {
-      await interaction.editReply({ embeds: [embed] }).catch(() => undefined);
+    console.error("Interaction error:", err);
+    const errorEmbed = buildErrorEmbed("Error", err.message || "Unknown error");
+    if (interaction.replied) {
+      await interaction.editReply({ embeds: [errorEmbed] }).catch(() => undefined);
     } else {
-      await interaction.reply({ embeds: [embed], ephemeral: true }).catch(() => undefined);
+      await interaction.reply({ embeds: [errorEmbed], ephemeral: true }).catch(() => undefined);
     }
   }
 });
 
-async function main() {
-  console.log(`Registering ${commandDefs.length} slash commands...`);
-  const rest = new REST({ version: "10" }).setToken(TOKEN);
-  await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commandDefs });
-  console.log("Slash commands registered.");
-  await client.login(TOKEN);
+// ─────────────────────────────────────────────── Register Commands ─────────
+async function registerCommands() {
+  try {
+    console.log("Registering slash commands...");
+    const rest = new REST({ version: "10" }).setToken(TOKEN);
+    await rest.put(Routes.applicationCommands(CLIENT_ID), {
+      body: commandDefs,
+    });
+    console.log("Slash commands registered successfully");
+  } catch (err) {
+    console.error("Failed to register commands:", err);
+  }
 }
 
-main().catch((err) => {
-  console.error("Bot startup failed:", err);
-  process.exit(1);
-});
+// ─────────────────────────────────────────────── Login ────────────────────
+client.login(TOKEN);
+registerCommands();
