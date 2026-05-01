@@ -158,7 +158,7 @@ function buildTrueVM(payloadStr) {
 }
 
 function applyCFF(blocks, stateVar) {
-  // Espacios asegurados alrededor de palabras clave para evitar 'endelse' pegado
+  // Espacios asegurados y ';' para evitar que el compresor pegue 'endelse'
   let lua = `local ${stateVar}=${lightMath(1)} ; while true do `
   for (let i = 0; i < blocks.length; i++) {
     if (i === 0) {
@@ -234,19 +234,6 @@ function megaProtections() {
   return build30xVM(cleanLogger)
 }
 
-// =============================================
-// CORRECCIÓN AUTOMÁTICA DE 'end' FALTANTES
-// =============================================
-function fixLuaEnds(code) {
-  const openMatches = code.match(/\b(function|do|if|for|while)\b/g) || []
-  const closeMatches = code.match(/\bend\b/g) || []
-  const needed = openMatches.length - closeMatches.length
-  if (needed > 0) {
-    return code + ' ' + ' end'.repeat(needed)
-  }
-  return code
-}
-
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
 
@@ -268,8 +255,7 @@ ${protections}
 ${junk}
 ${vm}`
   final = final.replace(/\s+/g, " ").trim()
-  final = fixLuaEnds(final)   // <-- arreglamos los end faltantes
-
+  // Ya no se usa fixLuaEnds
   return final
 }
 
