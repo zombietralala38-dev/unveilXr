@@ -1,4 +1,6 @@
-const HEADER = `--[[ thsi coee its protected by unveilX | https://discord.gg/DU35Mhyhq]]`
+// Obfuscador UnveilX con anti-env logger integrado
+
+const HEADER = `--[[ this code is protected by unveilX | https://discord.gg/DU35Mhyhq ]]`
 
 const usedNames = new Set()
 function genName(prefix = '') {
@@ -205,12 +207,77 @@ function build30xVM(payload) {
 }
 
 // =============================================
-// megaProtections VACÍA (sin ninguna protección)
+// megaProtections - Anti-Env Logger & Integrity Checks
 // =============================================
 function megaProtections() {
-  return ''
+  return `
+local function antiEnv()
+    -- 1. getgenv hook (muy común en executors)
+    local hasGG = false
+    pcall(function()
+        if rawget and rawget(getfenv and getfenv() or _G, "getgenv") ~= nil then
+            hasGG = true
+        end
+    end)
+    if hasGG then error("E1") end
+
+    -- 2. game.PlaceId debe funcionar sin errores
+    if not pcall(function() return game.PlaceId end) then error("E2") end
+    if type(game) ~= "userdata" or game.ClassName ~= "DataModel" then error("E3") end
+
+    -- 3. Players/GetNameFromUserIdAsync (detecta proxies falsos)
+    local ok, name = pcall(function()
+        return game:GetService("Players"):GetNameFromUserIdAsync(1)
+    end)
+    if ok then
+        local lp = game.Players.LocalPlayer
+        if lp and lp.Name ~= name then error("E4") end
+    else
+        error("E5")
+    end
+
+    -- 4. Time‑based detection (task.wait / os.clock)
+    if pcall(function() return os.clock end) and pcall(function() return task end) then
+        local t = os.clock()
+        task.wait(0.1)
+        if (os.clock() - t) < 0.05 then
+            error("E6")  -- wait demasiado corto -> hook en task
+        end
+    end
+
+    -- 5. Funciones críticas sin reemplazar
+    local crit = {"pcall","xpcall","error","loadstring","getfenv","rawget","type","select"}
+    for _, fn in ipairs(crit) do
+        local f = rawget and rawget(_G, fn) or _G[fn]
+        if f and type(f) ~= "function" then error("E7") end
+    end
+
+    -- 6. Servicios básicos y tipos de datos coherentes
+    local check = true
+    pcall(function()
+        local r = game:GetService("ReplicatedStorage")
+        local b = game:GetService("Lighting").Brightness
+        if type(b) ~= "number" then check = false end
+        local ts = game:GetService("TextService"):GetTextSize("X", 14, Enum.Font.Arial, Vector2.new(100, 0))
+        if typeof(ts) ~= "Vector2" or ts.X <= 0 then check = false end
+        local guiInset = game:GetService("GuiService"):GetGuiInset()
+        if typeof(guiInset) ~= "Vector2" then check = false end
+    end)
+    if not check then error("E8") end
+
+    return true
+end
+
+local anti_ok, anti_err = pcall(antiEnv)
+if not anti_ok then
+    error("Env tampered: " .. tostring(anti_err), 0)
+end
+`;
 }
 
+// =============================================
+// Obfuscate principal
+// =============================================
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
 
