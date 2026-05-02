@@ -14,7 +14,7 @@ function genName(prefix = '') {
   return name
 }
 
-// Solo 5% de probabilidad de envoltura matemática (30% menos que antes)
+// Solo 5% de envoltura matemática (equivalente a -30% extra sobre el anterior)
 function lightMath(n) {
   if (Math.random() < 0.95) return n.toString()
   const a = Math.floor(Math.random() * 21) + 4
@@ -26,7 +26,7 @@ function runtimeString(s) {
   return `string.char(${s.split('').map(c => lightMath(c.charCodeAt(0))).join(',')})`
 }
 
-// VM sencilla con un handler real y varios falsos, flujo de control falso (CFF) corregido
+// VM de una sola capa, estilo Luraph simplificado
 function buildSingleVM(innerCode) {
   const handlerCount = Math.floor(Math.random() * 4) + 3
   const handlers = []
@@ -42,18 +42,18 @@ function buildSingleVM(innerCode) {
   const DISPATCH = genName('d')
   let out = `local lM={} `
   for (let i = 0; i < handlers.length; i++) {
-    const fakeAssign = `local ${genName('v')}=${lightMath(Math.floor(Math.random()*1000))} `
-    if (i === realIdx)
-      out += `local ${handlers[i]}=function(lM) ${fakeAssign} ${innerCode} end `
-    else
-      out += `local ${handlers[i]}=function(lM) ${fakeAssign} return nil end `
+    const junkAssign = `local ${genName('v')}=${lightMath(Math.floor(Math.random()*1000))} `
+    if (i === realIdx) {
+      out += `local ${handlers[i]}=function(lM) ${junkAssign} ${innerCode} end `
+    } else {
+      out += `local ${handlers[i]}=function(lM) ${junkAssign} return nil end `
+    }
   }
   out += `local ${DISPATCH}={} `
   for (let i = 0; i < handlers.length; i++) {
     out += `${DISPATCH}[${lightMath(i+1)}]=${handlers[i]} `
   }
 
-  // Flujo de control falso sin errores sintácticos
   const stateVar = genName('s')
   out += `local ${stateVar}=${lightMath(1)} `
   out += `while true do `
@@ -63,18 +63,17 @@ function buildSingleVM(innerCode) {
     out += `elseif ${stateVar}==${lightMath(i+1)} then ${fakeBlock} ${stateVar}=${lightMath(i+2)} `
   }
   out += `else break end end ` // cierra if y while
-
   return `do ${out} end`
 }
 
-// VM anidada de mínimo 2 capas
+// VM mínima de 2 capas
 function buildMinimalNestedVM(innerCode) {
   let vm = buildSingleVM(innerCode)
   for (let i = 0; i < 2; i++) vm = buildSingleVM(vm)
   return vm
 }
 
-// La VM verdadera que ejecuta el payload final (para el combinador)
+// VM verdadera que ejecuta el payload final
 function buildTrueVM(payloadStr) {
   const STACK = genName()
   const chunkSize = 15
@@ -142,9 +141,8 @@ function buildTrueVM(payloadStr) {
   return vmCore
 }
 
-// Anti-env logger pequeño y letal (sin basura extra)
+// Anti‑env logger silencioso y letal
 function antiEnvLoggerCode() {
-  // Solo 3 líneas reales de código, el resto son protecciones normales
   return `
 do
   if pcall(getfenv,0) or (debug and debug.getinfo and pcall(debug.getinfo,print)) then
@@ -157,11 +155,10 @@ end`
 
 function megaProtections() {
   const cleanLogger = antiEnvLoggerCode()
-  // Envolver en una VM mínima de 2 capas para que esté sellado
   return buildMinimalNestedVM(cleanLogger)
 }
 
-// Divide el payload en 20 partes y las guarda en variables, luego las une
+// 20 partes selladas
 function build20PartVMs(payload) {
   const partLength = Math.ceil(payload.length / 20)
   const parts = []
@@ -170,31 +167,41 @@ function build20PartVMs(payload) {
   }
 
   const partVars = []
-  let partVarDeclarations = ''
   let vmCode = ''
 
-  // Cada parte se almacena en una variable local usando string.char
   for (let i = 0; i < parts.length; i++) {
     const varName = genName('_p' + i)
     partVars.push(varName)
     const encoded = parts[i].length > 0 ? runtimeString(parts[i]) : '""'
-    // Asignación simple, envuelta en una VM mínima de 2 capas para sellar
     const inner = `local ${varName}=${encoded}`
-    const nested = buildMinimalNestedVM(inner)
-    vmCode += `${nested} `
+    vmCode += buildMinimalNestedVM(inner) + ' '
   }
 
-  // Combinador que las une y ejecuta
   const combinedVar = genName('_combined')
-  const concatExpr = partVars.map(v => v).join('..')
-  let combiner = `local ${combinedVar}=${concatExpr} `
-  // Limpiar variables de partes
-  for (let i = 0; i < partVars.length; i++) {
-    combiner += `${partVars[i]}=nil `
-  }
+  let combiner = `local ${combinedVar}=${partVars.join('..')} `
+  partVars.forEach(v => combiner += `${v}=nil `)
   combiner += buildTrueVM(combinedVar)
 
-  return `${vmCode} ${combiner}`
+  return vmCode + ' ' + combiner
+}
+
+// Envoltorio final para que el script acabe en "break end"
+function wrapWithBreakEnd(code) {
+  // Un bucle while true que se ejecuta una sola vez y luego rompe.
+  // Después del código, forzamos que el estado cambie a 2 y luego break.
+  const state = genName('_x')
+  return `
+do
+  local ${state} = 1
+  while true do
+    if ${state} == 1 then
+      ${code}
+      ${state} = 2
+    else
+      break
+    end
+  end
+end`
 }
 
 function obfuscate(sourceCode) {
@@ -206,18 +213,21 @@ function obfuscate(sourceCode) {
   if (match) {
     payload = match[1]
   } else {
-    // Si no es URL, se toma el script completo
     payload = sourceCode
   }
 
   const protections = megaProtections()
   const mainVM = build20PartVMs(payload)
 
-  let final = `${HEADER}
-${protections}
-${mainVM}`
-  final = final.replace(/\s+/g, " ").trim()
-  return final
+  // Unimos todo
+  let body = `${protections} ${mainVM}`
+
+  // Envolvemos con el bucle break end al final
+  const final = wrapWithBreakEnd(body)
+
+  let result = `${HEADER}\n${final}`
+  result = result.replace(/\s+/g, " ").trim()
+  return result
 }
 
 module.exports = { obfuscate }
