@@ -1,4 +1,4 @@
-const HEADER = `--[[ this code its protected by unveilX | https://discord.gg/DU35Mhyhq]]`
+const HEADER = `--[[ this code its protected by unveilX | https://discord.gg/DU35Mhyhq ]]`
 
 const usedNames = new Set()
 function genName(prefix = '') {
@@ -14,9 +14,9 @@ function genName(prefix = '') {
   return name
 }
 
-// Reducir matemáticas en un 30% adicional respecto al valor actual (7.5% → 5.25%)
+// Solo 5% de probabilidad de envoltura matemática (30% menos que antes)
 function lightMath(n) {
-  if (Math.random() < 0.9475) return n.toString() // 94.75% sin matemáticas
+  if (Math.random() < 0.95) return n.toString()
   const a = Math.floor(Math.random() * 21) + 4
   const b = Math.floor(Math.random() * 7) + 2
   return `((${n}+${a}-${a})*${b}/${b})`
@@ -26,71 +26,55 @@ function runtimeString(s) {
   return `string.char(${s.split('').map(c => lightMath(c.charCodeAt(0))).join(',')})`
 }
 
-const MAPEO = {
-  "ScreenGui": "Aggressive Renaming",
-  "Frame": "String to Math",
-  "TextLabel": "Table Indirection",
-  "TextButton": "Mixed Boolean Arithmetic",
-  "Humanoid": "Dynamic Junk",
-  "Player": "Fake Flow",
-  "RunService": "Virtual Machine",
-  "TweenService": "Fake Flow",
-  "Players": "Fake Flow"
-}
-
-function detectAndApplyMappings(code) {
-  let modified = code, headers = ""
-  for (const [word, tech] of Object.entries(MAPEO)) {
-    const regex = new RegExp(`\\b${word}\\b`, "g")
-    if (regex.test(modified)) {
-      let replacement = `"${word}"`
-      if (tech.includes("Aggressive Renaming")) {
-        const v = genName()
-        headers += `local ${v}="${word}" `
-        replacement = v
-      } else if (tech.includes("String to Math")) {
-        replacement = `string.char(${word.split('').map(c => c.charCodeAt(0)).join(',')})`
-      } else if (tech.includes("Mixed Boolean Arithmetic")) {
-        replacement = `((1==1 or true)and"${word}")`
-      }
-      regex.lastIndex = 0
-      modified = modified.replace(regex, () => `game[${replacement}]`)
-    }
+// VM sencilla con un handler real y varios falsos, flujo de control falso (CFF) corregido
+function buildSingleVM(innerCode) {
+  const handlerCount = Math.floor(Math.random() * 4) + 3
+  const handlers = []
+  const used = new Set()
+  const bases = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
+  while (handlers.length < handlerCount) {
+    const base = bases[Math.floor(Math.random() * bases.length)]
+    const name = base + Math.floor(Math.random() * 99)
+    if (!used.has(name)) { used.add(name); handlers.push(name) }
   }
-  return headers + modified
-}
 
-function generateStrongJunk(lines) {
-  let block = ''
-  for (let i = 0; i < lines; i++) {
-    const r = Math.random()
-    if (r < 0.15) {
-      block += `if pcall(function() return #{1,2,3}==3 end) then local ${genName('_')}=${lightMath(1)} end `
-    } else if (r < 0.3) {
-      block += `pcall(function() local ${genName('x')}=#{[1]=true} return ${genName('x')} end) `
-    } else if (r < 0.45) {
-      block += `if pcall(function() return type(rawget)=='function' end) then local ${genName('y')}=true end `
-    } else if (r < 0.6) {
-      block += `for _=1,${lightMath(1)} do pcall(function() local ${genName('z')}='${genName('')}' end) end `
-    } else if (r < 0.75) {
-      block += `pcall(function() error() end) `
-    } else {
-      block += `local ${genName('u')}=pcall(function() return math.sqrt(${lightMath(144)}) end) `
-    }
+  const realIdx = Math.floor(Math.random() * handlerCount)
+  const DISPATCH = genName('d')
+  let out = `local lM={} `
+  for (let i = 0; i < handlers.length; i++) {
+    const fakeAssign = `local ${genName('v')}=${lightMath(Math.floor(Math.random()*1000))} `
+    if (i === realIdx)
+      out += `local ${handlers[i]}=function(lM) ${fakeAssign} ${innerCode} end `
+    else
+      out += `local ${handlers[i]}=function(lM) ${fakeAssign} return nil end `
   }
-  return block
-}
-
-function junkBlocks(totalLines, blockSize = 30) {
-  let full = ''
-  for (let i = 0; i < totalLines; i += blockSize) {
-    const lines = Math.min(blockSize, totalLines - i)
-    full += `do ${generateStrongJunk(lines)} end `
+  out += `local ${DISPATCH}={} `
+  for (let i = 0; i < handlers.length; i++) {
+    out += `${DISPATCH}[${lightMath(i+1)}]=${handlers[i]} `
   }
-  return full
+
+  // Flujo de control falso sin errores sintácticos
+  const stateVar = genName('s')
+  out += `local ${stateVar}=${lightMath(1)} `
+  out += `while true do `
+  out += `if ${stateVar}==${lightMath(1)} then ${DISPATCH}[${lightMath(realIdx+1)}](lM) ${stateVar}=${lightMath(2)} `
+  for (let i = 1; i < handlers.length; i++) {
+    const fakeBlock = `local ${genName('f')}=${lightMath(i)} `
+    out += `elseif ${stateVar}==${lightMath(i+1)} then ${fakeBlock} ${stateVar}=${lightMath(i+2)} `
+  }
+  out += `else break end end ` // cierra if y while
+
+  return `do ${out} end`
 }
 
-// VM verdadera que ejecuta la carga útil (similar a antes, se usará para combinación final)
+// VM anidada de mínimo 2 capas
+function buildMinimalNestedVM(innerCode) {
+  let vm = buildSingleVM(innerCode)
+  for (let i = 0; i < 2; i++) vm = buildSingleVM(vm)
+  return vm
+}
+
+// La VM verdadera que ejecuta el payload final (para el combinador)
 function buildTrueVM(payloadStr) {
   const STACK = genName()
   const chunkSize = 15
@@ -148,95 +132,24 @@ function buildTrueVM(payloadStr) {
 
   const ASSERT = `getfenv()[${runtimeString("assert")}]`
   const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`
-  const GAME = `getfenv()[${runtimeString("game")}]`
-  const HTTPGET = runtimeString("HttpGet")
-  if (payloadStr.includes("http"))
+  if (payloadStr.includes("http")) {
+    const GAME = `getfenv()[${runtimeString("game")}]`
+    const HTTPGET = runtimeString("HttpGet")
     vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME},_e)))() `
-  else
+  } else {
     vmCore += `${ASSERT}(${LOADSTRING}(_e))() `
-
+  }
   return vmCore
 }
 
-function applyCFF(blocks, stateVar) {
-  let lua = `local ${stateVar}=${lightMath(1)} ; while true do `
-  for (let i = 0; i < blocks.length; i++) {
-    if (i === 0) {
-      lua += `if ${stateVar}==${lightMath(1)} then ${blocks[i]} ${stateVar}=${lightMath(2)} `
-    } else {
-      lua += `elseif ${stateVar}==${lightMath(i+1)} then ${blocks[i]} ${stateVar}=${lightMath(i+2)} `
-    }
-  }
-  lua += `elseif ${stateVar}==${lightMath(blocks.length+1)} then break end end `
-  return lua
-}
-
-// VM de una sola capa personalizable (estilo Luraph mejorado)
-function buildSingleVM(innerCode, handlerCount = null) {
-  if (!handlerCount) handlerCount = Math.floor(Math.random() * 4) + 4
-  const handlers = []
-  const used = new Set()
-  const bases = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-  while (handlers.length < handlerCount) {
-    const base = bases[Math.floor(Math.random() * bases.length)]
-    const name = base + Math.floor(Math.random() * 99)
-    if (!used.has(name)) { used.add(name); handlers.push(name) }
-  }
-
-  const realIdx = Math.floor(Math.random() * handlerCount)
-  const DISPATCH = genName('d')
-  let out = `local lM={} local _A,_B,_C=0,0,0 `
-  for (let i = 0; i < handlers.length; i++) {
-    const fakeJunk = junkBlocks(Math.floor(Math.random() * 5) + 2, 4)
-    const extraDecoy = Math.random() < 0.3
-      ? `_A,_B,_C=${lightMath(Math.floor(Math.random()*100))},${lightMath(Math.floor(Math.random()*100))},${lightMath(Math.floor(Math.random()*100))} ; `
-      : ''
-    if (i === realIdx)
-      out += `local ${handlers[i]}=function(lM) ${extraDecoy} ${fakeJunk} ${innerCode} return nil end ;`
-    else
-      out += `local ${handlers[i]}=function(lM) ${extraDecoy} ${fakeJunk} return nil end ;`
-  }
-  out += `local ${DISPATCH}={} `
-  // Claves mezcladas con lightMath y alguna indirección
-  for (let i = 0; i < handlers.length; i++) {
-    const key = Math.random() < 0.5
-      ? `[${lightMath(i+1)}]`
-      : `[string.char(${lightMath(65+i)},${lightMath(65+i)}).."x"]`
-    out += `${DISPATCH}${key}=${handlers[i]} ;`
-  }
-  out += `local _realIdx=${realIdx+1} ;`
-  // Resolución dinámica con un poco de ofuscación adicional
-  const getHandler = `(function(idx) if idx==${lightMath(realIdx+1)} then return ${DISPATCH}[${lightMath(realIdx+1)}] else return ${DISPATCH}[idx] end end)`
-  const execPart = `(${getHandler})(${lightMath(realIdx+1)})(lM)`
-  const stateVar = genName('s')
-  out += applyCFF(Array(handlers.length).fill(execPart), stateVar)
-  return `do ${out} end`
-}
-
-// Construye una VM anidada de 2 capas (mínimo) para cada parte del payload
-function buildMinimalNestedVM(innerCode) {
-  let vm = buildSingleVM(innerCode, Math.floor(Math.random() * 3) + 3)
-  vm = buildSingleVM(vm, Math.floor(Math.random() * 3) + 3)
-  return vm
-}
-
-// Anti‑env logger más pequeño, silencioso y fuerte
+// Anti-env logger pequeño y letal (sin basura extra)
 function antiEnvLoggerCode() {
-  // Si se detecta un entorno manipulado, corrompe silenciosamente la ejecución
+  // Solo 3 líneas reales de código, el resto son protecciones normales
   return `
 do
-  local function _stealthCheck()
-    if pcall(getfenv, 0) then return true end
-    if debug and debug.getinfo then
-      if pcall(debug.getinfo, print) then return true end
-    end
-    return false
-  end
-  if _stealthCheck() then
-    -- Corromper variables críticas sin errores obvios
-    local _t = { __index = function() return error(nil, 0) end }
-    setmetatable(_G, _t)
-    -- Bucle infinito que hace perder tiempo de análisis
+  if pcall(getfenv,0) or (debug and debug.getinfo and pcall(debug.getinfo,print)) then
+    local mt = { __index = function() error() end }
+    setmetatable(_G, mt)
     while true do end
   end
 end`
@@ -244,63 +157,44 @@ end`
 
 function megaProtections() {
   const cleanLogger = antiEnvLoggerCode()
+  // Envolver en una VM mínima de 2 capas para que esté sellado
   return buildMinimalNestedVM(cleanLogger)
 }
 
-// Divide el payload en 20 partes y las encapsula en VMs mínimas
-function splitPayloadIntoParts(payload, partsCount = 20) {
-  const partLength = Math.ceil(payload.length / partsCount)
+// Divide el payload en 20 partes y las guarda en variables, luego las une
+function build20PartVMs(payload) {
+  const partLength = Math.ceil(payload.length / 20)
   const parts = []
-  for (let i = 0; i < partsCount; i++) {
+  for (let i = 0; i < 20; i++) {
     parts.push(payload.slice(i * partLength, (i + 1) * partLength))
   }
-  return parts
-}
 
-function build20PartVMs(payload) {
-  const parts = splitPayloadIntoParts(payload, 20)
-  const partVMs = []
-  const partVarBase = genName('_p')
-  const partTable = genName('_parts')
+  const partVars = []
+  let partVarDeclarations = ''
+  let vmCode = ''
 
-  // Declaración de tabla global de partes
-  let header = `local ${partTable}={} `
+  // Cada parte se almacena en una variable local usando string.char
   for (let i = 0; i < parts.length; i++) {
-    const partVar = genName('_part' + i)
-    const decoyJunk = junkBlocks(Math.floor(Math.random() * 5) + 2, 5)
-    // Cada parte debe almacenarse en la tabla en la posición correspondiente
-    const storeCode = `${partTable}[${lightMath(i+1)}]=${partVar}`
-    // La parte misma se obtiene de un string ofuscado que representa el fragmento
-    const partStr = parts[i]
-    const encoded = runtimeString(partStr)
-    // Código interno que decodifica y asigna
-    const inner = `local ${partVar}=${encoded} ; ${decoyJunk} ; ${storeCode}`
-    const vm = buildMinimalNestedVM(inner)
-    partVMs.push(vm)
+    const varName = genName('_p' + i)
+    partVars.push(varName)
+    const encoded = parts[i].length > 0 ? runtimeString(parts[i]) : '""'
+    // Asignación simple, envuelta en una VM mínima de 2 capas para sellar
+    const inner = `local ${varName}=${encoded}`
+    const nested = buildMinimalNestedVM(inner)
+    vmCode += `${nested} `
   }
 
-  // Mezclar los VMs de las partes con basura adicional para que estén dispersos
-  let combined = header
-  for (let i = 0; i < partVMs.length; i++) {
-    combined += `do ${partVMs[i]} end `
-    const spacer = junkBlocks(Math.floor(Math.random() * 10) + 5, 20)
-    combined += spacer
+  // Combinador que las une y ejecuta
+  const combinedVar = genName('_combined')
+  const concatExpr = partVars.map(v => v).join('..')
+  let combiner = `local ${combinedVar}=${concatExpr} `
+  // Limpiar variables de partes
+  for (let i = 0; i < partVars.length; i++) {
+    combiner += `${partVars[i]}=nil `
   }
+  combiner += buildTrueVM(combinedVar)
 
-  // Combinador final que junta las 20 partes y ejecuta
-  const combiner = `
-do
-  local _assembled = {}
-  for i=1,20 do
-    table.insert(_assembled, ${partTable}[i])
-  end
-  local _finalPayload = table.concat(_assembled)
-  ${partTable}=nil
-  ${buildTrueVM('_finalPayload')}
-end`
-
-  combined += combiner
-  return combined
+  return `${vmCode} ${combiner}`
 }
 
 function obfuscate(sourceCode) {
@@ -312,16 +206,15 @@ function obfuscate(sourceCode) {
   if (match) {
     payload = match[1]
   } else {
-    payload = detectAndApplyMappings(sourceCode)
+    // Si no es URL, se toma el script completo
+    payload = sourceCode
   }
 
   const protections = megaProtections()
-  const junk = junkBlocks(80, 30)
   const mainVM = build20PartVMs(payload)
 
   let final = `${HEADER}
 ${protections}
-${junk}
 ${mainVM}`
   final = final.replace(/\s+/g, " ").trim()
   return final
