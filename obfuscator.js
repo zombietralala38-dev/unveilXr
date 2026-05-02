@@ -26,7 +26,7 @@ function runtimeString(s) {
   return `string.char(${s.split('').map(c => lightMath(c.charCodeAt(0))).join(',')})`
 }
 
-// VM de una sola capa, dispatch con flujo de control falso
+// VM de una sola capa con dispatch y flujo de control falso
 function buildSingleVM(innerCode) {
   const handlerCount = Math.floor(Math.random() * 4) + 3
   const handlers = []
@@ -141,7 +141,7 @@ function buildTrueVM(payloadStr) {
   return vmCore
 }
 
-// Divide en 20 partes selladas
+// **** CORRECCIÓN AQUÍ: uso de tabla en lugar de variables sueltas ****
 function build20PartVMs(payload) {
   const partLength = Math.ceil(payload.length / 20)
   const parts = []
@@ -149,21 +149,25 @@ function build20PartVMs(payload) {
     parts.push(payload.slice(i * partLength, (i + 1) * partLength))
   }
 
-  const partVars = []
-  let vmCode = ''
+  const tableName = genName('_parts')   // Tabla que contendrá todas las partes
+  let vmCode = `local ${tableName} = {} `
 
   for (let i = 0; i < parts.length; i++) {
-    const varName = genName('_p' + i)
-    partVars.push(varName)
     const encoded = parts[i].length > 0 ? runtimeString(parts[i]) : '""'
-    const inner = `local ${varName}=${encoded}`
+    // Guardamos directamente en la tabla
+    const inner = `${tableName}[${lightMath(i+1)}] = ${encoded}`
+    // Cada asignación va envuelta en su VM sellada
     vmCode += buildMinimalNestedVM(inner) + ' '
   }
 
+  // Ahora combinamos las partes desde la tabla
   const combinedVar = genName('_combined')
-  let combiner = `local ${combinedVar}=${partVars.join('..')} `
-  partVars.forEach(v => combiner += `${v}=nil `)
-  combiner += buildTrueVM(combinedVar)
+  const idxVar = genName('_i')
+  let combiner = `local ${combinedVar} = {} `
+  combiner += `for ${idxVar}=1,20 do ${combinedVar}[${idxVar}] = ${tableName}[${idxVar}] end `
+  combiner += `${tableName} = nil `
+  combiner += `local _payload = table.concat(${combinedVar}) `
+  combiner += buildTrueVM('_payload')
 
   return vmCode + ' ' + combiner
 }
@@ -188,17 +192,15 @@ end`
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
 
-  // Detectar si es una URL de loadstring+HttpGet o código directo
   let payload = ""
   const regex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(regex)
   if (match) {
-    payload = match[1]  // solo la URL
+    payload = match[1]
   } else {
     payload = sourceCode
   }
 
-  // Solo la ofuscación principal, sin protecciones agresivas
   const mainVM = build20PartVMs(payload)
   const final = wrapWithBreakEnd(mainVM)
 
