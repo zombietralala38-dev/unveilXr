@@ -14,7 +14,7 @@ function genName(prefix = '') {
   return name
 }
 
-// Solo 5% de envoltura matemática (equivalente a -30% extra sobre el anterior)
+// Solo 5% de envoltura matemática, el resto números limpios
 function lightMath(n) {
   if (Math.random() < 0.95) return n.toString()
   const a = Math.floor(Math.random() * 21) + 4
@@ -26,7 +26,7 @@ function runtimeString(s) {
   return `string.char(${s.split('').map(c => lightMath(c.charCodeAt(0))).join(',')})`
 }
 
-// VM de una sola capa, estilo Luraph simplificado
+// VM de una sola capa, dispatch con flujo de control falso
 function buildSingleVM(innerCode) {
   const handlerCount = Math.floor(Math.random() * 4) + 3
   const handlers = []
@@ -62,18 +62,18 @@ function buildSingleVM(innerCode) {
     const fakeBlock = `local ${genName('f')}=${lightMath(i)} `
     out += `elseif ${stateVar}==${lightMath(i+1)} then ${fakeBlock} ${stateVar}=${lightMath(i+2)} `
   }
-  out += `else break end end ` // cierra if y while
+  out += `else break end end `
   return `do ${out} end`
 }
 
-// VM mínima de 2 capas
+// VM anidada mínima (2 capas) para sellar cada parte
 function buildMinimalNestedVM(innerCode) {
   let vm = buildSingleVM(innerCode)
   for (let i = 0; i < 2; i++) vm = buildSingleVM(vm)
   return vm
 }
 
-// VM verdadera que ejecuta el payload final
+// VM verdadera que reconstruye el payload final y lo ejecuta
 function buildTrueVM(payloadStr) {
   const STACK = genName()
   const chunkSize = 15
@@ -141,24 +141,7 @@ function buildTrueVM(payloadStr) {
   return vmCore
 }
 
-// Anti‑env logger silencioso y letal
-function antiEnvLoggerCode() {
-  return `
-do
-  if pcall(getfenv,0) or (debug and debug.getinfo and pcall(debug.getinfo,print)) then
-    local mt = { __index = function() error() end }
-    setmetatable(_G, mt)
-    while true do end
-  end
-end`
-}
-
-function megaProtections() {
-  const cleanLogger = antiEnvLoggerCode()
-  return buildMinimalNestedVM(cleanLogger)
-}
-
-// 20 partes selladas
+// Divide en 20 partes selladas
 function build20PartVMs(payload) {
   const partLength = Math.ceil(payload.length / 20)
   const parts = []
@@ -185,10 +168,8 @@ function build20PartVMs(payload) {
   return vmCode + ' ' + combiner
 }
 
-// Envoltorio final para que el script acabe en "break end"
+// Envoltorio final para que acabe en "break end"
 function wrapWithBreakEnd(code) {
-  // Un bucle while true que se ejecuta una sola vez y luego rompe.
-  // Después del código, forzamos que el estado cambie a 2 y luego break.
   const state = genName('_x')
   return `
 do
@@ -207,23 +188,19 @@ end`
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
 
+  // Detectar si es una URL de loadstring+HttpGet o código directo
   let payload = ""
   const regex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(regex)
   if (match) {
-    payload = match[1]
+    payload = match[1]  // solo la URL
   } else {
     payload = sourceCode
   }
 
-  const protections = megaProtections()
+  // Solo la ofuscación principal, sin protecciones agresivas
   const mainVM = build20PartVMs(payload)
-
-  // Unimos todo
-  let body = `${protections} ${mainVM}`
-
-  // Envolvemos con el bucle break end al final
-  const final = wrapWithBreakEnd(body)
+  const final = wrapWithBreakEnd(mainVM)
 
   let result = `${HEADER}\n${final}`
   result = result.replace(/\s+/g, " ").trim()
