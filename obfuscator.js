@@ -14,7 +14,7 @@ function genName(prefix = '') {
   return name
 }
 
-// Solo 5% de envoltura matemática, el resto números limpios
+// Solo 5% de envoltura matemática
 function lightMath(n) {
   if (Math.random() < 0.95) return n.toString()
   const a = Math.floor(Math.random() * 21) + 4
@@ -73,75 +73,7 @@ function buildMinimalNestedVM(innerCode) {
   return vm
 }
 
-// VM verdadera que reconstruye el payload final y lo ejecuta
-function buildTrueVM(payloadStr) {
-  const STACK = genName()
-  const chunkSize = 15
-  const realChunks = []
-  for (let i = 0; i < payloadStr.length; i += chunkSize)
-    realChunks.push(payloadStr.slice(i, i + chunkSize))
-
-  const seed = Math.floor(Math.random() * 200) + 50
-  const saltVal = Math.floor(Math.random() * 250) + 1
-  const KEY = genName()
-  const SALT = genName()
-  const memNames = []
-  let realOrder = []
-  let globalIndex = 0
-  const totalChunks = realChunks.length * 3
-  let currentReal = 0
-
-  let vmCore = `local ${STACK}={} local ${KEY}=${lightMath(seed)} local ${SALT}=${lightMath(saltVal)} `
-
-  for (let i = 0; i < totalChunks; i++) {
-    const memName = genName()
-    memNames.push(memName)
-    if (currentReal < realChunks.length && (Math.random() > 0.5 || (totalChunks - i) === (realChunks.length - currentReal))) {
-      realOrder.push(i + 1)
-      const chunk = realChunks[currentReal]
-      let encBytes = []
-      for (let j = 0; j < chunk.length; j++) {
-        const enc = (chunk.charCodeAt(j) + seed + (globalIndex * saltVal)) % 256
-        encBytes.push(lightMath(enc))
-        globalIndex++
-      }
-      vmCore += `local ${memName}={${encBytes.join(',')}} `
-      currentReal++
-    } else {
-      let fakeBytes = []
-      let fakeLen = Math.floor(Math.random() * 20) + 5
-      for (let j = 0; j < fakeLen; j++) fakeBytes.push(lightMath(Math.floor(Math.random() * 255)))
-      vmCore += `local ${memName}={${fakeBytes.join(',')}} `
-    }
-  }
-
-  const poolVar = genName('_pool')
-  const ORDER = genName('_order')
-  const idxVar = genName('_idx')
-  const byteVar = genName('_byte')
-
-  vmCore += `local ${poolVar}={${memNames.join(',')}} `
-  vmCore += `local ${ORDER}={${realOrder.map(n => lightMath(n)).join(',')}} `
-  vmCore += `local _gIdx=0 `
-  vmCore += `for _,${idxVar} in ipairs(${ORDER}) do `
-  vmCore += `for _,${byteVar} in ipairs(${poolVar}[${idxVar}]) do `
-  vmCore += `table.insert(${STACK},string.char(math.floor((${byteVar}-${KEY}-_gIdx*${SALT})%256))) `
-  vmCore += `_gIdx=_gIdx+1 end end `
-  vmCore += `local _e=table.concat(${STACK}) ${STACK}=nil `
-
-  const ASSERT = `getfenv()[${runtimeString("assert")}]`
-  const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`
-  if (payloadStr.includes("http")) {
-    const GAME = `getfenv()[${runtimeString("game")}]`
-    const HTTPGET = runtimeString("HttpGet")
-    vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME},_e)))() `
-  } else {
-    vmCore += `${ASSERT}(${LOADSTRING}(_e))() `
-  }
-  return vmCore
-}
-
-// **** CORRECCIÓN AQUÍ: uso de tabla en lugar de variables sueltas ****
+// Divide en 20 partes selladas y las guarda en una tabla
 function build20PartVMs(payload) {
   const partLength = Math.ceil(payload.length / 20)
   const parts = []
@@ -160,19 +92,28 @@ function build20PartVMs(payload) {
     vmCode += buildMinimalNestedVM(inner) + ' '
   }
 
-  // Ahora combinamos las partes desde la tabla
+  // Combinamos las partes desde la tabla
   const combinedVar = genName('_combined')
   const idxVar = genName('_i')
   let combiner = `local ${combinedVar} = {} `
   combiner += `for ${idxVar}=1,20 do ${combinedVar}[${idxVar}] = ${tableName}[${idxVar}] end `
   combiner += `${tableName} = nil `
   combiner += `local _payload = table.concat(${combinedVar}) `
-  combiner += buildTrueVM('_payload')
 
-  return vmCode + ' ' + combiner
+  // Ejecución final con pcall dentro de una VM sellada
+  const execInner = `
+    local _ok, _err = pcall(function()
+      local _f = loadstring(_payload)
+      if _f then _f() end
+    end)
+    if not _ok then end
+  `
+  const execVM = buildMinimalNestedVM(execInner) // lo metemos en otra VM para ofuscar
+
+  return vmCode + ' ' + combiner + ' ' + execVM
 }
 
-// Envoltorio final para que acabe en "break end"
+// Envoltorio final con pcall exterior y el clásico "break end"
 function wrapWithBreakEnd(code) {
   const state = genName('_x')
   return `
@@ -180,7 +121,9 @@ do
   local ${state} = 1
   while true do
     if ${state} == 1 then
-      ${code}
+      pcall(function()
+        ${code}
+      end)
       ${state} = 2
     else
       break
@@ -192,11 +135,12 @@ end`
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
 
+  // Detectar si es una URL de loadstring+HttpGet o código directo
   let payload = ""
   const regex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = sourceCode.match(regex)
   if (match) {
-    payload = match[1]
+    payload = match[1]  // solo la URL
   } else {
     payload = sourceCode
   }
@@ -205,6 +149,7 @@ function obfuscate(sourceCode) {
   const final = wrapWithBreakEnd(mainVM)
 
   let result = `${HEADER}\n${final}`
+  // Todo en una línea, sin romper comentarios
   result = result.replace(/\s+/g, " ").trim()
   return result
 }
