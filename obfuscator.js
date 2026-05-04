@@ -1,4 +1,4 @@
-const HEADER = `--[[ this code its protect by seaker and love ]]`
+const HEADER = `--[[ Protected by unveilX | https://discord.gg/DU35Mhyhq ]]`
 
 const usedNames = new Set()
 function genName(prefix = '') {
@@ -52,28 +52,20 @@ function getBase64Decoder() {
 end`
 }
 
-// VM anidada personalizada que reconstruye un mensaje a partir de fragmentos
-function buildMessageVM(message, depth = 0) {
-  if (depth >= 2) {
-    // Caso base: devuelve un fragmento del mensaje
-    const fragment = message.substring(0, 5)
-    return `"${fragment}"`
+// Fragmenta un mensaje en trozos de longitud aleatoria y los concatena directamente
+function fragmentMessage(message) {
+  const parts = []
+  let remaining = message
+  while (remaining.length > 0) {
+    const len = Math.floor(Math.random() * 4) + 2 // trozos de 2 a 5 caracteres
+    parts.push(remaining.slice(0, len))
+    remaining = remaining.slice(len)
   }
-  
-  const vmFunc = genName('_msg')
-  const part1 = message.substring(0, Math.floor(message.length / 2))
-  const part2 = message.substring(Math.floor(message.length / 2))
-  
-  return `(function()
-    local ${vmFunc} = function()
-      return ${buildMessageVM(part1, depth + 1)} .. ${buildMessageVM(part2, depth + 1)}
-    end
-    return ${vmFunc}()
-  end)()`
+  // Genera la expresión Lua de concatenación: "parte1".. "parte2" .. "parte3"
+  return parts.map(p => `"${p}"`).join('..')
 }
 
-// Anti-tamper SIN Base64 usando VMs anidadas para los mensajes
-function generateVMProtectedAntiTamper() {
+function generateCleanAntiTamper() {
   const messages = [
     'I really like Rick and Morty',
     'I really enjoy Rick and Morty',
@@ -88,25 +80,21 @@ function generateVMProtectedAntiTamper() {
   ]
   
   let code = ''
-  
   for (let i = 0; i < 50; i++) {
     const msg = messages[i % messages.length]
     const varName = genName('_at')
     const checkVar = genName('_ck')
     const envVar = genName('_env')
-    
-    // El mensaje se reconstruye con VM anidada
-    const messageExpr = buildMessageVM(msg, 0)
+    const fragmented = fragmentMessage(msg)  // ej: "I real".."ly like".." Rick".." and Morty"
     
     code += `
-local ${varName} = ${messageExpr}
+local ${varName} = ${fragmented}
 local ${checkVar} = (${varName} ~= "")
 if not ${checkVar} then return end
 if rawget(_G, ${varName}) then return end
 rawset(_G, ${varName}, true)
 `
   }
-  
   return code
 }
 
@@ -141,7 +129,6 @@ function buildBase64Parts(content, targetVar) {
   for (let i = 0; i < parts.length; i++) {
     const encoded = parts[i].length > 0 ? `"${base64Encode(parts[i])}"` : '""'
     code += `${tableName}[${i+1}]=${encoded} `
-    // SIN MATH CODE
   }
   
   const combinedVar = genName('_combined')
@@ -201,18 +188,18 @@ function obfuscate(sourceCode) {
   if (urlMatch) {
     const url = urlMatch[1]
     result += buildBase64Parts(url, targetVar) + '\n'
-    result += generateVMProtectedAntiTamper() + '\n'
+    result += generateCleanAntiTamper() + '\n'
     result += getLoadstringAbstraction() + '\n'
     result += buildUrlExecutor(targetVar) + '\n'
   } else if (loadstringMatch) {
     const code = loadstringMatch[1]
     result += buildBase64Parts(code, targetVar) + '\n'
-    result += generateVMProtectedAntiTamper() + '\n'
+    result += generateCleanAntiTamper() + '\n'
     result += getLoadstringAbstraction() + '\n'
     result += buildDirectExecutor(targetVar) + '\n'
   } else {
     result += buildBase64Parts(sourceCode, targetVar) + '\n'
-    result += generateVMProtectedAntiTamper() + '\n'
+    result += generateCleanAntiTamper() + '\n'
     result += getLoadstringAbstraction() + '\n'
     result += buildDirectExecutor(targetVar) + '\n'
   }
