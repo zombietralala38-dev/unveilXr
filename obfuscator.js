@@ -1,4 +1,4 @@
-const HEADER = `--[[ Protected by unveilX | https://discord.gg/DU35Mhyhq ]]`
+const HEADER = `--[[ thsi codr it's protected by Seak obfuscator ]]`
 
 const usedNames = new Set()
 function genName(prefix = '') {
