@@ -108,12 +108,8 @@ async function handleObfuscate(interaction) {
     });
   }
 
-  if (!isLuaCode(source)) {
-    const elapsed = Date.now() - startedAt;
-    return await interaction.editReply({
-      embeds: [buildErrorEmbed("Not Lua code", `No load, local, or print keywords found\n\`${formatDuration(elapsed)}\``)],
-    });
-  }
+  // ⚠️ Aquí estaba la detección de Lua que ya NO se ejecutará.
+  // Se procede directamente a ofuscar.
 
   try {
     const obfuscated = obfuscate(source);
