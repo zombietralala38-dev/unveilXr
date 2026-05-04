@@ -1,6 +1,7 @@
 const HEADER = `--[[ Protected by unveilX | https://discord.gg/DU35Mhyhq ]]`
 
 const usedNames = new Set()
+
 function genName(prefix = '') {
   let name
   do {
@@ -52,67 +53,20 @@ function getBase64Decoder() {
 end`
 }
 
-// Fragmenta un mensaje en trozos de longitud aleatoria y los concatena directamente
-function fragmentMessage(message) {
-  const parts = []
-  let remaining = message
-  while (remaining.length > 0) {
-    const len = Math.floor(Math.random() * 4) + 2 // trozos de 2 a 5 caracteres
-    parts.push(remaining.slice(0, len))
-    remaining = remaining.slice(len)
-  }
-  // Genera la expresión Lua de concatenación: "parte1".. "parte2" .. "parte3"
-  return parts.map(p => `"${p}"`).join('..')
-}
-
-function generateCleanAntiTamper() {
-  const messages = [
-    'I really like Rick and Morty',
-    'I really enjoy Rick and Morty',
-    'I truly love Rick and Morty',
-    'I absolutely adore Rick and Morty',
-    'Rick and Morty is amazing',
-    'I think Rick and Morty rocks',
-    'Rick and Morty is incredible',
-    'I cannot stop watching Rick and Morty',
-    'Rick and Morty changed my life',
-    'I recommend Rick and Morty to everyone',
-  ]
-  
-  let code = ''
-  for (let i = 0; i < 50; i++) {
-    const msg = messages[i % messages.length]
-    const varName = genName('_at')
-    const checkVar = genName('_ck')
-    const envVar = genName('_env')
-    const fragmented = fragmentMessage(msg)  // ej: "I real".."ly like".." Rick".." and Morty"
-    
-    code += `
-local ${varName} = ${fragmented}
-local ${checkVar} = (${varName} ~= "")
-if not ${checkVar} then return end
-if rawget(_G, ${varName}) then return end
-rawset(_G, ${varName}, true)
-`
-  }
-  return code
-}
-
 function getLoadstringAbstraction() {
   const loadVar = genName('_ld')
   const execFunc = genName('_ex')
   const safeLoad = genName('_sl')
   
-  return `
-local ${loadVar}=loadstring or load
+  return `local ${loadVar}=loadstring or load
 local function ${safeLoad}(code,name)
   local ${execFunc}=${loadVar}(code,name)
-  if ${execFunc} then return ${execFunc}else return nil end
+  if ${execFunc} then return ${execFunc}()else return nil end
 end
 `
 }
 
-function splitIntoParts(content, numParts = 20) {
+function splitIntoParts(content, numParts = 15) {
   const partLength = Math.ceil(content.length / numParts)
   const parts = []
   for (let i = 0; i < numParts; i++) {
@@ -124,87 +78,79 @@ function splitIntoParts(content, numParts = 20) {
 function buildBase64Parts(content, targetVar) {
   const parts = splitIntoParts(content)
   const tableName = genName('_parts')
-  let code = `local ${tableName}={} `
+  let code = `local ${tableName}={}`
   
   for (let i = 0; i < parts.length; i++) {
     const encoded = parts[i].length > 0 ? `"${base64Encode(parts[i])}"` : '""'
-    code += `${tableName}[${i+1}]=${encoded} `
+    code += `;${tableName}[${i+1}]=${encoded}`
   }
   
-  const combinedVar = genName('_combined')
-  code += `local ${combinedVar}={} `
-  code += `for ${genName('_i')}=1,${parts.length} do ${combinedVar}[${genName('_i')}]=${tableName}[${genName('_i')}] end `
-  code += `${tableName}=nil `
+  const decodedVar = genName('_decoded')
+  code += `;local ${decodedVar}=""`
+  code += `;for ${genName('_i')}=1,#${tableName} do ${decodedVar}=${decodedVar}.._b64d(${tableName}[${genName('_i')}])end`
   
-  code += `local ${targetVar}='' `
-  code += `for ${genName('_i')}=1,#${combinedVar} do `
-  code += `${targetVar}=${targetVar}.._b64d(${combinedVar}[${genName('_i')}]) `
-  code += `end `
+  code += `;${targetVar}=${decodedVar}`
   
   return code
 }
 
+function generateAntiTamper() {
+  const checks = [
+    'if rawget(_G,"_check1")then return end rawset(_G,"_check1",true)',
+    'if rawget(_G,"_check2")then return end rawset(_G,"_check2",true)',
+    'if rawget(_G,"_check3")then return end rawset(_G,"_check3",true)',
+  ]
+  
+  let code = ''
+  for (let check of checks) {
+    code += `;${check}`
+  }
+  return code
+}
+
 function buildUrlExecutor(urlVar) {
-  const execFunc = genName('_exec')
-  return `
-local function ${execFunc}()
-  local _url = ${urlVar}
-  local _response = game:HttpGet(_url)
-  if _response then
-    local _fn = _sl(_response)
-    if _fn then _fn() end
-  end
-end
-${execFunc}()
-`
+  const execVar = genName('_url_exec')
+  return `;local function ${execVar}() local _response=game:HttpGet(${urlVar}) if _response then _sl(_response)end end;${execVar}()`
 }
 
 function buildDirectExecutor(codeVar) {
-  const execFunc = genName('_exec')
-  return `
-local function ${execFunc}()
-  local _fn = _sl(${codeVar})
-  if _fn then _fn() end
-end
-${execFunc}()
-`
+  const execVar = genName('_code_exec')
+  return `;local function ${execVar}() _sl(${codeVar})end;${execVar}()`
 }
 
 function obfuscate(sourceCode) {
-  if (!sourceCode) return '--ERROR'
+  if (!sourceCode || typeof sourceCode !== 'string') {
+    throw new Error('Source code must be a non-empty string')
+  }
   
   usedNames.clear()
   
   let result = HEADER + '\n'
   result += getBase64Decoder() + '\n'
+  result += getLoadstringAbstraction() + '\n'
   
+  // Detectar tipo de código
   const urlRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
-  const loadstringRegex = /loadstring\s*\(\s*["'](.+?)["']\s*\)\s*\(\s*\)/i
   const urlMatch = sourceCode.match(urlRegex)
-  const loadstringMatch = sourceCode.match(loadstringRegex)
   
   const targetVar = genName('_target')
   
   if (urlMatch) {
     const url = urlMatch[1]
     result += buildBase64Parts(url, targetVar) + '\n'
-    result += generateCleanAntiTamper() + '\n'
-    result += getLoadstringAbstraction() + '\n'
+    result += generateAntiTamper() + '\n'
     result += buildUrlExecutor(targetVar) + '\n'
-  } else if (loadstringMatch) {
-    const code = loadstringMatch[1]
-    result += buildBase64Parts(code, targetVar) + '\n'
-    result += generateCleanAntiTamper() + '\n'
-    result += getLoadstringAbstraction() + '\n'
-    result += buildDirectExecutor(targetVar) + '\n'
   } else {
+    // Es código directo
     result += buildBase64Parts(sourceCode, targetVar) + '\n'
-    result += generateCleanAntiTamper() + '\n'
-    result += getLoadstringAbstraction() + '\n'
+    result += generateAntiTamper() + '\n'
     result += buildDirectExecutor(targetVar) + '\n'
   }
   
-  result = result.replace(/\n\s*/g, ' ').replace(/\s+/g, ' ').trim()
+  // Limpiar espacios excesivos pero mantener estructura válida
+  result = result.split('\n').map(line => line.trim()).filter(line => line.length > 0).join(';')
+  result = result.replace(/;+/g, ';').trim()
+  
   return result
 }
 
