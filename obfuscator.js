@@ -14,7 +14,6 @@ function genName(prefix = '') {
   return name
 }
 
-// Base64 encoding
 function base64Encode(str) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
   let result = ''
@@ -32,7 +31,6 @@ function base64Encode(str) {
   return result
 }
 
-// Base64 decode function as Lua code
 function getBase64Decoder() {
   return `local function _b64d(s)
   local b='ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
@@ -54,7 +52,7 @@ function getBase64Decoder() {
 end`
 }
 
-// Generate 100 different recursive anti-tamper checks
+// Generar solo 50 comprobaciones anti-manipulación, sin expresiones matemáticas redundantes
 function generateAntiTamperChecks() {
   const checks = []
   const antiMessages = [
@@ -70,7 +68,7 @@ function generateAntiTamperChecks() {
     'I recommend Rick and Morty to everyone',
   ]
   
-  for (let i = 0; i < 100; i++) {
+  for (let i = 0; i < 50; i++) {
     const msg = antiMessages[i % antiMessages.length]
     const varName = genName('_at')
     const hashVar = genName('_h')
@@ -79,7 +77,6 @@ function generateAntiTamperChecks() {
     const envCheck = genName('_env')
     const customError = genName('_err')
     
-    // Create unique recursive check
     const check = `
 local ${varName}="${msg}#${i}"
 local function ${recursiveFunc}(d,l)
@@ -104,7 +101,6 @@ ${envCheck}()
   return checks.join('\n')
 }
 
-// Custom error handler (replaces pcall)
 function getCustomErrorHandler() {
   const errorStack = genName('_es')
   const errorTrap = genName('_et')
@@ -129,7 +125,6 @@ end
 `
 }
 
-// Abstract loadstring
 function getLoadstringAbstraction() {
   const loadVar = genName('_ld')
   const execFunc = genName('_ex')
@@ -144,7 +139,6 @@ end
 `
 }
 
-// Custom concatenation (replaces table.concat)
 function getCustomConcat() {
   const concatFunc = genName('_cc')
   
@@ -161,60 +155,7 @@ end
 `
 }
 
-// Light math obfuscation
-function lightMath(n) {
-  if (Math.random() < 0.95) return n.toString()
-  const a = Math.floor(Math.random() * 21) + 4
-  const b = Math.floor(Math.random() * 7) + 2
-  return `((${n}+${a}-${a})*${b}/${b})`
-}
-
-// VM with opaque predicates
-function buildOpaqueVM(innerCode) {
-  const handlerCount = Math.floor(Math.random() * 4) + 5
-  const handlers = []
-  const used = new Set()
-  const bases = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
-  
-  while (handlers.length < handlerCount) {
-    const base = bases[Math.floor(Math.random() * bases.length)]
-    const name = base + Math.floor(Math.random() * 99)
-    if (!used.has(name)) { used.add(name); handlers.push(name) }
-  }
-
-  const realIdx = Math.floor(Math.random() * handlerCount)
-  const DISPATCH = genName('d')
-  const stateVar = genName('s')
-  const predicateVar = genName('p')
-  
-  let out = `local ${DISPATCH}={} `
-  
-  for (let i = 0; i < handlers.length; i++) {
-    const junkAssign = `local ${genName('v')}=${lightMath(Math.floor(Math.random()*1000))} `
-    if (i === realIdx) {
-      out += `${DISPATCH}[${lightMath(i+1)}]=function()${junkAssign}${innerCode}end `
-    } else {
-      out += `${DISPATCH}[${lightMath(i+1)}]=function()${junkAssign}end `
-    }
-  }
-  
-  // Opaque predicate: always evaluates to realIdx+1
-  const opaqueCondition = `(${lightMath(realIdx+1)})`
-  out += `local ${stateVar}=true `
-  out += `while ${stateVar} do `
-  out += `if ${opaqueCondition} then ${DISPATCH}[${lightMath(realIdx+1)}]()${stateVar}=false `
-  out += `else break end end `
-  
-  return `do ${out} end`
-}
-
-// Nested VM with recursion
-function buildNestedRecursiveVM(innerCode, depth = 0) {
-  if (depth >= 3) return innerCode
-  return buildOpaqueVM(buildNestedRecursiveVM(innerCode, depth + 1))
-}
-
-// Split payload into 20 parts with custom concat
+// Versión simplificada: sin VM, solo asigna las partes codificadas a una tabla
 function build20PartVMs(payload) {
   const partLength = Math.ceil(payload.length / 20)
   const parts = []
@@ -224,32 +165,28 @@ function build20PartVMs(payload) {
   }
 
   const tableName = genName('_parts')
-  const concatFunc = genName('_cc')
-  let vmCode = `local ${tableName}={} `
+  let code = `local ${tableName}={} `
 
   for (let i = 0; i < parts.length; i++) {
     const encoded = parts[i].length > 0 ? `"${base64Encode(parts[i])}"` : '""'
-    const inner = `${tableName}[${lightMath(i+1)}]=${encoded}`
-    vmCode += buildNestedRecursiveVM(inner, 0) + ' '
+    code += `${tableName}[${i+1}]=${encoded} `
   }
 
-  // Custom concatenation
+  // Combinar y decodificar
   const combinedVar = genName('_combined')
   let combiner = `local ${combinedVar}={} `
-  combiner += `for ${genName('_i')}=1,20 do ${combinedVar}[${genName('_i')}]=${tableName}[${genName('_i')}]end `
+  combiner += `for ${genName('_i')}=1,20 do ${combinedVar}[${genName('_i')}]=${tableName}[${genName('_i')}] end `
   combiner += `${tableName}=nil `
 
-  // Decode base64 parts and combine
   const decodedPayload = genName('_dp')
   let decoder = `local ${decodedPayload}='' `
   decoder += `for ${genName('_i')}=1,#${combinedVar} do `
   decoder += `${decodedPayload}=${decodedPayload}.._b64d(${combinedVar}[${genName('_i')}]) `
   decoder += `end `
 
-  return vmCode + ' ' + combiner + ' ' + getBase64Decoder() + ' ' + decoder + ' ' + decodedPayload
+  return code + combiner + decoder + ' ' + decodedPayload
 }
 
-// Custom error execution (no pcall)
 function wrapWithCustomError(code, payloadVar) {
   const errorHandler = genName('_eh')
   const executionFunc = genName('_ef')
@@ -272,7 +209,6 @@ end)
 `
 }
 
-// Final wrapper with anti-tamper and anti-env
 function buildFinalWrapper(mainVM, payloadVar) {
   const antiTamper = generateAntiTamperChecks()
   const errorHandler = getCustomErrorHandler()
@@ -310,9 +246,8 @@ function obfuscate(sourceCode) {
   let result = `${HEADER}\n`
   result += `local ${payloadVar}=""\n`
   result += partVMs + '\n'
-  result += buildFinalWrapper(buildNestedRecursiveVM(partVMs), payloadVar)
+  result += buildFinalWrapper(partVMs, payloadVar)
   
-  // Minify: compact whitespace but preserve functionality
   result = result.replace(/\n\s*/g, ' ').replace(/\s+/g, ' ').trim()
   
   return result
