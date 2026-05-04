@@ -108,7 +108,7 @@ async function handleObfuscate(interaction) {
     });
   }
 
-  // ⚠️ Aquí estaba la detección de Lua que ya NO se ejecutará.
+  // ⚠️ Aquí estaba la detección de Lua qa NO se ejecutará.
   // Se procede directamente a ofuscar.
 
   try {
