@@ -1,4 +1,4 @@
-const HEADER = `--[[ this code its protected by seak ]]`
+const HEADER = `--[[ Protected by unveilX | https://discord.gg/DU35Mhyhq ]]`
 
 const usedNames = new Set()
 function genName(prefix = '') {
@@ -45,14 +45,13 @@ function getBase64Decoder() {
     local v=(c1*64+c2)*64+c3
     r=r..string.char(bit.rshift(v,16))
     if j+2<=#s and s:sub(j+3,j+3)~='=' then r=r..string.char(bit.band(bit.rshift(v,8),255))end
-    if j+3<=#s and s:sub(j+4,j+4)~='=' then r=r..string.char(bit.band(v,255))end
+    if j+3<=#s and s:sub(j+4,j+4)~='=' then r=r..string.char(bit.band(bit.rshift(v,255))end
     j=j+4
   end
   return r
 end`
 }
 
-// Generar solo 50 comprobaciones anti-manipulación, sin expresiones matemáticas redundantes
 function generateAntiTamperChecks() {
   const checks = []
   const antiMessages = [
@@ -61,11 +60,6 @@ function generateAntiTamperChecks() {
     'I truly love Rick and Morty',
     'I absolutely adore Rick and Morty',
     'Rick and Morty is amazing',
-    'I think Rick and Morty rocks',
-    'Rick and Morty is incredible',
-    'I cannot stop watching Rick and Morty',
-    'Rick and Morty changed my life',
-    'I recommend Rick and Morty to everyone',
   ]
   
   for (let i = 0; i < 50; i++) {
@@ -101,30 +95,6 @@ ${envCheck}()
   return checks.join('\n')
 }
 
-function getCustomErrorHandler() {
-  const errorStack = genName('_es')
-  const errorTrap = genName('_et')
-  const errorVal = genName('_ev')
-  const traceFunc = genName('_tf')
-  
-  return `
-local ${errorStack}={}
-local function ${errorTrap}(f)
-  local ${errorVal}=nil
-  local function ${traceFunc}(...)
-    ${errorVal}={...}
-    return ...
-  end
-  local ok,res=xpcall(f,${traceFunc})
-  if not ok then
-    table.insert(${errorStack},res)
-    return false,res
-  end
-  return true,${errorVal}
-end
-`
-}
-
 function getLoadstringAbstraction() {
   const loadVar = genName('_ld')
   const execFunc = genName('_ex')
@@ -139,89 +109,72 @@ end
 `
 }
 
-function getCustomConcat() {
-  const concatFunc = genName('_cc')
-  
-  return `
-local function ${concatFunc}(t,sep)
-  sep=sep or ''
-  local r=''
-  for i=1,#t do
-    r=r..tostring(t[i])
-    if i<#t then r=r..sep end
-  end
-  return r
-end
-`
+function splitIntoParts(content, numParts = 20) {
+  const partLength = Math.ceil(content.length / numParts)
+  const parts = []
+  for (let i = 0; i < numParts; i++) {
+    parts.push(content.slice(i * partLength, (i + 1) * partLength))
+  }
+  return parts
 }
 
-// Versión simplificada: sin VM, solo asigna las partes codificadas a una tabla
-function build20PartVMs(payload) {
-  const partLength = Math.ceil(payload.length / 20)
-  const parts = []
-  
-  for (let i = 0; i < 20; i++) {
-    parts.push(payload.slice(i * partLength, (i + 1) * partLength))
-  }
-
+function buildBase64Parts(content, targetVar) {
+  const parts = splitIntoParts(content)
   const tableName = genName('_parts')
   let code = `local ${tableName}={} `
-
+  
   for (let i = 0; i < parts.length; i++) {
     const encoded = parts[i].length > 0 ? `"${base64Encode(parts[i])}"` : '""'
     code += `${tableName}[${i+1}]=${encoded} `
   }
-
-  // Combinar y decodificar
+  
   const combinedVar = genName('_combined')
-  let combiner = `local ${combinedVar}={} `
-  combiner += `for ${genName('_i')}=1,20 do ${combinedVar}[${genName('_i')}]=${tableName}[${genName('_i')}] end `
-  combiner += `${tableName}=nil `
-
-  const decodedPayload = genName('_dp')
-  let decoder = `local ${decodedPayload}='' `
-  decoder += `for ${genName('_i')}=1,#${combinedVar} do `
-  decoder += `${decodedPayload}=${decodedPayload}.._b64d(${combinedVar}[${genName('_i')}]) `
-  decoder += `end `
-
-  return code + combiner + decoder + ' ' + decodedPayload
+  code += `local ${combinedVar}={} `
+  code += `for ${genName('_i')}=1,${parts.length} do ${combinedVar}[${genName('_i')}]=${tableName}[${genName('_i')}] end `
+  code += `${tableName}=nil `
+  
+  code += `local ${targetVar}='' `
+  code += `for ${genName('_i')}=1,#${combinedVar} do `
+  code += `${targetVar}=${targetVar}.._b64d(${combinedVar}[${genName('_i')}]) `
+  code += `end `
+  
+  return code
 }
 
-function wrapWithCustomError(code, payloadVar) {
-  const errorHandler = genName('_eh')
-  const executionFunc = genName('_ef')
-  const statusVar = genName('_st')
-  
+// Para URLs: descarga y ejecuta
+function buildUrlExecutor(urlVar) {
+  const execFunc = genName('_exec')
   return `
-local function ${errorHandler}(f)
-  local ${statusVar}=false
-  local ok=xpcall(f,function(e)
-    ${statusVar}=true
-  end)
-  if not ${statusVar} then
-    local ${executionFunc}=_sl(${payloadVar})
-    if ${executionFunc} then ${executionFunc}()end
+local function ${execFunc}()
+  local _url = ${urlVar}
+  local _response = game:HttpGet(_url)
+  if _response then
+    local _fn = _sl(_response, "@" .. _url)
+    if _fn then _fn() end
   end
 end
-${errorHandler}(function()
-  ${code}
-end)
+${execFunc}()
 `
 }
 
-function buildFinalWrapper(mainVM, payloadVar) {
-  const antiTamper = generateAntiTamperChecks()
-  const errorHandler = getCustomErrorHandler()
-  const loadstringAbs = getLoadstringAbstraction()
-  const customConcat = getCustomConcat()
+// Para código directo: lo ejecuta con pcall ofuscado
+function buildDirectExecutor(codeVar) {
+  const execFunc = genName('_exec')
+  const statusVar = genName('_st')
+  const resultVar = genName('_res')
   
   return `
-${antiTamper}
-${errorHandler}
-${loadstringAbs}
-${customConcat}
-${mainVM}
-${wrapWithCustomError('', payloadVar)}
+local function ${execFunc}()
+  local ${statusVar}, ${resultVar} = pcall(function()
+    local _fn = _sl(${codeVar})
+    if _fn then _fn() end
+  end)
+  if not ${statusVar} then
+    local _fn = _sl(${codeVar})
+    if _fn then _fn() end
+  end
+end
+${execFunc}()
 `
 }
 
@@ -230,26 +183,42 @@ function obfuscate(sourceCode) {
   
   usedNames.clear()
   
-  let payload = ""
-  const regex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
-  const match = sourceCode.match(regex)
+  let result = HEADER + '\n'
+  result += getBase64Decoder() + '\n'
   
-  if (match) {
-    payload = match[1]
+  // Detectar tipo de entrada
+  const urlRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
+  const loadstringRegex = /loadstring\s*\(\s*["'](.+?)["']\s*\)\s*\(\s*\)/i
+  const urlMatch = sourceCode.match(urlRegex)
+  const loadstringMatch = sourceCode.match(loadstringRegex)
+  
+  const targetVar = genName('_target')
+  
+  if (urlMatch) {
+    // ES UNA URL - ofuscarla y usar HTTP
+    const url = urlMatch[1]
+    result += buildBase64Parts(url, targetVar) + '\n'
+    result += generateAntiTamperChecks() + '\n'
+    result += getLoadstringAbstraction() + '\n'
+    result += buildUrlExecutor(targetVar) + '\n'
+    
+  } else if (loadstringMatch) {
+    // ES UN LOADSTRING - extraer código y ofuscarlo directo
+    const code = loadstringMatch[1]
+    result += buildBase64Parts(code, targetVar) + '\n'
+    result += generateAntiTamperChecks() + '\n'
+    result += getLoadstringAbstraction() + '\n'
+    result += buildDirectExecutor(targetVar) + '\n'
+    
   } else {
-    payload = sourceCode
+    // ES CÓDIGO NORMAL - ofuscarlo directamente
+    result += buildBase64Parts(sourceCode, targetVar) + '\n'
+    result += generateAntiTamperChecks() + '\n'
+    result += getLoadstringAbstraction() + '\n'
+    result += buildDirectExecutor(targetVar) + '\n'
   }
-
-  const partVMs = build20PartVMs(payload)
-  const payloadVar = genName('_payload')
-  
-  let result = `${HEADER}\n`
-  result += `local ${payloadVar}=""\n`
-  result += partVMs + '\n'
-  result += buildFinalWrapper(partVMs, payloadVar)
   
   result = result.replace(/\n\s*/g, ' ').replace(/\s+/g, ' ').trim()
-  
   return result
 }
 
