@@ -32,46 +32,6 @@ const COLOR_BLUE = 0x3b82f6;
 const COLOR_RED = 0xef4444;
 const COLOR_GREEN = 0x22c55e;
 
-const DATA_DIR = path.resolve(__dirname, "data");
-const INDEX_FILE = path.join(DATA_DIR, "index.json");
-
-function ensureDataDir() {
-  if (!fs.existsSync(DATA_DIR)) fs.mkdirSync(DATA_DIR, { recursive: true });
-}
-
-function loadJson(file, fallback) {
-  try {
-    return JSON.parse(fs.readFileSync(file, "utf8"));
-  } catch {
-    return fallback;
-  }
-}
-
-function saveJson(file, data) {
-  ensureDataDir();
-  fs.writeFileSync(file, JSON.stringify(data, null, 2));
-}
-
-ensureDataDir();
-let entries = loadJson(INDEX_FILE, {});
-
-function randomDigits(n) {
-  let out = "";
-  for (let i = 0; i < n; i++) out += Math.floor(Math.random() * 10).toString();
-  return out;
-}
-
-function generateUniqueId(length) {
-  let id = randomDigits(length);
-  while (entries[id]) id = randomDigits(length);
-  return id;
-}
-
-function saveEntry(entry) {
-  entries[entry.id] = entry;
-  saveJson(INDEX_FILE, entries);
-}
-
 function formatDuration(ms) {
   if (ms < 1000) return `${ms}ms`;
   return `${(ms / 1000).toFixed(2)}s`;
@@ -91,19 +51,12 @@ function buildErrorEmbed(title, description) {
     .setFooter({ text: FOOTER_MESSAGE });
 }
 
-const LUA_MARKERS = [
-  /\blocal\b/,
-  /\bprint\b/,
-  /\bfunction\b/,
-  /\bend\b/,
-  /\brequire\b/,
-];
+const LUA_KEYWORDS = [/\bload\b/, /\blocal\b/, /\bprint\b/];
 
-function looksLikeLua(rawSrc) {
+function isLuaCode(rawSrc) {
   const src = (rawSrc || "").trim();
-  if (!src) return { ok: false };
-  for (const re of LUA_MARKERS) if (re.test(src)) return { ok: true };
-  return { ok: false };
+  if (!src) return false;
+  return LUA_KEYWORDS.some((re) => re.test(src));
 }
 
 const commandDefs = [
@@ -132,8 +85,8 @@ async function handleObfuscate(interaction) {
     return await interaction.editReply({
       embeds: [
         buildErrorEmbed(
-          "Sin entrada",
-          `Usa \`code\` o carga un archivo .lua/.txt\n\`${formatDuration(elapsed)}\``
+          "No input provided",
+          `Provide code or upload a .lua/.txt file\n\`${formatDuration(elapsed)}\``
         ),
       ],
     });
@@ -145,48 +98,36 @@ async function handleObfuscate(interaction) {
       source = codeOption;
     } else if (fileOption) {
       const name = (fileOption.name || "").toLowerCase();
-      if (!name.endsWith(".lua") && !name.endsWith(".txt")) throw new Error("Solo .lua o .txt");
+      if (!name.endsWith(".lua") && !name.endsWith(".txt")) throw new Error("Only .lua or .txt files");
       source = await readAttachmentText(fileOption.url);
     }
   } catch (err) {
     const elapsed = Date.now() - startedAt;
     return await interaction.editReply({
-      embeds: [buildErrorEmbed("Error lectura", `${err.message}\n\`${formatDuration(elapsed)}\``)],
+      embeds: [buildErrorEmbed("Read error", `${err.message}\n\`${formatDuration(elapsed)}\``)],
     });
   }
 
-  const luaCheck = looksLikeLua(source);
-  if (!luaCheck.ok) {
+  if (!isLuaCode(source)) {
     const elapsed = Date.now() - startedAt;
     return await interaction.editReply({
-      embeds: [buildErrorEmbed("No es Lua", `No parece código Lua\n\`${formatDuration(elapsed)}\``)],
+      embeds: [buildErrorEmbed("Not Lua code", `No load, local, or print keywords found\n\`${formatDuration(elapsed)}\``)],
     });
   }
 
   try {
     const obfuscated = obfuscate(source);
-    const id = generateUniqueId(8);
-    const entry = {
-      id,
-      createdAt: Date.now(),
-      content: obfuscated,
-      fileName: "obfuscated.lua",
-    };
-    saveEntry(entry);
-
     const elapsed = Date.now() - startedAt;
     const attachment = new AttachmentBuilder(Buffer.from(obfuscated, "utf8"), { name: "obfuscated.lua" });
-    const previewSource = obfuscated.slice(0, 500);
-    const preview = `\`\`\`lua\n${previewSource}${obfuscated.length > previewSource.length ? "\n..." : ""}\n\`\`\``;
+    const preview = obfuscated.slice(0, 300);
 
     const embed = new EmbedBuilder()
       .setColor(COLOR_GREEN)
-      .setTitle("✅ Obfuscación exitosa")
+      .setTitle("✅ Obfuscation successful")
       .addFields(
-        { name: "ID", value: `\`${id}\``, inline: true },
-        { name: "Tamaño", value: `${obfuscated.length} bytes`, inline: true },
-        { name: "Tiempo", value: `\`${formatDuration(elapsed)}\``, inline: true },
-        { name: "Preview", value: preview.length <= 1024 ? preview : "Código muy largo" }
+        { name: "Size", value: `${obfuscated.length} bytes`, inline: true },
+        { name: "Time", value: `\`${formatDuration(elapsed)}\``, inline: true },
+        { name: "Preview", value: `\`\`\`lua\n${preview}...\n\`\`\`` }
       )
       .setFooter({ text: FOOTER_MESSAGE });
 
@@ -194,13 +135,13 @@ async function handleObfuscate(interaction) {
   } catch (err) {
     const elapsed = Date.now() - startedAt;
     await interaction.editReply({
-      embeds: [buildErrorEmbed("Error", `${err.message}\n\`${formatDuration(elapsed)}\``)],
+      embeds: [buildErrorEmbed("Obfuscation failed", `${err.message}\n\`${formatDuration(elapsed)}\``)],
     });
   }
 }
 
 client.once(Events.ClientReady, (c) => {
-  console.log(`✅ Bot conectado como ${c.user.tag}`);
+  console.log(`✅ Bot logged in as ${c.user.tag}`);
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
@@ -222,10 +163,10 @@ client.on(Events.InteractionCreate, async (interaction) => {
 
 async function registerCommands() {
   try {
-    console.log("📝 Registrando comandos...");
+    console.log("📝 Registering commands...");
     const rest = new REST({ version: "10" }).setToken(TOKEN);
     await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commandDefs });
-    console.log("✅ Comandos registrados");
+    console.log("✅ Commands registered");
   } catch (err) {
     console.error("❌ Error:", err);
   }
