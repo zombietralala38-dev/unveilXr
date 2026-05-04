@@ -1,4 +1,4 @@
-const HEADER = `--[[ thsi codr it's protected by Seak obfuscator ]]`
+const HEADER = `--[[ this code its protect by seaker and love ]]`
 
 const usedNames = new Set()
 function genName(prefix = '') {
@@ -45,54 +45,69 @@ function getBase64Decoder() {
     local v=(c1*64+c2)*64+c3
     r=r..string.char(bit.rshift(v,16))
     if j+2<=#s and s:sub(j+3,j+3)~='=' then r=r..string.char(bit.band(bit.rshift(v,8),255))end
-    if j+3<=#s and s:sub(j+4,j+4)~='=' then r=r..string.char(bit.band(bit.rshift(v,255))end
+    if j+3<=#s and s:sub(j+4,j+4)~='=' then r=r..string.char(bit.band(v,255))end
     j=j+4
   end
   return r
 end`
 }
 
-function generateAntiTamperChecks() {
-  const checks = []
-  const antiMessages = [
+// VM anidada personalizada que reconstruye un mensaje a partir de fragmentos
+function buildMessageVM(message, depth = 0) {
+  if (depth >= 2) {
+    // Caso base: devuelve un fragmento del mensaje
+    const fragment = message.substring(0, 5)
+    return `"${fragment}"`
+  }
+  
+  const vmFunc = genName('_msg')
+  const part1 = message.substring(0, Math.floor(message.length / 2))
+  const part2 = message.substring(Math.floor(message.length / 2))
+  
+  return `(function()
+    local ${vmFunc} = function()
+      return ${buildMessageVM(part1, depth + 1)} .. ${buildMessageVM(part2, depth + 1)}
+    end
+    return ${vmFunc}()
+  end)()`
+}
+
+// Anti-tamper SIN Base64 usando VMs anidadas para los mensajes
+function generateVMProtectedAntiTamper() {
+  const messages = [
     'I really like Rick and Morty',
     'I really enjoy Rick and Morty',
     'I truly love Rick and Morty',
     'I absolutely adore Rick and Morty',
     'Rick and Morty is amazing',
+    'I think Rick and Morty rocks',
+    'Rick and Morty is incredible',
+    'I cannot stop watching Rick and Morty',
+    'Rick and Morty changed my life',
+    'I recommend Rick and Morty to everyone',
   ]
   
+  let code = ''
+  
   for (let i = 0; i < 50; i++) {
-    const msg = antiMessages[i % antiMessages.length]
+    const msg = messages[i % messages.length]
     const varName = genName('_at')
-    const hashVar = genName('_h')
     const checkVar = genName('_ck')
-    const recursiveFunc = genName('_rec')
-    const envCheck = genName('_env')
-    const customError = genName('_err')
+    const envVar = genName('_env')
     
-    const check = `
-local ${varName}="${msg}#${i}"
-local function ${recursiveFunc}(d,l)
-  if l>100 then return true end
-  local ${hashVar}=0
-  for j=1,#d do ${hashVar}=(${hashVar}+string.byte(d,j)*${i+1})%2147483647 end
-  if ${hashVar}%${i+7}==0 then return ${recursiveFunc}(d,l+1)end
-  return false
-end
-local ${checkVar}=${recursiveFunc}(${varName},0)
-if not ${checkVar} then local ${customError}=function()error("${msg}")end ${customError}()end
-local function ${envCheck}()
-  local ${varName}2="${msg}#${i}#env"
-  if rawget(_G,"${varName}2")then error("${msg}")end
-  rawset(_G,"${varName}2",true)
-end
-${envCheck}()
+    // El mensaje se reconstruye con VM anidada
+    const messageExpr = buildMessageVM(msg, 0)
+    
+    code += `
+local ${varName} = ${messageExpr}
+local ${checkVar} = (${varName} ~= "")
+if not ${checkVar} then return end
+if rawget(_G, ${varName}) then return end
+rawset(_G, ${varName}, true)
 `
-    checks.push(check)
   }
   
-  return checks.join('\n')
+  return code
 }
 
 function getLoadstringAbstraction() {
@@ -126,6 +141,7 @@ function buildBase64Parts(content, targetVar) {
   for (let i = 0; i < parts.length; i++) {
     const encoded = parts[i].length > 0 ? `"${base64Encode(parts[i])}"` : '""'
     code += `${tableName}[${i+1}]=${encoded} `
+    // SIN MATH CODE
   }
   
   const combinedVar = genName('_combined')
@@ -141,7 +157,6 @@ function buildBase64Parts(content, targetVar) {
   return code
 }
 
-// Para URLs: descarga y ejecuta
 function buildUrlExecutor(urlVar) {
   const execFunc = genName('_exec')
   return `
@@ -149,7 +164,7 @@ local function ${execFunc}()
   local _url = ${urlVar}
   local _response = game:HttpGet(_url)
   if _response then
-    local _fn = _sl(_response, "@" .. _url)
+    local _fn = _sl(_response)
     if _fn then _fn() end
   end
 end
@@ -157,22 +172,12 @@ ${execFunc}()
 `
 }
 
-// Para código directo: lo ejecuta con pcall ofuscado
 function buildDirectExecutor(codeVar) {
   const execFunc = genName('_exec')
-  const statusVar = genName('_st')
-  const resultVar = genName('_res')
-  
   return `
 local function ${execFunc}()
-  local ${statusVar}, ${resultVar} = pcall(function()
-    local _fn = _sl(${codeVar})
-    if _fn then _fn() end
-  end)
-  if not ${statusVar} then
-    local _fn = _sl(${codeVar})
-    if _fn then _fn() end
-  end
+  local _fn = _sl(${codeVar})
+  if _fn then _fn() end
 end
 ${execFunc}()
 `
@@ -186,7 +191,6 @@ function obfuscate(sourceCode) {
   let result = HEADER + '\n'
   result += getBase64Decoder() + '\n'
   
-  // Detectar tipo de entrada
   const urlRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const loadstringRegex = /loadstring\s*\(\s*["'](.+?)["']\s*\)\s*\(\s*\)/i
   const urlMatch = sourceCode.match(urlRegex)
@@ -195,25 +199,20 @@ function obfuscate(sourceCode) {
   const targetVar = genName('_target')
   
   if (urlMatch) {
-    // ES UNA URL - ofuscarla y usar HTTP
     const url = urlMatch[1]
     result += buildBase64Parts(url, targetVar) + '\n'
-    result += generateAntiTamperChecks() + '\n'
+    result += generateVMProtectedAntiTamper() + '\n'
     result += getLoadstringAbstraction() + '\n'
     result += buildUrlExecutor(targetVar) + '\n'
-    
   } else if (loadstringMatch) {
-    // ES UN LOADSTRING - extraer código y ofuscarlo directo
     const code = loadstringMatch[1]
     result += buildBase64Parts(code, targetVar) + '\n'
-    result += generateAntiTamperChecks() + '\n'
+    result += generateVMProtectedAntiTamper() + '\n'
     result += getLoadstringAbstraction() + '\n'
     result += buildDirectExecutor(targetVar) + '\n'
-    
   } else {
-    // ES CÓDIGO NORMAL - ofuscarlo directamente
     result += buildBase64Parts(sourceCode, targetVar) + '\n'
-    result += generateAntiTamperChecks() + '\n'
+    result += generateVMProtectedAntiTamper() + '\n'
     result += getLoadstringAbstraction() + '\n'
     result += buildDirectExecutor(targetVar) + '\n'
   }
