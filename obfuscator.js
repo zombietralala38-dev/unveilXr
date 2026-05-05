@@ -1,8 +1,6 @@
-// obfuscator_fixed.js — Ultra Optimized & Functional
-// Peso final: 25KB (loadstring) / 35-40KB (código hub)
-// Sin errores de sintaxis que afecten ejecución
+// obfuscator_heavy.js — VM Custom + Anti-Debug/Tamper/Env + Junk hasta 25/40KB
 
-const HEADER = `--[[unveilX Protected]]`
+const HEADER = `--[[unveilX Protected Heavy]]`
 
 const usedNames = new Set()
 const LUA_KEYWORDS = new Set(['and','break','do','else','elseif','end','false','for','function','if','in','local','nil','not','or','repeat','return','then','true','until','while','goto'])
@@ -20,7 +18,7 @@ function genName(prefix='_') {
   return name
 }
 
-// Base64 encoder - FUNCIONAL
+// Base64 encoder
 function base64Encode(str) {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
   let result = '', i = 0
@@ -37,7 +35,7 @@ function base64Encode(str) {
   return result
 }
 
-// Base64 decoder Lua - FUNCIONAL
+// Base64 decoder Lua
 function createBase64Decoder() {
   const fnName = genName('b64d')
   return fnName, `local function ${fnName}(s)
@@ -62,34 +60,99 @@ end
 return ${fnName}`
 }
 
-// Anti-debug simple pero efectivo
-function buildAntiDebug() {
+// Genera una cantidad masiva de código basura (junk) hasta alcanzar 'size' bytes
+function generateJunk(size) {
+  let junk = ''
+  const templates = [
+    () => {
+      const a = genName('j'), b = genName('j')
+      return `local ${a}=${Math.random()*1000|0} local ${b}=${a}*${Math.random()*100|0} ${a}=${a}+${b} `
+    },
+    () => {
+      const a = genName('j')
+      return `local ${a}={{},{}} for i=1,${Math.random()*10|0} do table.insert(${a}[1],i) end `
+    },
+    () => {
+      const a = genName('j')
+      return `if not pcall(function() local ${a}=debug and debug.getinfo end) then end `
+    },
+    () => {
+      const a = genName('j'), b = genName('j')
+      return `local ${a},${b}=${Math.random()*10|0},${Math.random()*10|0} if ${a}<${b} then ${a}=${b} end `
+    }
+  ]
+  while (junk.length < size) {
+    const idx = Math.floor(Math.random() * templates.length)
+    junk += templates[idx]()
+  }
+  return junk.substring(0, size)
+}
+
+// Anti env logger (20 repeticiones, con mensaje)
+function buildAntiEnvLogger(count) {
   let code = ''
-  for (let i = 0; i < 20; i++) {
-    const var1 = genName('ad')
-    const var2 = genName('ak')
-    code += `local ${var1}=0 local ${var2}=function() ${var1}=${var1}+1 end ${var2}() `
+  for (let i = 0; i < count; i++) {
+    const envVar = genName('env')
+    code += `
+if pcall(function()
+  local ${envVar}=getfenv and getfenv() or _ENV
+  if ${envVar}.Logger or ${envVar}.debug or ${envVar}.sandbox then
+    print("I really like Rick and Morty")
+    while true do end
+  end
+end) then end
+`
   }
   return code
 }
 
-// Opaque predicate - Ofuscación adicional
-function buildOpaqueVM(innerCode) {
-  const d = genName('d')
-  const l = genName('l')
-  const s = Math.floor(Math.random() * 1000) + 100
-  
-  return `local ${d}={{${innerCode}},(function()end)} local ${l}=true while ${l} do local e=d[1][1]() ${l}=false end `
+// Anti tamper (7 repeticiones, con mensaje)
+function buildAntiTamper(count) {
+  const hashTargets = ['print', 'math.floor', 'string.sub', 'table.insert']
+  let code = ''
+  for (let i = 0; i < count; i++) {
+    const target = hashTargets[i % hashTargets.length]
+    const hashVar = genName('h')
+    const funcVar = genName('fn')
+    const expectedHash = Math.floor(Math.random() * 100000)
+    code += `
+local ${funcVar}=${target}
+local ${hashVar}=0
+if ${funcVar} then
+  for j=1,#tostring(${funcVar}) do ${hashVar}=(${hashVar}+j)%${expectedHash} end
+else
+  ${hashVar}=${expectedHash+1}
+end
+if ${hashVar}~=${expectedHash} then
+  print("I really like Rick and Morty")
+  while true do end
+end
+`
+  }
+  return code
 }
 
-// Payload VM - Ejecuta código de forma obfuscada
-function buildPayloadVM(payload, isLoadstring) {
+// Anti debugger (7 iteraciones de ~1s cada una)
+function buildAntiDebug(count) {
+  let code = ''
+  for (let i = 0; i < count; i++) {
+    const startVar = genName('st')
+    code += `
+local ${startVar}=pcall(function()return os.clock()end)and os.clock()or tick()
+repeat until (pcall(function()return os.clock()end)and os.clock()or tick())-${startVar}>=1
+`
+  }
+  return code
+}
+
+// Payload VM (decodifica y ejecuta)
+function buildPayloadVM(payload) {
   const encoded = base64Encode(payload)
   const decFn = genName('dec')
   const payVar = genName('pay')
   const execFn = genName('exec')
   const result = genName('res')
-  
+
   const decoderCode = `local function ${decFn}(s)
 local b="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
 local t={}
@@ -110,18 +173,19 @@ end
 return r
 end`
 
-  const vmCode = `${decoderCode}
+  return `${decoderCode}
 local ${payVar}="${encoded}"
 local ${result}=${decFn}(${payVar})
 local ${execFn}=loadstring or load
 if ${execFn} then
 xpcall(${execFn}(${result}),function()end)
 end`
-
-  return vmCode
 }
 
-// Main obfuscation function - FUNCIONAL Y PROBADA
+/**
+ * @param {string} sourceCode
+ * @param {object} options - { targetSizeKB: 25 }
+ */
 function obfuscate(sourceCode, options = {}) {
   if (!sourceCode || typeof sourceCode !== 'string') {
     return '--[[ERROR: Invalid source code]]'
@@ -130,8 +194,6 @@ function obfuscate(sourceCode, options = {}) {
   usedNames.clear()
 
   let payload = sourceCode
-  
-  // Detectar loadstring patterns
   const httpMatch = sourceCode.match(
     /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   )
@@ -139,20 +201,46 @@ function obfuscate(sourceCode, options = {}) {
     payload = `loadstring(game:HttpGet("${httpMatch[1]}"))()`
   }
 
-  const isLoadstring = payload.includes('loadstring') || payload.includes('game:HttpGet')
-  
-  // Construir output final
-  let output = HEADER + '\n'
-  output += 'do\n'
-  output += buildAntiDebug()
-  output += buildPayloadVM(payload, isLoadstring)
-  output += '\nend'
+  const targetKB = options.targetSizeKB || 25
+  const targetBytes = targetKB * 1024
 
-  // Minificar (eliminar saltos de línea, dejar 1 espacio)
-  output = output.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim()
+  // Construir partes fijas
+  const header = HEADER
+  const envelopeStart = 'do '
+  const envelopeEnd = ' end'
 
-  return output
+  const protections = buildAntiEnvLogger(20) +
+                      buildAntiTamper(7) +
+                      buildAntiDebug(7)
+
+  const payloadVM = buildPayloadVM(payload)
+
+  // Calcular el tamaño de todo menos la basura extra
+  const fixedPart = header + envelopeStart + protections + payloadVM + envelopeEnd
+  const fixedSize = Buffer.byteLength(fixedPart, 'utf8') // asumimos entorno Node, sino usar .length
+
+  // Generar basura para rellenar hasta el target
+  let junkSize = targetBytes - fixedSize
+  if (junkSize < 0) junkSize = 0
+  const junkCode = generateJunk(junkSize)
+
+  // Armar resultado final e insertar basura antes del payload
+  let finalOutput = header + '\n' +
+    envelopeStart +
+    junkCode +
+    protections +
+    payloadVM +
+    envelopeEnd
+
+  // Minificar
+  finalOutput = finalOutput.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim()
+
+  // Redondear al tamaño deseado (por si nos pasamos)
+  if (Buffer.byteLength(finalOutput, 'utf8') > targetBytes) {
+    finalOutput = finalOutput.substring(0, targetBytes)
+  }
+
+  return finalOutput
 }
 
-// Export
 module.exports = { obfuscate }
