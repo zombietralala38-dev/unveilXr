@@ -1,6 +1,6 @@
-// obfuscator_heavy.js — VM Custom + Anti-Debug/Tamper/Env + Junk hasta 25/40KB
+// ofuscador_50_50.js — 25KB (loadstring) / 40KB (hub) | 50% junk + 50% protecciones | Sin Base64
 
-const HEADER = `--[[unveilX Protected Heavy]]`
+const HEADER = `--[[unveilX Fortress]]`
 
 const usedNames = new Set()
 const LUA_KEYWORDS = new Set(['and','break','do','else','elseif','end','false','for','function','if','in','local','nil','not','or','repeat','return','then','true','until','while','goto'])
@@ -10,234 +10,180 @@ function genName(prefix='_') {
   let name
   do {
     name = prefix + chars[Math.floor(Math.random() * chars.length)]
-    for (let i = 0; i < 6; i++) {
-      name += chars[Math.floor(Math.random() * chars.length)]
-    }
+    for (let i = 0; i < 6; i++) name += chars[Math.floor(Math.random() * chars.length)]
   } while (usedNames.has(name) || LUA_KEYWORDS.has(name))
   usedNames.add(name)
   return name
 }
 
-// Base64 encoder
-function base64Encode(str) {
-  const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/'
-  let result = '', i = 0
-  while (i < str.length) {
-    const a = str.charCodeAt(i++)
-    const b = i < str.length ? str.charCodeAt(i++) : 0
-    const c = i < str.length ? str.charCodeAt(i++) : 0
-    const bitmap = (a << 16) | (b << 8) | c
-    result += chars[(bitmap >> 18) & 63]
-    result += chars[(bitmap >> 12) & 63]
-    result += (i - 2 < str.length) ? chars[(bitmap >> 6) & 63] : '='
-    result += (i - 1 < str.length) ? chars[bitmap & 63] : '='
-  }
-  return result
-}
-
-// Base64 decoder Lua
-function createBase64Decoder() {
-  const fnName = genName('b64d')
-  return fnName, `local function ${fnName}(s)
-local b="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-local t={}
-for i=0,63 do t[b:sub(i+1,i+1)]=i end
-local r=""
-local j=1
-while j<=#s do
-local c0=t[s:sub(j,j)]or 0
-local c1=t[s:sub(j+1,j+1)]or 0
-local c2=t[s:sub(j+2,j+2)]or 0
-local c3=t[s:sub(j+3,j+3)]or 0
-local n=((c0*64+c1)*64+c2)*64+c3
-r=r..string.char(math.floor(n/65536)%256)
-if s:sub(j+2,j+2)~="=" then r=r..string.char(math.floor(n/256)%256)end
-if s:sub(j+3,j+3)~="=" then r=r..string.char(n%256)end
-j=j+4
-end
-return r
-end
-return ${fnName}`
-}
-
-// Genera una cantidad masiva de código basura (junk) hasta alcanzar 'size' bytes
-function generateJunk(size) {
+// ---------- JUNK GENERATOR (50% del peso, poco math) ----------
+function generateJunk(sizeBytes) {
   let junk = ''
   const templates = [
+    // Asignaciones de cadenas aleatorias
     () => {
-      const a = genName('j'), b = genName('j')
-      return `local ${a}=${Math.random()*1000|0} local ${b}=${a}*${Math.random()*100|0} ${a}=${a}+${b} `
+      const a = genName('s')
+      const len = Math.floor(Math.random() * 20) + 5
+      let str = ''
+      for (let i = 0; i < len; i++) str += String.fromCharCode(97 + Math.floor(Math.random() * 26))
+      return `local ${a}="${str}" `
     },
+    // Tablas vacías o con pocos elementos
     () => {
-      const a = genName('j')
-      return `local ${a}={{},{}} for i=1,${Math.random()*10|0} do table.insert(${a}[1],i) end `
+      const a = genName('t')
+      return `local ${a}={} for i=1,${Math.floor(Math.random()*5)+1} do ${a}[i]=i end `
     },
+    // Funciones vacías que nunca se llaman
     () => {
-      const a = genName('j')
-      return `if not pcall(function() local ${a}=debug and debug.getinfo end) then end `
+      const f = genName('f')
+      return `local function ${f}() return end `
     },
+    // Condicionales siempre falsos con basura interna
     () => {
-      const a = genName('j'), b = genName('j')
-      return `local ${a},${b}=${Math.random()*10|0},${Math.random()*10|0} if ${a}<${b} then ${a}=${b} end `
+      const a = genName('c')
+      return `if false then local ${a}=1 ${a}=${a}+1 end `
+    },
+    // Bucles que iteran 1 vez y no hacen nada
+    () => {
+      const a = genName('l')
+      return `for ${a}=1,1 do local _=${a} end `
     }
   ]
-  while (junk.length < size) {
-    const idx = Math.floor(Math.random() * templates.length)
-    junk += templates[idx]()
+
+  while (Buffer.byteLength(junk, 'utf8') < sizeBytes) {
+    const t = templates[Math.floor(Math.random() * templates.length)]
+    junk += t()
   }
-  return junk.substring(0, size)
+  return junk.substring(0, sizeBytes)
 }
 
-// Anti env logger (20 repeticiones, con mensaje)
-function buildAntiEnvLogger(count) {
-  let code = ''
-  for (let i = 0; i < count; i++) {
-    const envVar = genName('env')
-    code += `
-if pcall(function()
-  local ${envVar}=getfenv and getfenv() or _ENV
-  if ${envVar}.Logger or ${envVar}.debug or ${envVar}.sandbox then
-    print("I really like Rick and Morty")
-    while true do end
-  end
-end) then end
-`
-  }
-  return code
-}
+// ---------- PROTECCIONES (50% del peso) ----------
 
-// Anti tamper (7 repeticiones, con mensaje)
-function buildAntiTamper(count) {
-  const hashTargets = ['print', 'math.floor', 'string.sub', 'table.insert']
-  let code = ''
-  for (let i = 0; i < count; i++) {
-    const target = hashTargets[i % hashTargets.length]
-    const hashVar = genName('h')
-    const funcVar = genName('fn')
-    const expectedHash = Math.floor(Math.random() * 100000)
-    code += `
-local ${funcVar}=${target}
-local ${hashVar}=0
-if ${funcVar} then
-  for j=1,#tostring(${funcVar}) do ${hashVar}=(${hashVar}+j)%${expectedHash} end
-else
-  ${hashVar}=${expectedHash+1}
-end
-if ${hashVar}~=${expectedHash} then
-  print("I really like Rick and Morty")
-  while true do end
-end
-`
-  }
-  return code
-}
-
-// Anti debugger (7 iteraciones de ~1s cada una)
+// Anti-debug (7 segundos total)
 function buildAntiDebug(count) {
   let code = ''
   for (let i = 0; i < count; i++) {
-    const startVar = genName('st')
-    code += `
-local ${startVar}=pcall(function()return os.clock()end)and os.clock()or tick()
-repeat until (pcall(function()return os.clock()end)and os.clock()or tick())-${startVar}>=1
-`
+    const st = genName('st')
+    code += `local ${st}=pcall(function()return os.clock()end)and os.clock()or tick() `
+    code += `repeat until (pcall(function()return os.clock()end)and os.clock()or tick())-${st}>=1 `
   }
   return code
 }
 
-// Payload VM (decodifica y ejecuta)
-function buildPayloadVM(payload) {
-  const encoded = base64Encode(payload)
-  const decFn = genName('dec')
-  const payVar = genName('pay')
-  const execFn = genName('exec')
-  const result = genName('res')
-
-  const decoderCode = `local function ${decFn}(s)
-local b="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"
-local t={}
-for i=0,63 do t[b:sub(i+1,i+1)]=i end
-local r=""
-local j=1
-while j<=#s do
-local c0=t[s:sub(j,j)]or 0
-local c1=t[s:sub(j+1,j+1)]or 0
-local c2=t[s:sub(j+2,j+2)]or 0
-local c3=t[s:sub(j+3,j+3)]or 0
-local n=((c0*64+c1)*64+c2)*64+c3
-r=r..string.char(math.floor(n/65536)%256)
-if s:sub(j+2,j+2)~="=" then r=r..string.char(math.floor(n/256)%256)end
-if s:sub(j+3,j+3)~="=" then r=r..string.char(n%256)end
-j=j+4
-end
-return r
-end`
-
-  return `${decoderCode}
-local ${payVar}="${encoded}"
-local ${result}=${decFn}(${payVar})
-local ${execFn}=loadstring or load
-if ${execFn} then
-xpcall(${execFn}(${result}),function()end)
-end`
+// Anti-env logger (20, ofuscado, mensaje "I really like Rick and Morty")
+function buildAntiEnvLogger(count) {
+  let code = ''
+  for (let i = 0; i < count; i++) {
+    const envVar = genName('e')
+    const detect = genName('d')
+    code += `local ${detect}=pcall(function()local ${envVar}=getfenv and getfenv()or _ENV return ${envVar}.Logger or ${envVar}.debug or ${envVar}.sandbox end) `
+    code += `if ${detect} then print("I really like Rick and Morty")while true do end end `
+  }
+  return code
 }
 
-/**
- * @param {string} sourceCode
- * @param {object} options - { targetSizeKB: 25 }
- */
-function obfuscate(sourceCode, options = {}) {
-  if (!sourceCode || typeof sourceCode !== 'string') {
-    return '--[[ERROR: Invalid source code]]'
+// Anti-tamper (7, verifica funciones nativas con hash simple)
+function buildAntiTamper(count) {
+  const targets = ['print','math.floor','string.sub','table.insert']
+  let code = ''
+  for (let i = 0; i < count; i++) {
+    const func = genName('fn')
+    const hashVar = genName('h')
+    const expected = Math.floor(Math.random() * 100000)
+    const tgt = targets[i % targets.length]
+    code += `local ${func}=${tgt} local ${hashVar}=0 if ${func} then for j=1,#tostring(${func})do ${hashVar}=(${hashVar}+j)%${expected} end else ${hashVar}=${expected+1} end `
+    code += `if ${hashVar}~=${expected} then print("I really like Rick and Morty")while true do end end `
+  }
+  return code
+}
+
+// ---------- PAYLOAD VM (sin Base64, reconstrucción desde tabla numérica) ----------
+function buildPayloadVM(originalCode) {
+  // Convertir código original a array de bytes
+  const bytes = []
+  for (let i = 0; i < originalCode.length; i++) {
+    bytes.push(originalCode.charCodeAt(i))
   }
 
+  // Dividir la tabla en pedazos para ofuscar
+  const tableName = genName('tb')
+  const reconstructor = genName('rec')
+  const result = genName('res')
+  const exec = genName('exe')
+
+  // Generar la tabla Lua como string
+  let tableStr = `local ${tableName}={`
+  for (let i = 0; i < bytes.length; i++) {
+    tableStr += bytes[i]
+    if (i < bytes.length - 1) tableStr += ','
+  }
+  tableStr += '} '
+
+  // Función reconstructora
+  const reconCode = `local function ${reconstructor}(t) local r="" for i=1,#t do r=r..string.char(t[i]) end return r end `
+
+  // Ejecución final
+  const execCode = `local ${result}=${reconstructor}(${tableName}) local ${exec}=loadstring or load if ${exec} then xpcall(${exec}(${result}),function()end) end `
+
+  return tableStr + reconCode + execCode
+}
+
+// ---------- MAIN OBFUSCATOR ----------
+function obfuscate(sourceCode, options = {}) {
+  if (!sourceCode || typeof sourceCode !== 'string') {
+    return '--[[ERROR]]'
+  }
   usedNames.clear()
 
   let payload = sourceCode
-  const httpMatch = sourceCode.match(
-    /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
-  )
+  const httpMatch = sourceCode.match(/loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i)
   if (httpMatch) {
     payload = `loadstring(game:HttpGet("${httpMatch[1]}"))()`
   }
 
   const targetKB = options.targetSizeKB || 25
-  const targetBytes = targetKB * 1024
+  const totalBytes = targetKB * 1024
+  const halfBytes = Math.floor(totalBytes / 2)
 
-  // Construir partes fijas
-  const header = HEADER
-  const envelopeStart = 'do '
-  const envelopeEnd = ' end'
-
-  const protections = buildAntiEnvLogger(20) +
+  // Construir las protecciones + VM
+  const protections = buildAntiDebug(7) +
+                      buildAntiEnvLogger(20) +
                       buildAntiTamper(7) +
-                      buildAntiDebug(7)
+                      buildPayloadVM(payload)
 
-  const payloadVM = buildPayloadVM(payload)
+  // Tamaño de las protecciones (en bytes)
+  const protSize = Buffer.byteLength(protections, 'utf8')
 
-  // Calcular el tamaño de todo menos la basura extra
-  const fixedPart = header + envelopeStart + protections + payloadVM + envelopeEnd
-  const fixedSize = Buffer.byteLength(fixedPart, 'utf8') // asumimos entorno Node, sino usar .length
+  // Calcular basura necesaria para alcanzar la mitad del total (si prot es menor a halfBytes)
+  let junkNeeded = halfBytes - protSize
+  if (junkNeeded < 0) junkNeeded = 0
 
-  // Generar basura para rellenar hasta el target
-  let junkSize = targetBytes - fixedSize
-  if (junkSize < 0) junkSize = 0
-  const junkCode = generateJunk(junkSize)
+  // Generar basura (50% del peso total, aprox.)
+  const junk = generateJunk(junkNeeded)
 
-  // Armar resultado final e insertar basura antes del payload
-  let finalOutput = header + '\n' +
-    envelopeStart +
-    junkCode +
+  // Armar script final
+  let finalOutput = HEADER + '\n' +
+    'do ' +
+    junk +
     protections +
-    payloadVM +
-    envelopeEnd
+    ' end'
 
-  // Minificar
+  // Minificar a una línea
   finalOutput = finalOutput.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim()
 
-  // Redondear al tamaño deseado (por si nos pasamos)
-  if (Buffer.byteLength(finalOutput, 'utf8') > targetBytes) {
-    finalOutput = finalOutput.substring(0, targetBytes)
+  // Ajustar a tamaño exacto (por redondeo)
+  const finalSize = Buffer.byteLength(finalOutput, 'utf8')
+  if (finalSize < totalBytes) {
+    // Rellenar con más basura simple hasta el objetivo
+    let padding = ''
+    while (Buffer.byteLength(finalOutput + padding, 'utf8') < totalBytes) {
+      padding += '; '
+    }
+    finalOutput += padding
+  }
+  if (finalSize > totalBytes) {
+    // Recortar a exactamente totalBytes (poco probable, pero seguro)
+    finalOutput = finalOutput.substring(0, totalBytes)
   }
 
   return finalOutput
