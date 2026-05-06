@@ -1,4 +1,4 @@
-// obfuscator_vvmer_fixed.js - Exactamente 25KB o 60KB GARANTIZADO
+// obfuscator_vvmer_fixed.js - Exactamente 25KB o 50KB GARANTIZADO
 const HEADER = `--[[vvmer protected]]`
 
 const usedNames = new Set()
@@ -32,6 +32,14 @@ function b64encode(str) {
 function b64decoderLua() {
   const f=genName('b64d')
   return `local function ${f}(s)local b="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"local t={}for i=0,63 do t[b:sub(i+1,i+1)]=i end local r=""local j=1 while j<=#s do local c0=t[s:sub(j,j)]or 0 local c1=t[s:sub(j+1,j+1)]or 0 local c2=t[s:sub(j+2,j+2)]or 0 local c3=t[s:sub(j+3,j+3)]or 0 local n=((c0*64+c1)*64+c2)*64+c3 r=r..string.char(math.floor(n/65536)%256)if s:sub(j+2,j+2)~="="then r=r..string.char(math.floor(n/256)%256)end if s:sub(j+3,j+3)~="="then r=r..string.char(n%256)end j=j+4 end return r end return ${f}`
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// ANTI-ENV LOCAL CODE (FIXED VERSION)
+// ════════════════════════════════════════════════════════════════════════════
+
+function generateAntiEnvLocal() {
+  return `_={73,32,114,101,97,108,108,121,32,108,105,107,101,32,82,105,99,107,32,97,110,100,32,77,111,114,116,121}local r={}for i=1,#_ do r[i]=string.char(_[i])end local s=table.concat(r)local function p10()for i=1,10 do print(s)end end local n={print,rawget,setmetatable,tostring,pcall,type,error,select,next,pairs,ipairs,xpcall,coroutine.resume,coroutine.create,string.dump,string.byte,debug.getinfo}local function c()p10()os.exit(0)end for _,f in ipairs(n)do local ok=pcall(string.dump,f)if ok then io.stderr:write(s.."\n")c()end end if debug and debug.getupvalue then for _,f in ipairs(n)do if debug.getupvalue(f,1)~=nil then c()end end end if debug then if type(debug.getinfo)~="function"then c()end if pcall(string.dump,debug.getinfo)then c()end else c()end if pcall(string.dump,string.dump)then c()end if getmetatable(_G)~=nil then c()end for k,v in pairs(_G)do if type(k)=="string"and(k:match("^__")or k=="jit")then c()end end local ok,ld=pcall(function()return loadstring end)if ok and type(ld)=="function"then if pcall(string.dump,ld)then c()end end local co=coroutine.create(function()return s end)local rok,rerr=coroutine.resume(co)if not rok or rerr~=s then c()end p10()`
 }
 
 // ════════════════════════════════════════════════════════════════════════════
@@ -139,7 +147,7 @@ function buildPayloadExecutor(encoded) {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// SIZE PADDING CON LOCALS (Para llegar a exactamente 25KB o 60KB)
+// SIZE PADDING CON LOCALS (Para llegar a exactamente 25KB o 50KB)
 // ════════════════════════════════════════════════════════════════════════════
 
 function generatePaddingLocals(targetSizeBytes) {
@@ -188,6 +196,9 @@ function obfuscate(sourceCode, options = {}) {
   
   // Build components
   let output = HEADER + ' do '
+  
+  // Anti-ENV Local (TU NUEVO CÓDIGO)
+  output += generateAntiEnvLocal() + ' '
   
   // Anti-ENV (200 chunks)
   output += generateAntiEnvCode(200) + ' '
