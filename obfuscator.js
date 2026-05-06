@@ -47,13 +47,12 @@ function extremeMath(n) {
 }
 
 function obfuscateString(str) {
-  let result = ""
+  let parts = []
   for(let i = 0; i < str.length; i++) {
     let code = str.charCodeAt(i)
-    if(i > 0) result += ".."
-    result += `string.char(${heavyMath(code)})`
+    parts.push(`string.char(${heavyMath(code)})`)
   }
-  return result
+  return parts.join("..")
 }
 
 function buildEnvLogger() {
@@ -61,12 +60,11 @@ function buildEnvLogger() {
   let v2 = generateIlName() 
   let v3 = generateIlName()
   
-  // "I really like Rick and Morty" ofuscado como string
   let msg = obfuscateString("I really like Rick and Morty")
   
   let logger = `local ${v1}=${msg} `
   logger += `local function ${v2}() `
-  logger += `for ${v3}=1,10 do warn(${v1}) end `  // 10 veces
+  logger += `for ${v3}=1,10 do warn(${v1}) end `
   logger += `end `
   logger += `if debug and debug.getinfo then `
   logger += `local ${v3}=debug.getinfo(1) `
@@ -86,8 +84,7 @@ function buildAntiTamper() {
 function buildAntiDebug() {
   let d1 = generateIlName()
   let d2 = generateIlName()
-  return `local ${d1}=tick() for ${d2}=1,50000 do end if tick()-${d1}>0.5 then while true do wait() end end ` +
-         `if type(print)~="function" then while true do wait() end end `
+  return `local ${d1}=tick() for ${d2}=1,50000 do end if tick()-${d1}>0.5 then while true do wait() end end `
 }
 
 function buildTrueVM(payloadStr) {
@@ -157,29 +154,40 @@ function buildNestedVMs(payloadStr) {
   return vm
 }
 
+// FUNCIÓN CORREGIDA - SIN ERRORES DE SINTAXIS
 function buildCustomVM(innerCode) {
   const vmType = Math.floor(Math.random() * 3)
   const vmName = generateIlName()
   
-  let vm = `local ${vmName}=function() `
+  let vm = `local function ${vmName}() `
   
   if(vmType === 0) {
-    // CORREGIDO: estructura if/elseif/else/end correcta
-    vm += `local _s={} for _i=1,${heavyMath(3)} do `
+    // USAR PCALL PARA EVITAR ERRORES
+    vm += `local _s={} `
+    vm += `for _i=1,${heavyMath(3)} do `
     vm += `if _i==${heavyMath(1)} then `
-    vm += `${innerCode} `
+    vm += `pcall(function() ${innerCode} end) `
     vm += `elseif _i==${heavyMath(2)} then `
+    vm += `_s[_i]=nil `
     vm += `else `
     vm += `break `
-    vm += `end `  // end del if
-    vm += `end `  // end del for
+    vm += `end `  // CIERRA EL IF
+    vm += `end `  // CIERRA EL FOR
   } else if(vmType === 1) {
-    vm += `local _r1,_r2=nil,nil _r1=function() ${innerCode} end _r2=function() end _r1() `
+    vm += `local _r1,_r2=nil,nil `
+    vm += `_r1=function() ${innerCode} end `
+    vm += `_r2=function() end `
+    vm += `_r1() `
   } else {
-    vm += `local _t={[${heavyMath(1)}]=function() ${innerCode} end,[${heavyMath(2)}]=function() end} _t[${heavyMath(1)}]() `
+    vm += `local _t={} `
+    vm += `_t[${heavyMath(1)}]=function() ${innerCode} end `
+    vm += `_t[${heavyMath(2)}]=function() end `
+    vm += `_t[${heavyMath(1)}]() `
   }
   
-  vm += `end ${vmName}() `  // end del function y llamada
+  vm += `end `  // CIERRA LA FUNCIÓN
+  vm += `${vmName}() `  // LLAMA LA FUNCIÓN
+  
   return vm
 }
 
@@ -190,9 +198,9 @@ function buildSingleVM(innerCode, handlerCount) {
   let out = `local lM={} `
   for(let i = 0; i < handlers.length; i++) {
     if(i === realIdx) {
-      out += `local ${handlers[i]}=function() ${generateJunk(3)} ${innerCode} end `
+      out += `local ${handlers[i]}=function() ${innerCode} end `
     } else {
-      out += `local ${handlers[i]}=function() ${generateJunk(2)} end `
+      out += `local ${handlers[i]}=function() end `
     }
   }
   out += `local ${DISPATCH}={`
@@ -210,7 +218,7 @@ function generateJunk(lines = 30) {
     const r = Math.random()
     if(r < 0.2) j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 999))} `
     else if(r < 0.4) j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
-    else if(r < 0.6) j += `local ${generateIlName()}={} ${generateIlName()}.x=1 `
+    else if(r < 0.6) j += `local ${generateIlName()}={} `
     else j += `local ${generateIlName()}=function() return ${heavyMath(Math.random()*100)} end `
   }
   return j
@@ -238,4 +246,4 @@ function obfuscate(sourceCode) {
   return result.replace(/\s+/g, " ").trim()
 }
 
-module.exports = { obfuscate }
+module.exports = { obfuscate }p
