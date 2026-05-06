@@ -1,118 +1,260 @@
-const IL_POOL = ["IIIIIIII1","vvvvvv1","vvvvvvvv2","vvvvvv3","IIlIlIlI1","lvlvlvlv2","I1","l1","v1","v2","v3","II","ll","vv","I2"];
-const LOCKER_POOL = ["R1CK","M0RTY","P0RT4L","C1T4D3L","P1CKLE","M33S33KS","SCHW1FTY","S4NCHEZ","SM1TH","G4Z0RP4Z0P"];
-const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"];
+const HEADER = `--[[ vvmer obfuscator - Rick and Morty locker pool ]]`
 
-function rng(min, max) { return Math.floor(Math.random() * (max - min + 1)) + min; }
-function pick(arr) { return arr[Math.floor(Math.random() * arr.length)]; }
-function genIl() { return pick(IL_POOL) + rng(1000, 99999); }
-function genLock() { return pick(LOCKER_POOL) + rng(100, 9999); }
+const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
+const LOCKER_POOL = ["R1CK","M0RTY","P0RT4L","C1T4D3L","P1CKLE","M33S33KS","SCHW1FTY","S4NCHEZ","SM1TH","G4Z0RP4Z0P"]
+const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"]
+
+function generateIlName() {
+  return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 99999)
+}
+
+function generateLockerName() {
+  return LOCKER_POOL[Math.floor(Math.random() * LOCKER_POOL.length)] + Math.floor(Math.random() * 9999)
+}
+
+function pickHandlers(count) {
+  const used = new Set()
+  const result = []
+  while (result.length < count) {
+    const base = HANDLER_POOL[Math.floor(Math.random() * HANDLER_POOL.length)]
+    const name = base + Math.floor(Math.random() * 99)
+    if (!used.has(name)) { used.add(name); result.push(name) }
+  }
+  return result
+}
 
 function heavyMath(n) {
-  if (Math.random() < 0.6) return String(n);
-  const a = rng(10, 200), b = rng(2, 30);
-  return `(((${n}+${a})*${b}/${b})-${a})`;
+  if (Math.random() < 0.5) return n.toString()
+  let a = Math.floor(Math.random() * 100) + 10
+  let b = Math.floor(Math.random() * 20) + 2
+  return `(((${n}+${a})*${b}/${b})-${a})`
+}
+
+function extremeFragment(secretMsg, totalPartsStr) {
+  const chars = secretMsg.split('')
+  const charCodes = chars.map(c => c.charCodeAt(0))
+  const fragVars = []
+  
+  for (let i = 0; i < chars.length; i++) {
+    const varName = generateIlName()
+    fragVars.push({ name: varName, code: heavyMath(charCodes[i]), original: chars[i] })
+  }
+  
+  let fragmentationCode = ''
+  fragmentationCode += `-- FRAGMENTED INTO ${totalPartsStr} PARTS `
+  
+  for (const frag of fragVars) {
+    fragmentationCode += `local ${frag.name} = ${frag.code} `
+  }
+  
+  fragmentationCode += `local _secretMsg = "" `
+  for (let i = 0; i < chars.length; i++) {
+    fragmentationCode += `_secretMsg = _secretMsg .. string.char(${fragVars[i].name}) `
+  }
+  
+  return {
+    code: fragmentationCode,
+    totalFragments: totalPartsStr,
+    msgVarNames: fragVars.map(f => f.name)
+  }
 }
 
 function buildTrueVM(payloadStr) {
-  const STACK = genIl(), KEY = genIl(), ORDER = genIl(), SALT = genIl();
-  const seed = rng(50, 250), saltVal = rng(1, 250);
+  const STACK = generateIlName()
+  const KEY = generateIlName()
+  const ORDER = generateIlName()
+  const SALT = generateIlName()
+  const seed = Math.floor(Math.random() * 200) + 50
+  const saltVal = Math.floor(Math.random() * 250) + 1
   
-  let out = `local ${STACK}={}local ${KEY}=${seed}local ${SALT}=${saltVal}`;
+  let vmCore = `local ${STACK}={} local ${KEY}=${seed} local ${SALT}=${saltVal} `
+  const chunkSize = 10
+  let realChunks = []
+  for(let i = 0; i < payloadStr.length; i += chunkSize) {
+    realChunks.push(payloadStr.slice(i, i + chunkSize))
+  }
   
-  const chunks = [];
-  for (let i = 0; i < payloadStr.length; i += 10) chunks.push(payloadStr.slice(i, i + 10));
+  let poolVars = []
+  let realOrder = []
+  let totalChunks = realChunks.length * 2
+  let currentReal = 0
+  let globalIndex = 0
   
-  const poolVars = [], realOrder = [];
-  let realIdx = 0, gIdx = 0;
-  const total = chunks.length * 2;
-  
-  for (let i = 0; i < total; i++) {
-    const mem = genIl();
-    poolVars.push(mem);
+  for(let i = 0; i < totalChunks; i++) {
+    let memName = generateIlName()
+    poolVars.push(memName)
     
-    if (realIdx < chunks.length && (Math.random() > 0.4 || total - i === chunks.length - realIdx)) {
-      realOrder.push(i + 1);
-      const enc = [];
-      for (let j = 0; j < chunks[realIdx].length; j++) {
-        enc.push((chunks[realIdx].charCodeAt(j) + seed + gIdx * saltVal) % 256);
-        gIdx++;
+    if (currentReal < realChunks.length && (Math.random() > 0.4 || (totalChunks - i) === (realChunks.length - currentReal))) {
+      realOrder.push(i + 1)
+      let chunk = realChunks[currentReal]
+      let encryptedBytes = []
+      for(let j = 0; j < chunk.length; j++) { 
+        let enc = (chunk.charCodeAt(j) + seed + (globalIndex * saltVal)) % 256
+        encryptedBytes.push(enc)
+        globalIndex++
       }
-      out += `local ${mem}={${enc.join(',')}}`;
-      realIdx++;
+      vmCore += `local ${memName}={${encryptedBytes.join(',')}} `
+      currentReal++
     } else {
-      const fake = [];
-      for (let j = 0; j < rng(3, 12); j++) fake.push(rng(0, 255));
-      out += `local ${mem}={${fake.join(',')}}`;
+      let fakeBytes = []
+      let fakeLen = Math.floor(Math.random() * 10) + 3
+      for(let j = 0; j < fakeLen; j++) {
+        fakeBytes.push(Math.floor(Math.random() * 255))
+      }
+      vmCore += `local ${memName}={${fakeBytes.join(',')}} `
     }
   }
   
-  const idxV = genIl(), byteV = genIl();
-  out += `local _pool={${poolVars.join(',')}}local ${ORDER}={${realOrder.join(',')}}`;
-  // ARREGLO 1: pairs en vez de ipairs (Luau también corta con ipairs en el primer nil)
-  out += `local _g=0 for _,${idxV} in pairs(${ORDER})do for _,${byteV} in pairs(_pool[${idxV}])do`;
-  out += `table.insert(${STACK},string.char((${byteV}-${KEY}-_g*${SALT})%256))_g=_g+1 end end`;
-  out += `local _e=table.concat(${STACK})${STACK}=nil`;
-  // ARREGLO 2: EJECUTA el código reconstruido (sin esto no pasa nada)
-  out += ` loadstring(_e)()`;
-  return out;
+  vmCore += `local _pool={${poolVars.join(',')}} local ${ORDER}={${realOrder.join(',')}} `
+  const idxVar = generateIlName()
+  const byteVar = generateIlName()
+  
+  vmCore += `local _gIdx=0 for _, ${idxVar} in ipairs(${ORDER}) do for _, ${byteVar} in ipairs(_pool[${idxVar}]) do `
+  vmCore += `table.insert(${STACK}, string.char((${byteVar} - ${KEY} - _gIdx * ${SALT}) % 256)) _gIdx=_gIdx+1 end end `
+  vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `
+  
+  return vmCore
 }
 
-function buildSingleVM(inner, count) {
-  const handlers = [];
-  const used = new Set();
-  while (handlers.length < count) {
-    const name = pick(HANDLER_POOL) + rng(0, 99);
-    if (!used.has(name)) { used.add(name); handlers.push(name); }
+function buildSingleVM(innerCode, handlerCount) {
+  const handlers = pickHandlers(handlerCount)
+  const realIdx = Math.floor(Math.random() * handlerCount)
+  const DISPATCH = generateIlName()
+  
+  let out = `local lM={} `
+  for (let i = 0; i < handlers.length; i++) {
+    if (i === realIdx) {
+      out += `local ${handlers[i]}=function(lM) ${generateJunk(5)} ${innerCode} end `
+    } else {
+      out += `local ${handlers[i]}=function(lM) ${generateJunk(3)} return nil end `
+    }
   }
   
-  const real = rng(0, count - 1), DISP = genIl();
-  let out = `local lM={}`;
-  
-  for (let i = 0; i < count; i++) {
-    if (i === real) out += `local ${handlers[i]}=function(lM)${inner}end`;
-    else out += `local ${handlers[i]}=function(lM)return nil end`;
+  out += `local ${DISPATCH}={`
+  for (let i = 0; i < handlers.length; i++) {
+    out += `[${i + 1}]=${handlers[i]},`
   }
+  out += `} `
   
-  out += `local ${DISP}={`;
-  for (let i = 0; i < count; i++) out += `[${i+1}]=${handlers[i]},`;
-  out += `}`;
+  let execBlocks = []
+  for (let i = 0; i < handlers.length; i++) {
+    execBlocks.push(`${DISPATCH}[${i + 1}](lM)`)
+  }
+  out += applyCFF(execBlocks)
   
-  for (let i = 0; i < count; i++) out += `${DISP}[${i+1}](lM)`;
-  
-  return out;
+  return out
 }
 
-function obfuscate(source) {
-  if (!source) return '--ERROR';
-
-  // Fragmentar "I really like Rick and Morty"
-  const SECRET = 'I really like Rick and Morty';
-  const fragVars = [];
-  let fragCode = '';
-  for (const c of SECRET) {
-    const v = genIl();
-    fragVars.push(v);
-    fragCode += `local ${v}=${heavyMath(c.charCodeAt(0))}`;
+function buildVM(payloadStr, layers) {
+  let vm = buildTrueVM(payloadStr)
+  for (let i = 0; i < layers; i++) {
+    vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 2)
   }
-  fragCode += `local _s=""`;
-  for (const v of fragVars) fragCode += `_s=_s..string.char(${v})`;
+  return vm
+}
 
-  // Reemplazar mensaje en el payload
-  let payload = source.replace(
+function generateJunk(lines = 10) {
+  let j = ''
+  for (let i = 0; i < lines; i++) {
+    const r = Math.random()
+    if (r < 0.3) {
+      j += `local ${generateIlName()}=${Math.floor(Math.random() * 999)} `
+    } else if (r < 0.5) {
+      j += `local ${generateIlName()}=string.char(${Math.floor(Math.random() * 255)}) `
+    } else if (r < 0.7) {
+      j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 999))} `
+    } else {
+      j += `local ${generateIlName()}="${generateLockerName()}" `
+    }
+  }
+  return j
+}
+
+function applyCFF(blocks) {
+  const stateVar = generateIlName()
+  let lua = `local ${stateVar}=1 while true do `
+  for (let i = 0; i < blocks.length; i++) {
+    if (i === 0) {
+      lua += `if ${stateVar}==1 then ${blocks[i]} ${stateVar}=2 `
+    } else if (i === blocks.length - 1) {
+      lua += `elseif ${stateVar}==${i + 1} then ${blocks[i]} break `
+    } else {
+      lua += `elseif ${stateVar}==${i + 1} then ${blocks[i]} ${stateVar}=${i + 2} `
+    }
+  }
+  lua += `end end `
+  return lua
+}
+
+const ETA_ENAI_TKVR_PAYLOAD = `
+local function logger()
+    for i = 1, 100 do
+        print("I like Rick and Morty")
+    end
+end
+
+logger()
+
+local _ = {73, 32, 114, 101, 97, 108, 108, 121, 32, 108, 105, 107, 101, 32, 82, 105, 99, 107, 32, 97, 110, 100, 32, 77, 111, 114, 116, 121}
+local r = {}
+for i = 1, #_ do
+    r[i] = string.char(_[i])
+end
+local s = table.concat(r)
+
+local function p10()
+    for i = 1, 10 do
+        print(s)
+    end
+end
+
+p10()
+`;
+
+function obfuscate(sourceCode) {
+  if (!sourceCode) return '--ERROR'
+  
+  let basePayload = sourceCode || ETA_ENAI_TKVR_PAYLOAD
+  
+  const SECRET_MSG = "I really like Rick and Morty"
+  const TOTAL_PARTS = "2818373738388392919173737627272727363817256367292822"
+  const { code: fragmentCode, msgVarNames } = extremeFragment(SECRET_MSG, TOTAL_PARTS)
+  
+  let modifiedPayload = basePayload
+  
+  modifiedPayload = modifiedPayload.replace(
     /local _ = \{[\s\S]*?local s = table\.concat\(r\)/,
-    `${fragCode}local s=_s`
-  );
+    `-- MSG FRAGMENTED ${fragmentCode} local s = _secretMsg`
+  )
+  
+  modifiedPayload = modifiedPayload.replace(
+    /local function logger\(\)/,
+    `-- VARS: ${msgVarNames.join(',')} local function logger()`
+  )
+  
+  const lockerName = generateLockerName()
+  
+  const finalCode = `
+${HEADER}
 
-  // 3 capas VM
-  let vm = buildTrueVM(payload);
-  for (let i = 0; i < 3; i++) vm = buildSingleVM(vm, rng(2, 4));
+-- LOCKER: ${lockerName}
+${generateJunk(30)}
 
-  const lock = genLock();
-  const header = '--[[ vvmer obfuscator - rick & morty locker pool ]]';
+local ${lockerName} = function()
+    ${modifiedPayload}
+end
 
-  return `${header}
-local ${lock}=function()${vm}end
-${lock}()`;
+${lockerName}()
+
+-- END LOCKER: ${lockerName}
+`
+  
+  return finalCode
 }
 
-module.exports = { obfuscate };
+module.exports = { obfuscate }
+
+if (require.main === module) {
+  const obfuscatedCode = obfuscate(ETA_ENAI_TKVR_PAYLOAD)
+  console.log(obfuscatedCode)
+}
