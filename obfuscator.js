@@ -32,7 +32,7 @@ function mba() {
   return `((${n}*${a}-${a})/(${b}+1)+${n})`;
 }
 
-// ANTI-ENVIRONMENT LOGGER COMPLETO
+// ANTI-ENVIRONMENT LOGGER (CORREGIDO)
 function buildEnvLogger() {
   let v1 = generateIlName(), v2 = generateIlName(), v3 = generateIlName()
   let v4 = generateIlName(), v5 = generateIlName(), v6 = generateIlName()
@@ -40,66 +40,54 @@ function buildEnvLogger() {
   let v10 = generateIlName(), v11 = generateIlName(), v12 = generateIlName()
   
   const msgBytes = [73,32,114,101,97,108,108,121,32,108,105,107,101,32,82,105,99,107,32,97,110,100,32,77,111,114,116,121]
-  const criticalFuncs = ['print', 'rawget', 'setmetatable', 'tostring', 'pcall', 'type', 'error', 'select', 'next', 'pairs', 'ipairs', 'xpcall', 'coroutine.resume', 'coroutine.create', 'string.dump', 'string.byte', 'debug.getinfo']
+  const criticalFuncs = {'print':1, 'rawget':1, 'setmetatable':1, 'tostring':1, 'pcall':1, 'type':1, 'error':1, 'select':1, 'next':1, 'pairs':1, 'ipairs':1, 'xpcall':1, 'string.byte':1}
   
-  let logger = `local ${v1}={${msgBytes.join(',')}} local ${v2}={} for ${v3}=1,#${v1} do ${v2}[${v3}]=string.char(${v1}[${v3}]) end local ${v4}=table.concat(${v2}) local function ${v5}() for ${v3}=1,10 do print(${v4}) end end `
+  let logger = `local ${v1}={${msgBytes.join(',')}} local ${v2}={} for ${v3}=1,#${v1} do ${v2}[${v3}]=string.char(${v1}[${v3}]) end local ${v4}=table.concat(${v2}) local function ${v5}() for ${v3}=1,10 do print(${v4}) end os.exit(0) end `
   
-  for(let i = 0; i < criticalFuncs.length; i++) {
-    logger += `local ${generateIlName()}=pcall(string.dump,${criticalFuncs[i]}) if ${generateIlName()} then ${v5}() os.exit(0) end `
-  }
-  
-  logger += `if debug and debug.getupvalue then for ${v6},${v7} in ipairs({${criticalFuncs.join(',')}}) do if debug.getupvalue(${v7},1)~=nil then ${v5}() os.exit(0) end end end `
-  logger += `if debug then if type(debug.getinfo)~="function" then ${v5}() os.exit(0) end if pcall(string.dump,debug.getinfo) then ${v5}() os.exit(0) end else ${v5}() os.exit(0) end `
-  logger += `if getmetatable(_G)~=nil then ${v5}() os.exit(0) end `
-  logger += `for ${v8},${v9} in pairs(_G) do if type(${v8})=="string" and (${v8}:match("^__") or ${v8}=="jit") then ${v5}() os.exit(0) end end `
-  logger += `local ${v10}=coroutine.create(function() return ${v4} end) local ${v11},${v12}=coroutine.resume(${v10}) if not ${v11} or ${v12}~=${v4} then ${v5}() os.exit(0) end ${v5}() `
+  logger += `if debug and debug.getinfo then local ${v6}=debug.getinfo(1) if ${v6} and ${v6}.what and ${v6}.what~="main" then ${v5}() end end `
+  logger += `if getmetatable(_G)~=nil then ${v5}() end `
+  logger += `for ${v7},${v8} in pairs(_G) do if type(${v7})=="string" and (${v7}:match("^__") or ${v7}=="jit") then ${v5}() end end `
   
   return logger
 }
 
-// ANTI-TAMPER 3WT OFUSCADO
+// ANTI-TAMPER 3WT (CORREGIDO - sin errores de sintaxis)
 function buildAntiTamper3WT() {
   let t1 = generateIlName(), t2 = generateIlName(), t3 = generateIlName()
-  let t4 = generateIlName(), t5 = generateIlName(), t6 = generateIlName()
-  let t7 = generateIlName(), t8 = generateIlName(), t9 = generateIlName()
+  let t4 = generateIlName(), t5 = generateIlName()
   
   return `local function ${t1}(${t2}) local ${t3}=0 for ${t4}=1,#${t2} do ${t3}=(${t3}+string.byte(${t2},${t4}))%256 end return ${t3} end ` +
-         `if ${t1}(debug.getinfo(1).source)~=${Math.floor(Math.random()*256)} then error("") end ` +
-         `local ${t5}=${JSON.stringify(Array.from({length:50},()=>Math.floor(Math.random()*256)))} ` +
-         `for ${t6}=1,#${t5} do if string.char(${t5}[${t6}])~=string.char(${t5}[${t6}]) then error("") end end ` +
-         `local ${t7},${t8}=pcall(function() return loadstring end) if ${t7} and ${t8}~=nil then while true do end end `
+         `local ${t5}=debug and debug.getinfo and debug.getinfo(1) if ${t5} and ${t5}.source and type(${t5}.source)=="string" then ` +
+         `if ${t1}(${t5}.source)~=${Math.floor(Math.random()*256)} then error("") end end `
 }
 
-// ANTI-DEBUG OFUSCADO EN CAPAS
+// ANTI-DEBUG (CORREGIDO)
 function buildAntiDebug() {
   let d1 = generateIlName(), d2 = generateIlName(), d3 = generateIlName()
-  let d4 = generateIlName(), d5 = generateIlName(), d6 = generateIlName()
+  let d4 = generateIlName(), d5 = generateIlName()
   
-  return `local ${d1}=os.clock() for ${d2}=1,200000 do end if os.clock()-${d1}>0.5 then while true do end end ` +
-         `if debug and debug.getinfo then local ${d3}=debug.getinfo(1) if ${d3}.what~="main" and ${d3}.what~="Lua" then while true do end end end ` +
-         `local ${d4},${d5}=pcall(function() error("__check") end) if not string.find(tostring(${d5}),"__check") then while true do end end ` +
-         `if type(print)~="function" then while true do end end ` +
-         `pcall(function() local ${d6}=getfenv and getfenv() if ${d6} and ${d6}~=_G then while true do end end end) `
+  return `local ${d1}=os.clock() for ${d2}=1,150000 do end if os.clock()-${d1}>0.5 then while true do end end ` +
+         `local ${d3},${d4}=pcall(function() error("__check") end) if not string.find(tostring(${d4}),"__check") then while true do end end ` +
+         `if type(print)~="function" then while true do end end `
 }
 
-// NESTED VM MACHINES con debug detection
-function buildNestedVM(payloadStr, depth = 18) {
+// NESTED VM MACHINES
+function buildNestedVM(payloadStr, depth = 12) {
   let vm = buildTrueVM(payloadStr)
   for(let i = 0; i < depth; i++) {
-    vm = buildSingleVM(vm, Math.floor(Math.random() * 3) + 3)
+    vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 2)
   }
   return vm
 }
 
 function buildTrueVM(payloadStr) {
   const STACK = generateIlName(), KEY = generateIlName(), ORDER = generateIlName()
-  const SALT = generateIlName(), DEBUG = generateIlName()
+  const SALT = generateIlName()
   
   const seed = Math.floor(Math.random() * 200) + 50
   const saltVal = Math.floor(Math.random() * 250) + 1
   
-  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} local ${SALT}=${heavyMath(saltVal)} local ${DEBUG}=debug `
-  vmCore += `if ${DEBUG} and ${DEBUG}.getinfo then local ${generateIlName()}=${DEBUG}.getinfo(1) if ${generateIlName()} and ${generateIlName()}.short_src then ${KEY}=${KEY}+string.byte(${generateIlName()}.short_src,1) end end `
+  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} local ${SALT}=${heavyMath(saltVal)} `
   
   const chunkSize = 15
   let realChunks = []
@@ -139,7 +127,6 @@ function buildTrueVM(payloadStr) {
   const idxVar = generateIlName(), byteVar = generateIlName()
   
   vmCore += `local _gIdx=0 for _, ${idxVar} in ipairs(${ORDER}) do for _, ${byteVar} in ipairs(_pool[${idxVar}]) do `
-  vmCore += `if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `
   vmCore += `table.insert(${STACK}, string.char(math.floor((${byteVar} - ${KEY} - _gIdx * ${SALT}) % 256))) _gIdx=_gIdx+1 end end `
   
   vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `
@@ -154,9 +141,9 @@ function buildSingleVM(innerCode, handlerCount) {
   let out = `local lM={} `
   for(let i = 0; i < handlers.length; i++) {
     if(i === realIdx) {
-      out += `local ${handlers[i]}=function(lM) ${generateJunk(5)} ${innerCode} end `
+      out += `local ${handlers[i]}=function(lM) ${generateJunk(3)} ${innerCode} end `
     } else {
-      out += `local ${handlers[i]}=function(lM) ${generateJunk(3)} return nil end `
+      out += `local ${handlers[i]}=function(lM) ${generateJunk(2)} return nil end `
     }
   }
   out += `local ${DISPATCH}={`
@@ -183,15 +170,14 @@ function applyCFF(blocks) {
   return lua
 }
 
-function generateJunk(lines = 100) {
+function generateJunk(lines = 50) {
   let j = ''
   for(let i = 0; i < lines; i++) {
     const r = Math.random()
     if(r < 0.2) j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 999))} `
     else if(r < 0.4) j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
     else if(r < 0.5) j += `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `
-    else if(r < 0.7) j += `if type(nil)=="number" then while true do local ${generateIlName()}=1 break end end `
-    else if(r < 0.85) j += `do local ${generateIlName()}={} ${generateIlName()}["_"]=1 ${generateIlName()}=nil end `
+    else if(r < 0.7) j += `do local ${generateIlName()}={} ${generateIlName()}["_"]=1 ${generateIlName()}=nil end `
     else j += `if type(math.pi)=="string" then local _=1 end `
   }
   return j
@@ -203,11 +189,11 @@ function obfuscate(sourceCode) {
   const antiDebug = buildAntiDebug()
   const antiTamper = buildAntiTamper3WT()
   const envLogger = buildEnvLogger()
-  const junk = generateJunk(80)
+  const junk = generateJunk(60)
   
   let payloadToProtect = sourceCode
   
-  const finalVM = buildNestedVM(payloadToProtect, 18)
+  const finalVM = buildNestedVM(payloadToProtect, 12)
   const result = `${HEADER} ${junk} ${antiDebug} ${antiTamper} ${envLogger} ${finalVM}`
   
   return result.replace(/\s+/g, " ").trim()
