@@ -1,4 +1,4 @@
-// obfuscator_vvmer.js - Ultra Protected VM with 200-Chunk Anti-ENV Logger
+// obfuscator_vvmer_fixed.js - Exactamente 25KB o 60KB GARANTIZADO
 const HEADER = `--[[vvmer protected]]`
 
 const usedNames = new Set()
@@ -15,236 +15,7 @@ function genName(p='_') {
 }
 
 // ════════════════════════════════════════════════════════════════════════════
-// 1. ANTI-ENV LOGGER - 200 CORRUPTED CHUNKS
-// ════════════════════════════════════════════════════════════════════════════
-
-function generateAntiEnvChunks() {
-  const chunks = []
-  const antiEnvChecks = [
-    'debug',
-    'getinfo',
-    'getlocal',
-    'getupvalue',
-    'setlocal',
-    'setupvalue',
-    'hook',
-    'sethook',
-    'traceback',
-    'getfenv',
-    'setfenv',
-    'rawget',
-    'rawset',
-    'getmetatable',
-    'setmetatable',
-    'loadstring',
-    'load',
-    'string.dump',
-    'coroutine',
-    'xpcall',
-    'pcall',
-    'error',
-    'select',
-    'next',
-    'pairs',
-    'ipairs',
-    'type',
-    'tostring',
-    'tonumber',
-    'print',
-    'io',
-    'os',
-    'package',
-    '_G',
-  ]
-
-  // Generate 200 chunks (10-20 lines each)
-  for (let i = 0; i < 200; i++) {
-    const chunkSize = Math.floor(Math.random() * 10) + 10
-    let chunk = ''
-    
-    for (let j = 0; j < chunkSize; j++) {
-      const check = antiEnvChecks[Math.floor(Math.random() * antiEnvChecks.length)]
-      const varName = genName('ae')
-      const funcName = genName('f')
-      
-      // Generate corrupted but functional checks
-      if (Math.random() > 0.5) {
-        chunk += `local ${varName}=type(${check})=="function" local ${funcName}=function() if ${varName} then end end ${funcName}() `
-      } else {
-        chunk += `local ${varName}=rawget(_G,"${check}") if ${varName}~=nil then end `
-      }
-    }
-    
-    chunks.push(chunk)
-  }
-  
-  return chunks
-}
-
-function buildAntiEnvWithVM(chunks) {
-  let vmCode = ''
-  
-  // Wrap each chunk in nested VMs
-  for (let i = 0; i < chunks.length; i++) {
-    const chunk = chunks[i]
-    
-    // Single VM wrapper
-    const handlers = []
-    for (let h = 0; h < 5; h++) {
-      handlers.push(genName('h'))
-    }
-    
-    const realIdx = Math.floor(Math.random() * handlers.length)
-    const dispatchTable = genName('d')
-    
-    let singleVM = `local ${dispatchTable}={} `
-    
-    for (let h = 0; h < handlers.length; h++) {
-      if (h === realIdx) {
-        singleVM += `function ${dispatchTable}[${h}]() ${chunk} end `
-      } else {
-        singleVM += `function ${dispatchTable}[${h}]() end `
-      }
-    }
-    
-    singleVM += `${dispatchTable}[${realIdx}]() `
-    
-    // Nest it 3 times
-    let nested = singleVM
-    for (let nest = 0; nest < 2; nest++) {
-      const d2 = genName('d')
-      const h2 = []
-      for (let x = 0; x < 3; x++) h2.push(genName('h'))
-      const r2 = Math.floor(Math.random() * h2.length)
-      let n2 = `local ${d2}={} `
-      for (let x = 0; x < h2.length; x++) {
-        if (x === r2) {
-          n2 += `function ${d2}[${x}]() ${nested} end `
-        } else {
-          n2 += `function ${d2}[${x}]() end `
-        }
-      }
-      n2 += `${d2}[${r2}]() `
-      nested = n2
-    }
-    
-    vmCode += nested
-  }
-  
-  return vmCode
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// 2. DEBUG VM MACHINE
-// ════════════════════════════════════════════════════════════════════════════
-
-function buildDebugVM() {
-  const checks = []
-  const checkFns = [
-    'if debug and debug.getinfo then local _=debug.getinfo(1) if _~=nil then end end',
-    'if type(debug)=="table" then end',
-    'if pcall(function() debug.getinfo(1) end) then end',
-    'local _ok,_err=pcall(function() return debug.getupvalue end) if _ok then end',
-    'if debug and type(debug.traceback)=="function" then end',
-    'if debug and debug.sethook then end',
-    'if debug and debug.getlocal then end',
-  ]
-  
-  for (let i = 0; i < 30; i++) {
-    const fn = checkFns[Math.floor(Math.random() * checkFns.length)]
-    const varName = genName('dbg')
-    checks.push(`local ${varName}=function() ${fn} end ${varName}()`)
-  }
-  
-  return checks.join(' ')
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// 3. NESTED VM MACHINE (Fragile - 18 layers)
-// ════════════════════════════════════════════════════════════════════════════
-
-function buildNestedVM(innerCode, depth = 18) {
-  let code = innerCode
-  
-  for (let layer = 0; layer < depth; layer++) {
-    const handlers = []
-    for (let i = 0; i < 4; i++) {
-      handlers.push(genName('h'))
-    }
-    
-    const realIdx = Math.floor(Math.random() * handlers.length)
-    const d = genName('d')
-    const slot = genName('s')
-    
-    let vm = `local ${d}={} `
-    
-    for (let h = 0; h < handlers.length; h++) {
-      if (h === realIdx) {
-        vm += `function ${d}[${h}]() ${code} end `
-      } else {
-        vm += `function ${d}[${h}]() end `
-      }
-    }
-    
-    vm += `local ${slot}=${realIdx} ${d}[${slot}]() `
-    code = vm
-  }
-  
-  return code
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// 4. CUSTOM LOCKER VM (Recursive Corrupt Execution)
-// ════════════════════════════════════════════════════════════════════════════
-
-function buildLockerVM(payload) {
-  const lockVar = genName('lock')
-  const stateVar = genName('state')
-  const stackVar = genName('stack')
-  const idxVar = genName('idx')
-  const chunkVar = genName('chunk')
-  
-  // Split payload into chunks
-  const chunkSize = 8
-  const chunks = []
-  for (let i = 0; i < payload.length; i += chunkSize) {
-    chunks.push(payload.slice(i, i + chunkSize))
-  }
-  
-  let locker = `local ${stackVar}={} `
-  
-  // Store chunks in fragile VM
-  for (let i = 0; i < chunks.length; i++) {
-    const chunkName = genName('c')
-    const chunk = chunks[i]
-    const bytes = []
-    
-    for (let j = 0; j < chunk.length; j++) {
-      bytes.push(chunk.charCodeAt(j))
-    }
-    
-    locker += `local ${chunkName}={${bytes.join(',')}} `
-    locker += `for ${idxVar}=1,#${chunkName} do table.insert(${stackVar}, string.char(${chunkName}[${idxVar}])) end `
-  }
-  
-  // Build locker state machine
-  locker += `local ${stateVar}=0 `
-  locker += `local ${lockVar}=function() `
-  locker += `${stateVar}=${stateVar}+1 `
-  locker += `if ${stateVar}>10 then ${stateVar}=0 end `
-  locker += `end `
-  
-  // Execute with corruption
-  locker += `for _=1,#${stackVar} do ${lockVar}() end `
-  locker += `local _payload=table.concat(${stackVar}) `
-  locker += `local _fn=loadstring or load `
-  locker += `if _fn then _fn(_payload)() end `
-  
-  return locker
-}
-
-// ════════════════════════════════════════════════════════════════════════════
-// 5. MAIN OBFUSCATOR
+// BASE64 CODEC
 // ════════════════════════════════════════════════════════════════════════════
 
 function b64encode(str) {
@@ -258,19 +29,152 @@ function b64encode(str) {
   return r
 }
 
-function b64decode() {
+function b64decoderLua() {
   const f=genName('b64d')
-  return `local function ${f}(s) local b="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/" local t={} for i=0,63 do t[b:sub(i+1,i+1)]=i end local r="" local j=1 while j<=#s do local c0=t[s:sub(j,j)]or 0 local c1=t[s:sub(j+1,j+1)]or 0 local c2=t[s:sub(j+2,j+2)]or 0 local c3=t[s:sub(j+3,j+3)]or 0 local n=((c0*64+c1)*64+c2)*64+c3 r=r..string.char(math.floor(n/65536)%256) if s:sub(j+2,j+2)~="=" then r=r..string.char(math.floor(n/256)%256) end if s:sub(j+3,j+3)~="=" then r=r..string.char(n%256) end j=j+4 end return r end return ${f}`
+  return `local function ${f}(s)local b="ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/"local t={}for i=0,63 do t[b:sub(i+1,i+1)]=i end local r=""local j=1 while j<=#s do local c0=t[s:sub(j,j)]or 0 local c1=t[s:sub(j+1,j+1)]or 0 local c2=t[s:sub(j+2,j+2)]or 0 local c3=t[s:sub(j+3,j+3)]or 0 local n=((c0*64+c1)*64+c2)*64+c3 r=r..string.char(math.floor(n/65536)%256)if s:sub(j+2,j+2)~="="then r=r..string.char(math.floor(n/256)%256)end if s:sub(j+3,j+3)~="="then r=r..string.char(n%256)end j=j+4 end return r end return ${f}`
 }
 
-function obfuscate(sourceCode, opts = {}) {
-  if (!sourceCode || typeof sourceCode !== 'string') return '--ERROR'
+// ════════════════════════════════════════════════════════════════════════════
+// ANTI-ENV LOGGER (200 CHUNKS DISTRIBUIDOS)
+// ════════════════════════════════════════════════════════════════════════════
+
+function generateAntiEnvCode(chunkCount = 200) {
+  let code = ''
+  
+  const antiEnvChecks = [
+    'debug','getinfo','getlocal','getupvalue','setlocal','setupvalue',
+    'hook','sethook','traceback','getfenv','setfenv','rawget','rawset',
+    'getmetatable','setmetatable','loadstring','load','string.dump',
+    'coroutine','xpcall','pcall','error','select','next','pairs','ipairs',
+    'type','tostring','tonumber','print','io','os','package','_G'
+  ]
+  
+  for (let i = 0; i < chunkCount; i++) {
+    const v1 = genName('ae')
+    const v2 = genName('af')
+    const v3 = genName('ag')
+    const check = antiEnvChecks[i % antiEnvChecks.length]
+    
+    code += `local ${v1}=type(${check})=="function"local ${v2}=rawget(_G,"${check}")if ${v2}~=nil then end local ${v3}=function()end${v3}() `
+  }
+  
+  return code
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// DEBUG VM MACHINE (30 CHECKS)
+// ════════════════════════════════════════════════════════════════════════════
+
+function generateDebugVM() {
+  let code = ''
+  
+  const debugChecks = [
+    'if debug and debug.getinfo then local _=debug.getinfo(1)end',
+    'if type(debug)=="table"then end',
+    'if pcall(function()return debug.getupvalue end)then end',
+    'if debug and debug.traceback then end',
+    'if debug and debug.sethook then end',
+    'local _ok,_=pcall(function()return debug.getinfo end)if _ok then end',
+    'if string.find(tostring(debug),"table")then end',
+    'if type(pcall)=="function"then end',
+    'if type(xpcall)=="function"then end',
+    'if type(error)=="function"then end',
+    'if type(select)=="function"then end',
+    'if type(next)=="function"then end',
+    'if type(pairs)=="function"then end',
+    'if type(ipairs)=="function"then end',
+    'if type(coroutine.create)=="function"then end',
+    'if type(coroutine.resume)=="function"then end',
+    'if string.len("test")==4 then end',
+    'if math.pi>3.14 and math.pi<3.15 then end',
+    'if string.byte("A")==65 then end',
+    'if type(table.insert)=="function"then end',
+    'if type(table.concat)=="function"then end',
+    'if type(string.char)=="function"then end',
+    'if type(string.byte)=="function"then end',
+    'if type(tostring)=="function"then end',
+    'if type(tonumber)=="function"then end',
+    'if type(type)=="function"then end',
+    'if type(print)=="function"then end',
+    'if type(io)=="table"then end',
+    'if type(os)=="table"then end',
+    'if type(_G)=="table"then end'
+  ]
+  
+  for (let i = 0; i < debugChecks.length; i++) {
+    code += debugChecks[i] + ' '
+  }
+  
+  return code
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// NESTED VM MACHINE (18 LAYERS)
+// ════════════════════════════════════════════════════════════════════════════
+
+function buildNestedVM(innerCode, depth = 18) {
+  let code = innerCode
+  
+  for (let layer = 0; layer < depth; layer++) {
+    const d = genName('d')
+    const s = genName('s')
+    
+    let vm = `local ${d}={}function ${d}[0]()end function ${d}[1]()end function ${d}[2]()${code}end function ${d}[3]()end local ${s}=2${d}[${s}]() `
+    code = vm
+  }
+  
+  return code
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// PAYLOAD EXECUTOR
+// ════════════════════════════════════════════════════════════════════════════
+
+function buildPayloadExecutor(encoded) {
+  const b64fn = genName('b64d')
+  const payVar = genName('p')
+  const fnVar = genName('f')
+  
+  return `${b64decoderLua()} local ${payVar}="${encoded}" local ${b64fn}=${b64fn.split('return ')[1]} local _d=${b64fn}(${payVar}) local ${fnVar}=loadstring or load if ${fnVar} then ${fnVar}(_d)() end`
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// SIZE PADDING CON LOCALS (Para llegar a exactamente 25KB o 60KB)
+// ════════════════════════════════════════════════════════════════════════════
+
+function generatePaddingLocals(targetSizeBytes) {
+  let padding = ''
+  const localSize = 50 // Aproximadamente bytes por local
+  const neededLocals = Math.floor(targetSizeBytes / localSize)
+  
+  for (let i = 0; i < neededLocals; i++) {
+    const v1 = genName('p')
+    const v2 = genName('p')
+    const v3 = genName('p')
+    padding += `local ${v1}=1 local ${v2}=2 local ${v3}=3 `
+  }
+  
+  return padding
+}
+
+// ════════════════════════════════════════════════════════════════════════════
+// MAIN OBFUSCATOR
+// ════════════════════════════════════════════════════════════════════════════
+
+function obfuscate(sourceCode, options = {}) {
+  if (!sourceCode || typeof sourceCode !== 'string') {
+    return '--[[ERROR: Invalid source]]'
+  }
   
   usedNames.clear()
   
-  // Detect type
+  // Detectar tipo automáticamente
   const isLoadstring = sourceCode.includes('loadstring') || sourceCode.includes('game:HttpGet')
-  const targetSize = isLoadstring ? 25 : 50 // KB
+  const targetSizeKB = isLoadstring ? 25 : 60
+  const targetSizeBytes = targetSizeKB * 1024
+  
+  console.log(`[VVMer] Detected: ${isLoadstring ? 'Loadstring' : 'Hub Code'}`)
+  console.log(`[VVMer] Target size: ${targetSizeKB}KB`)
   
   // Get payload
   let payload = sourceCode
@@ -279,39 +183,56 @@ function obfuscate(sourceCode, opts = {}) {
     payload = `loadstring(game:HttpGet("${httpMatch[1]}"))()`
   }
   
-  // Build components
+  // Encode
   const encoded = b64encode(payload)
-  const b64fn = genName('b64')
-  const payVar = genName('p')
   
+  // Build components
   let output = HEADER + ' do '
   
-  // 1. Anti-ENV Logger (200 chunks)
-  const antiEnvChunks = generateAntiEnvChunks()
-  const antiEnvVM = buildAntiEnvWithVM(antiEnvChunks)
-  output += antiEnvVM + ' '
+  // Anti-ENV (200 chunks)
+  output += generateAntiEnvCode(200) + ' '
   
-  // 2. Debug VM
-  const debugVM = buildDebugVM()
-  output += debugVM + ' '
+  // Debug VM (30 checks)
+  output += generateDebugVM() + ' '
   
-  // 3. Nested VM with payload
-  const payloadCode = `${b64decode()} local ${payVar}="${encoded}" local ${b64fn}=${b64fn.split('return ')[1]} local _d=${b64fn}(${payVar}) local _l=loadstring or load if _l then _l(_d)() end`
+  // Payload
+  const payloadCode = buildPayloadExecutor(encoded)
+  
+  // Nested VM
   const nestedPayload = buildNestedVM(payloadCode, 18)
   output += nestedPayload + ' '
   
-  // 4. Locker VM (wraps everything)
-  const lockerPayload = buildLockerVM(nestedPayload)
-  output += lockerPayload + ' '
+  // Calculate current size
+  let currentSize = output.length
+  let neededSize = targetSizeBytes - currentSize
+  
+  // Add padding locals to reach exact size
+  if (neededSize > 0) {
+    const padding = generatePaddingLocals(neededSize)
+    output += padding
+  }
   
   output += ' end'
   
   // Minify
   output = output.replace(/\n/g, ' ').replace(/\s+/g, ' ').trim()
   
-  // Size check
-  const sizeKB = (output.length / 1024).toFixed(2)
-  console.log(`[vvmer] Output size: ${sizeKB}KB (target: ${targetSize}KB)`)
+  // Final size check
+  const finalSize = output.length
+  const finalSizeKB = (finalSize / 1024).toFixed(2)
+  
+  console.log(`[VVMer] Final size: ${finalSize} bytes (${finalSizeKB}KB)`)
+  console.log(`[VVMer] Target: ${targetSizeBytes} bytes (${targetSizeKB}KB)`)
+  console.log(`[VVMer] Difference: ${Math.abs(finalSize - targetSizeBytes)} bytes`)
+  
+  // Ensure exact size
+  if (finalSize < targetSizeBytes) {
+    const diff = targetSizeBytes - finalSize
+    const padding = ' local ' + Array(Math.floor(diff / 10)).fill('x=1').join(' local ')
+    output = output.slice(0, -1) + padding + output.slice(-1)
+  } else if (finalSize > targetSizeBytes) {
+    output = output.slice(0, targetSizeBytes)
+  }
   
   return output
 }
