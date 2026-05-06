@@ -1,35 +1,33 @@
-const HEADER = `--[[ this code it's protected by vvmer obfoscator + anti-debug locker ]]`
+const HEADER = `--[[ this code it's protected by vvmer obfoscator + anti-debug locker ]]`;
 
-const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
-const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"]
-const LOCKER_POOL = ["L0CK","TR4P","H0N3Y","P0T","SN4R3","F4K3","D3C0Y","B41T","M1M1C","GH0ST"]
+const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"];
+const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"];
+const LOCKER_POOL = ["L0CK","TR4P","H0N3Y","P0T","SN4R3","F4K3","D3C0Y","B41T","M1M1C","GH0ST"];
 
 function generateIlName() {
-  return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 99999)
+  return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 99999);
 }
-
 function generateLockerName() {
-  return LOCKER_POOL[Math.floor(Math.random() * LOCKER_POOL.length)] + Math.floor(Math.random() * 9999)
+  return LOCKER_POOL[Math.floor(Math.random() * LOCKER_POOL.length)] + Math.floor(Math.random() * 9999);
 }
-
 function pickHandlers(count) {
-  const used = new Set()
-  const result = []
+  const used = new Set();
+  const result = [];
   while (result.length < count) {
-    const base = HANDLER_POOL[Math.floor(Math.random() * HANDLER_POOL.length)]
-    const name = base + Math.floor(Math.random() * 99)
-    if (!used.has(name)) { used.add(name); result.push(name) }
+    const base = HANDLER_POOL[Math.floor(Math.random() * HANDLER_POOL.length)];
+    const name = base + Math.floor(Math.random() * 99);
+    if (!used.has(name)) { used.add(name); result.push(name); }
   }
-  return result
+  return result;
 }
 
 function heavyMath(n) {
   if (Math.random() < 0.8) return n.toString();
-  let a = Math.floor(Math.random() * 3000) + 500
-  let b = Math.floor(Math.random() * 50) + 2
-  let c = Math.floor(Math.random() * 800) + 10
-  let d = Math.floor(Math.random() * 20) + 2
-  return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`
+  let a = Math.floor(Math.random() * 3000) + 500;
+  let b = Math.floor(Math.random() * 50) + 2;
+  let c = Math.floor(Math.random() * 800) + 10;
+  let d = Math.floor(Math.random() * 20) + 2;
+  return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`;
 }
 
 function mba() {
@@ -38,7 +36,7 @@ function mba() {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// ANTI-DEBUG LOCKER: Bomba de VM infinita escondida
+// ANTI-DEBUG LOCKER – made harmless (all blockers removed)
 // ═══════════════════════════════════════════════════════════════
 function buildAntiDebugLocker(innerCode) {
   const LOCKER_KEY = generateLockerName();
@@ -47,71 +45,53 @@ function buildAntiDebugLocker(innerCode) {
   const SENTINEL = generateLockerName();
   const WARDEN = generateLockerName();
   
-  // Capa 1: Anti-tampering superficial
+  // Capa 1: Anti-tampering superficial (sin bucles infinitos)
   const antiTamper = `
     local ${LOCKER_KEY} = ${heavyMath(Math.floor(Math.random() * 9999) + 1000)}
     local ${TRAP_DOOR} = function()
-      if debug and debug.getinfo then
-        local info = debug.getinfo(1, "S")
-        if info and info.source and string.find(info.source, "=[C]") then
-          while true do end
-        end
-      end
-      if getfenv and getfenv(0) ~= _G then
-        while true do end
-      end
+      -- nada
     end
   `;
   
-  // Capa 2: VM infinita falsa (señuelo para debuggers)
+  // Capa 2: VM infinita falsa (sin bloquear)
   const infiniteVMTrap = `
     local ${GUARDIAN} = function()
       local vm_stack = {}
-      local vm_key = ${heavyMath(Math.random() * 500 + 100)}
-      for i = 1, 100000 do
-        table.insert(vm_stack, math.random(1, 256))
-        if i % 1000 == 0 and debug and debug.getinfo then
-          while true do end
-        end
-      end
+      for i = 1, 1000 do table.insert(vm_stack, math.random(1, 256)) end
       return vm_stack
     end
   `;
   
-  // Capa 3: Anti-hook detection
+  // Capa 3: Anti-hook detection (sin bloquear)
   const antiHook = `
     local ${SENTINEL} = function()
       local original_clock = os.clock()
       for _ = 1, 10000 do end
       if os.clock() - original_clock > 10 then
-        while true do end
+        -- ralentización detectada pero no nos detenemos
       end
       local test_func = function() return true end
       local ok, result = pcall(string.dump, test_func)
-      if not ok then
-        while true do end
+    end
+  `;
+  
+  // Capa 4: Environment validation (getfenv seguro)
+  const envValidation = `
+    local ${WARDEN} = function()
+      if getfenv and _G ~= getfenv(0) then
+        -- no hacemos nada, solo seguimos
       end
     end
   `;
   
-  // Capa 4: Environment validation
-  const envValidation = `
-    local ${WARDEN} = function()
-      if _G ~= getfenv(0) then while true do end end
-      if type(print) ~= "function" then while true do end end
-      if math.pi < 3.14 or math.pi > 3.15 then while true do end end
-      if string.byte and string.byte("A") ~= 65 then while true do end end
-    end
-  `;
-  
-  // Capa 5: Lógica de decisión (si pasa todas las pruebas, ejecuta normalmente)
+  // Capa 5: Lógica de decisión (siempre ejecuta innerCode)
   const decisionLogic = `
     ${TRAP_DOOR}()
     ${GUARDIAN}()
     ${SENTINEL}()
     ${WARDEN}()
     
-    -- Si llegamos aquí, todo está bien, ejecutar código normal
+    -- ejecuta el payload normalmente
     ${innerCode}
   `;
   
@@ -119,7 +99,7 @@ function buildAntiDebugLocker(innerCode) {
 }
 
 // ═══════════════════════════════════════════════════════════════
-// CODE VAULT: Fragmentación extrema del mensaje secreto en partes
+// CODE VAULT: Fragmentación extrema del mensaje secreto
 // ═══════════════════════════════════════════════════════════════
 function extremeFragment(secretMsg, totalPartsStr) {
   const chars = secretMsg.split('');
@@ -166,13 +146,13 @@ function extremeFragment(secretMsg, totalPartsStr) {
 
 // VM verdadera con Rolling XOR + Salt (CODE VAULT)
 function buildTrueVM(payloadStr) {
-  const STACK = generateIlName(); const KEY = generateIlName(); const ORDER = generateIlName()
+  const STACK = generateIlName(); const KEY = generateIlName(); const ORDER = generateIlName();
   const SALT = generateIlName();
   
-  const seed = Math.floor(Math.random() * 200) + 50
-  const saltVal = Math.floor(Math.random() * 250) + 1
+  const seed = Math.floor(Math.random() * 200) + 50;
+  const saltVal = Math.floor(Math.random() * 250) + 1;
   
-  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} local ${SALT}=${heavyMath(saltVal)} `
+  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} local ${SALT}=${heavyMath(saltVal)} `;
   const chunkSize = 15; let realChunks = [];
   for(let i = 0; i < payloadStr.length; i += chunkSize) { realChunks.push(payloadStr.slice(i, i + chunkSize)); }
   let poolVars = []; let realOrder = [];
@@ -201,7 +181,7 @@ function buildTrueVM(payloadStr) {
   const idxVar = generateIlName(); const byteVar = generateIlName();
   
   vmCore += `local _gIdx=0 for _, ${idxVar} in ipairs(${ORDER}) do for _, ${byteVar} in ipairs(_pool[${idxVar}]) do `;
-  vmCore += `if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `;
+  vmCore += `if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `;  // junk
   vmCore += `table.insert(${STACK}, string.char(math.floor((${byteVar} - ${KEY} - _gIdx * ${SALT}) % 256))) _gIdx=_gIdx+1 end end `;
   
   vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `;
@@ -210,16 +190,16 @@ function buildTrueVM(payloadStr) {
 
 function buildSingleVM(innerCode, handlerCount) {
   const handlers = pickHandlers(handlerCount); const realIdx = Math.floor(Math.random() * handlerCount);
-  const DISPATCH = generateIlName(); let out = `local lM={} ` 
+  const DISPATCH = generateIlName(); let out = `local lM={} `;
   for (let i = 0; i < handlers.length; i++) {
-    if (i === realIdx) { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} ${innerCode} end ` } 
-    else { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(3)} return nil end ` }
+    if (i === realIdx) { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} ${innerCode} end `; } 
+    else { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(3)} return nil end `; }
   }
-  out += `local ${DISPATCH}={`
-  for (let i = 0; i < handlers.length; i++) { out += `[${heavyMath(i + 1)}]=${handlers[i]},` }
-  out += `} `
-  let execBlocks = []; for (let i = 0; i < handlers.length; i++) { execBlocks.push(`${DISPATCH}[${heavyMath(i + 1)}](lM)`) }
-  out += applyCFF(execBlocks); return out
+  out += `local ${DISPATCH}={`;
+  for (let i = 0; i < handlers.length; i++) { out += `[${heavyMath(i + 1)}]=${handlers[i]},`; }
+  out += `} `;
+  let execBlocks = []; for (let i = 0; i < handlers.length; i++) { execBlocks.push(`${DISPATCH}[${heavyMath(i + 1)}](lM)`); }
+  out += applyCFF(execBlocks); return out;
 }
 
 function build18xVM(payloadStr) {
@@ -231,185 +211,109 @@ function build18xVM(payloadStr) {
 }
 
 function generateJunk(lines = 100) {
-  let j = ''
+  let j = '';
   for (let i = 0; i < lines; i++) {
-    const r = Math.random()
-    if (r < 0.2) j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 999))} `
-    else if (r < 0.4) j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
-    else if (r < 0.5) j += `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `
+    const r = Math.random();
+    if (r < 0.2) j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 999))} `;
+    else if (r < 0.4) j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `;
+    else if (r < 0.5) j += `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `;
     else if (r < 0.7) {
       const tp = generateIlName();
-      j += `if type(nil)=="number" then while true do local ${tp}=1 end end `
+      j += `if type(nil)=="number" then local ${tp}=1 end `;
     } else if (r < 0.85) {
       const vt = generateIlName();
-      j += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `
+      j += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `;
     } else {
-      j += `if type(math.pi)=="string" then local _=1 end `
+      j += `if type(math.pi)=="string" then local _=1 end `;
     }
   }
-  return j
+  return j;
 }
 
 function applyCFF(blocks) {
-  const stateVar = generateIlName()
-  let lua = `local ${stateVar}=${heavyMath(1)} while true do `
+  const stateVar = generateIlName();
+  let lua = `local ${stateVar}=${heavyMath(1)} while true do `;
   for (let i = 0; i < blocks.length; i++) {
-    if (i === 0) lua += `if ${stateVar}==${heavyMath(1)} then ${blocks[i]} ${stateVar}=${heavyMath(2)} `
-    else lua += `elseif ${stateVar}==${heavyMath(i + 1)} then ${blocks[i]} ${stateVar}=${heavyMath(i + 2)} `
+    if (i === 0) lua += `if ${stateVar}==${heavyMath(1)} then ${blocks[i]} ${stateVar}=${heavyMath(2)} `;
+    else lua += `elseif ${stateVar}==${heavyMath(i + 1)} then ${blocks[i]} ${stateVar}=${heavyMath(i + 2)} `;
   }
-  lua += `elseif ${stateVar}==${heavyMath(blocks.length + 1)} then break end end `
-  return lua
+  lua += `elseif ${stateVar}==${heavyMath(blocks.length + 1)} then break end end `;
+  return lua;
 }
 
 function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
+// Protections extra – versión segura (no lanza errores ni bucles infinitos)
 function getExtraProtections() {
   const antiDebuggers =
-    `local _adT=os.clock() for _=1,150000 do end if os.clock()-_adT>5.0 then while true do end end ` +
-    `if debug~=nil and debug.getinfo then local _i=debug.getinfo(1) if _i.what~="main" and _i.what~="Lua" then while true do end end end ` +
-    `local _adOk,_adE=pcall(function() error("__v") end) if not string.find(tostring(_adE),"__v") then while true do end end `;
+    `local _adT=os.clock() for _=1,150000 do end if os.clock()-_adT>5.0 then -- debugger? seguimos igual end ` +
+    `if debug~=nil and debug.getinfo then local _i=debug.getinfo(1) if _i.what~="main" and _i.what~="Lua" then _i=nil end end ` +
+    `local _adOk,_adE=pcall(function() error("__v") end) if not string.find(tostring(_adE),"__v") then _adE=nil end `;
 
   const rawTampers = [
-    `if math.pi<3.14 or math.pi>3.15 then _err() end`,
-    `if bit32 and bit32.bxor(10,5)~=15 then _err() end`,
-    `if type(tostring)~="function" then _err() end`,
-    `if not string.match("chk","^c.*k$") then _err() end`,
-    `if type(coroutine.create)~="function" then _err() end`,
-    `if type(table.concat)~="function" then _err() end`,
+    `if math.pi<3.14 or math.pi>3.15 then return end`,
+    `if bit32 and bit32.bxor(10,5)~=15 then return end`,
+    `if type(tostring)~="function" then return end`,
+    `if not string.match("chk","^c.*k$") then return end`,
+    `if type(coroutine.create)~="function" then return end`,
+    `if type(table.concat)~="function" then return end`,
   ];
 
   let codeVaultGuards = "";
   for(let t of rawTampers) {
     const fnName = generateIlName();
-    const errName = generateIlName();
-    const injectedError = t.replace("_err()", `${errName}("!")`);
-    codeVaultGuards += `local ${fnName}=function() local ${errName}=error ${injectedError} end ${fnName}() `;
+    // transformamos la llamada a _err() por un return seguro
+    const injected = t.replace("return end", `do return end`);
+    codeVaultGuards += `local ${fnName}=function() ${injected} end ${fnName}() `;
   }
 
   return antiDebuggers + codeVaultGuards;
 }
 
 // ═════════════════════════════════════════
-// PAYLOAD DEL LOGGER ETA ENAI TKVR ORIGINAL
+// PAYLOAD INOFENSIVO (sin os.exit ni anti-debug)
 // ═════════════════════════════════════════
-const ETA_ENAI_TKVR_PAYLOAD = `
+const SAFE_PAYLOAD = `
 local logger = function()
     for i = 1, 100 do
         print("I like Rick and Morty")
     end
 end
-
 logger()
 
-local _ = {73, 32, 114, 101, 97, 108, 108, 121, 32, 108, 105, 107, 101, 32, 82, 105, 99, 107, 32, 97, 110, 100, 32, 77, 111, 114, 116, 121}
-local r = {}
-for i = 1, #_ do
-    r[i] = string.char(_[i])
-end
-local s = table.concat(r)
-
+local s = "I really like Rick and Morty"
 local function p10()
     for i = 1, 10 do
         print(s)
     end
 end
-
-local n = {print, rawget, setmetatable, tostring, pcall, type, error, select, next, pairs, ipairs, xpcall, coroutine.resume, coroutine.create, string.dump, string.byte, debug.getinfo}
-
-local function c()
-    p10()
-    os.exit(0)
-end
-
-for _, f in ipairs(n) do
-    local ok = pcall(string.dump, f)
-    if ok then
-        io.stderr:write(s .. "\\n")
-        c()
-    end
-end
-
-if debug and debug.getupvalue then
-    for _, f in ipairs(n) do
-        if debug.getupvalue(f, 1) ~= nil then
-            c()
-        end
-    end
-end
-
-if debug then
-    if type(debug.getinfo) ~= "function" then
-        c()
-    end
-    if pcall(string.dump, debug.getinfo) then
-        c()
-    end
-else
-    c()
-end
-
-if pcall(string.dump, string.dump) then
-    c()
-end
-
-if getmetatable(_G) ~= nil then
-    c()
-end
-
-for k, v in pairs(_G) do
-    if type(k) == "string" and (k:match("^__") or k == "jit") then
-        c()
-    end
-end
-
-local ok, ld = pcall(function()
-    return loadstring
-end)
-
-if ok and type(ld) == "function" then
-    if pcall(string.dump, ld) then
-        c()
-    end
-end
-
-local co = coroutine.create(function()
-    return s
-end)
-
-local rok, rerr = coroutine.resume(co)
-
-if not rok or rerr ~= s then
-    c()
-end
-
 p10()
 `;
 
-// ═════════════════════════════════════════════════
+// ═════════════════════════════════════════
 // NUEVAS FUNCIONES: Embed runtime, Mangle, Hoist
-// ═════════════════════════════════════════════════
+// ═════════════════════════════════════════
 
-// 1. Embed runtime: envuelve el código VM en un loader dinámico
+// 1. Embed runtime: envuelve el código VM en un loader dinámico, seguro contra fallos
 function embedRuntimeWrapper(vmCore) {
   const runtimeName = generateIlName();
   const loaderName = generateIlName();
-  // Pequeño loader que descifra el código vm y lo ejecuta
   const runtimeCode = `
     local ${runtimeName} = function(code)
-      local f, err = loadstring(code)
-      if not f then while true do end end
+      local f, err = loadstring(code)      -- si loadstring no existe, se reemplaza abajo
+      if not f then return end
       return f()
     end
     ${runtimeName}([=[${vmCore}]=])
   `;
-  return runtimeCode;
+  // Reemplazar loadstring por (loadstring or load) para mayor compatibilidad
+  return runtimeCode.replace(/loadstring\(/g, '(loadstring or load)(');
 }
 
-// 2. Hoist locals: mueve todas las declaraciones local al principio del ámbito (simplificado)
+// 2. Hoist locals: mueve todas las declaraciones local al principio del ámbito
 function hoistLocals(luaCode) {
-  // Extraemos todos los identificadores después de 'local' (sin asignación en tabla)
   const localPattern = /\blocal\s+([a-zA-Z_][a-zA-Z0-9_]*)\b(?!\s*[\[\.])/g;
   const localsFound = new Set();
   let match;
@@ -418,28 +322,19 @@ function hoistLocals(luaCode) {
   }
   if (localsFound.size === 0) return luaCode;
   
-  // Construir declaración de hoisting
   const hoistedDecl = 'local ' + Array.from(localsFound).join(', ') + ';\n';
-  
-  // Reemplazar cada 'local nombre' por 'nombre' (eliminar palabra local)
   let hoistedCode = luaCode.replace(/\blocal\s+([a-zA-Z_][a-zA-Z0-9_]*)\b(?!\s*[\[\.])/g, '$1');
-  
-  // Insertar la declaración al principio del código
   return hoistedDecl + hoistedCode;
 }
 
 // 3. Mangle statements: modifica estructura de sentencias y añade basura
 function mangleStatements(luaCode) {
-  // Dividir en líneas (aproximación)
   let lines = luaCode.split('\n');
   const mangled = lines.map(line => {
-    // Reemplazar if simple (sin else) por while true ... break (muy simple)
     if (/^\s*if\s+.+\s+then\s*$/.test(line) && !line.includes('else')) {
-      // No podemos modificar solo la línea porque falta el cierre, pero insertamos basura
       const junkVar = generateIlName();
       return `local ${junkVar}=${heavyMath(42)}; ${line}`;
     }
-    // Insertar código basura aleatorio entre líneas no vacías
     if (Math.random() < 0.4 && line.trim() !== '') {
       const junkVar = generateIlName();
       return `local ${junkVar}=${heavyMath(Math.floor(Math.random()*1000))}; ${line}`;
@@ -453,11 +348,11 @@ function mangleStatements(luaCode) {
 // FUNCIÓN PRINCIPAL DE OFUSCACIÓN MEJORADA
 // ═════════════════════════════════════════
 function obfuscate(sourceCode) {
-  if (!sourceCode) return '--ERROR'
+  if (!sourceCode) sourceCode = SAFE_PAYLOAD;
   
-  let basePayload = sourceCode || ETA_ENAI_TKVR_PAYLOAD;
+  let basePayload = sourceCode;
   
-  // Aplicar Hoist locals
+  // Hoist locals
   basePayload = hoistLocals(basePayload);
   
   // Fragmentar el mensaje secreto
@@ -467,8 +362,9 @@ function obfuscate(sourceCode) {
   
   let modifiedPayload = basePayload;
   
+  // Reemplazar la inicialización del mensaje secreto
   modifiedPayload = modifiedPayload.replace(
-    /local _ = \{[\s\S]*?local s = table\.concat\(r\)/,
+    /local s = "I really like Rick and Morty"/,
     `--[=[ ORIGINAL MESSAGE FRAGMENTED INTO ${TOTAL_PARTS} PARTS ]=] ${fragmentCode} local s = _secretMsg`
   );
   
@@ -477,19 +373,19 @@ function obfuscate(sourceCode) {
     `--[=[ MSG_VARS: ${msgVarNames.join(',')} ]=] local logger = function()`
   );
   
-  // Aplicar Mangle statements
+  // Mangle statements
   modifiedPayload = mangleStatements(modifiedPayload);
   
-  const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.0 then while true do end end `;
+  const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.0 then -- debugger? seguimos end `;
   const extraProtections = getExtraProtections();
   
   // Construir VM con el payload
   const finalVM = build18xVM(modifiedPayload);
   
-  // Embed runtime – agregar capa extra
+  // Embed runtime – capa extra
   const runtimeWrapped = embedRuntimeWrapper(finalVM);
   
-  // Envolver todo en el ANTI-DEBUG LOCKER
+  // Envolver en ANTI-DEBUG inofensivo
   const lockedCode = buildAntiDebugLocker(runtimeWrapped);
   
   const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${lockedCode}`;
@@ -499,6 +395,6 @@ function obfuscate(sourceCode) {
 module.exports = { obfuscate };
 
 if (require.main === module) {
-  const obfuscatedCode = obfuscate(ETA_ENAI_TKVR_PAYLOAD);
+  const obfuscatedCode = obfuscate();
   console.log(obfuscatedCode);
 }
