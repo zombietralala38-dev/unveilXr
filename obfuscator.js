@@ -1,4 +1,4 @@
-const HEADER = `--[[ thsi cid eits protected by seak obfuscator ]]`
+const HEADER = `--[[ VMProtect Ultimate v3.0 - Roblox Compatible ]]`
 
 const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"]
@@ -46,39 +46,54 @@ function extremeMath(n) {
   return result
 }
 
-function mba() {
-  let patterns = [
-    `((${Math.floor(Math.random()*10)+1}*${Math.floor(Math.random()*50)+10}-${Math.floor(Math.random()*50)+10})/(${Math.floor(Math.random()*20)+2}+1)+${Math.floor(Math.random()*5)+1})`,
-    `((${Math.floor(Math.random()*100)+1} % ${Math.floor(Math.random()*20)+5}) + ${Math.floor(Math.random()*50)+1} - ${Math.floor(Math.random()*30)+1})`
-  ]
-  return patterns[Math.floor(Math.random() * patterns.length)]
+function obfuscateString(str) {
+  let result = ""
+  for(let i = 0; i < str.length; i++) {
+    let code = str.charCodeAt(i)
+    if(i > 0) result += ".."
+    result += `string.char(${heavyMath(code)})`
+  }
+  return result
 }
 
 function buildEnvLogger() {
-  let v1 = generateIlName(), v2 = generateIlName(), v3 = generateIlName()
-  let v4 = generateIlName(), v5 = generateIlName()
+  let v1 = generateIlName()
+  let v2 = generateIlName() 
+  let v3 = generateIlName()
   
-  const msgBytes = [73,32,114,101,97,108,108,121,32,108,105,107,101,32,82,105,99,107,32,97,110,100,32,77,111,114,116,121]
+  // "I really like Rick and Morty" ofuscado como string
+  let msg = obfuscateString("I really like Rick and Morty")
   
-  let logger = `local ${v1}={${msgBytes.join(',')}} local ${v2}={} for ${v3}=1,#${v1} do ${v2}[${v3}]=string.char(${v1}[${v3}]) end local ${v4}=table.concat(${v2}) local function ${v5}() for ${v3}=1,3 do warn(${v4}) end end `
-  logger += `if debug and debug.getinfo then local ${v3}=debug.getinfo(1) if ${v3} and ${v3}.what and ${v3}.what~="main" then ${v5}() end end `
+  let logger = `local ${v1}=${msg} `
+  logger += `local function ${v2}() `
+  logger += `for ${v3}=1,10 do warn(${v1}) end `  // 10 veces
+  logger += `end `
+  logger += `if debug and debug.getinfo then `
+  logger += `local ${v3}=debug.getinfo(1) `
+  logger += `if ${v3} and ${v3}.what and ${v3}.what~="main" then `
+  logger += `${v2}() `
+  logger += `end `
+  logger += `end `
   
   return logger
 }
 
 function buildAntiTamper() {
-  let t1 = generateIlName(), t2 = generateIlName()
+  let t1 = generateIlName()
   return `local ${t1}=${extremeMath(Math.floor(Math.random()*50)+10)} if ${t1}~=${heavyMath(Math.floor(Math.random()*50)+10)} then warn("") end `
 }
 
 function buildAntiDebug() {
-  let d1 = generateIlName(), d2 = generateIlName(), d3 = generateIlName()
+  let d1 = generateIlName()
+  let d2 = generateIlName()
   return `local ${d1}=tick() for ${d2}=1,50000 do end if tick()-${d1}>0.5 then while true do wait() end end ` +
          `if type(print)~="function" then while true do wait() end end `
 }
 
 function buildTrueVM(payloadStr) {
-  const STACK = generateIlName(), KEY = generateIlName(), ORDER = generateIlName()
+  const STACK = generateIlName()
+  const KEY = generateIlName()
+  const ORDER = generateIlName()
   const SALT = generateIlName()
   
   const seed = Math.floor(Math.random() * 200) + 50
@@ -92,9 +107,11 @@ function buildTrueVM(payloadStr) {
     realChunks.push(payloadStr.slice(i, i + chunkSize))
   }
   
-  let poolVars = [], realOrder = []
+  let poolVars = []
+  let realOrder = []
   let totalChunks = realChunks.length * 3
-  let currentReal = 0, globalIndex = 0
+  let currentReal = 0
+  let globalIndex = 0
   
   for(let i = 0; i < totalChunks; i++) {
     let memName = generateIlName()
@@ -121,7 +138,8 @@ function buildTrueVM(payloadStr) {
   }
   
   vmCore += `local _pool={${poolVars.join(',')}} local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `
-  const idxVar = generateIlName(), byteVar = generateIlName()
+  const idxVar = generateIlName()
+  const byteVar = generateIlName()
   
   vmCore += `local _gIdx=0 for _, ${idxVar} in ipairs(${ORDER}) do for _, ${byteVar} in ipairs(_pool[${idxVar}]) do `
   vmCore += `table.insert(${STACK}, string.char(math.floor((${byteVar} - ${KEY} - _gIdx * ${SALT}) % 256))) _gIdx=_gIdx+1 end end `
@@ -146,14 +164,22 @@ function buildCustomVM(innerCode) {
   let vm = `local ${vmName}=function() `
   
   if(vmType === 0) {
-    vm += `local _s={} for _i=1,${heavyMath(3)} do if _i==${heavyMath(1)} then ${innerCode} elseif _i==${heavyMath(2)} then else break end end `
+    // CORREGIDO: estructura if/elseif/else/end correcta
+    vm += `local _s={} for _i=1,${heavyMath(3)} do `
+    vm += `if _i==${heavyMath(1)} then `
+    vm += `${innerCode} `
+    vm += `elseif _i==${heavyMath(2)} then `
+    vm += `else `
+    vm += `break `
+    vm += `end `  // end del if
+    vm += `end `  // end del for
   } else if(vmType === 1) {
     vm += `local _r1,_r2=nil,nil _r1=function() ${innerCode} end _r2=function() end _r1() `
   } else {
     vm += `local _t={[${heavyMath(1)}]=function() ${innerCode} end,[${heavyMath(2)}]=function() end} _t[${heavyMath(1)}]() `
   }
   
-  vm += `end ${vmName}() `
+  vm += `end ${vmName}() `  // end del function y llamada
   return vm
 }
 
