@@ -1,9 +1,8 @@
-// vvmer-obfuscator con ETA ENAI TKVR LOGGER integrado + fragmentación extrema CODE VAULT + ANTI-DEBUG LOCKER
-const HEADER = `--[[ this code its prtexted by Seak obfuscator ]]`
+const HEADER = `--[[ this code it's protected by vvmer obfoscator ]]`
 
 const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"]
-const LOCKER_POOL = ["L0CK","TR4P","H0N3Y","P0T","SN4R3","F4K3","D3C0Y","B41T","M1M1C","GH0ST"]
+const LOCKER_POOL = ["R1CK","M0RTY","P0RT4L","C1T4D3L","P1CKLE","M33S33KS","SCHW1FTY","S4NCHEZ","SM1TH","G4Z0RP4Z0P"]
 
 function generateIlName() {
   return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 99999)
@@ -38,90 +37,6 @@ function mba() {
   return `((${n}*${a}-${a})/(${b}+1)+${n})`;
 }
 
-// ═══════════════════════════════════════════════════════════════
-// ANTI-DEBUG LOCKER: Bomba de VM infinita escondida
-// ═══════════════════════════════════════════════════════════════
-function buildAntiDebugLocker(innerCode) {
-  const LOCKER_KEY = generateLockerName();
-  const TRAP_DOOR = generateLockerName();
-  const GUARDIAN = generateLockerName();
-  const SENTINEL = generateLockerName();
-  const WARDEN = generateLockerName();
-  
-  // Capa 1: Anti-tampering superficial
-  const antiTamper = `
-    local ${LOCKER_KEY} = ${heavyMath(Math.floor(Math.random() * 9999) + 1000)}
-    local ${TRAP_DOOR} = function()
-      if debug and debug.getinfo then
-        local info = debug.getinfo(1, "S")
-        if info and info.source and string.find(info.source, "=[C]") then
-          while true do end
-        end
-      end
-      if getfenv and getfenv(0) ~= _G then
-        while true do end
-      end
-    end
-  `;
-  
-  // Capa 2: VM infinita falsa (señuelo para debuggers)
-  const infiniteVMTrap = `
-    local ${GUARDIAN} = function()
-      local vm_stack = {}
-      local vm_key = ${heavyMath(Math.random() * 500 + 100)}
-      for i = 1, 100000 do
-        table.insert(vm_stack, math.random(1, 256))
-        if i % 1000 == 0 and debug and debug.getinfo then
-          while true do end
-        end
-      end
-      return vm_stack
-    end
-  `;
-  
-  // Capa 3: Anti-hook detection
-  const antiHook = `
-    local ${SENTINEL} = function()
-      local original_clock = os.clock()
-      for _ = 1, 10000 do end
-      if os.clock() - original_clock > 10 then
-        while true do end
-      end
-      local test_func = function() return true end
-      local ok, result = pcall(string.dump, test_func)
-      if not ok then
-        while true do end
-      end
-    end
-  `;
-  
-  // Capa 4: Environment validation
-  const envValidation = `
-    local ${WARDEN} = function()
-      if _G ~= getfenv(0) then while true do end end
-      if type(print) ~= "function" then while true do end end
-      if math.pi < 3.14 or math.pi > 3.15 then while true do end end
-      if string.byte and string.byte("A") ~= 65 then while true do end end
-    end
-  `;
-  
-  // Capa 5: Lógica de decisión (si pasa todas las pruebas, ejecuta normalmente)
-  const decisionLogic = `
-    ${TRAP_DOOR}()
-    ${GUARDIAN}()
-    ${SENTINEL}()
-    ${WARDEN}()
-    
-    -- Si llegamos aquí, todo está bien, ejecutar código normal
-    ${innerCode}
-  `;
-  
-  return antiTamper + infiniteVMTrap + antiHook + envValidation + decisionLogic;
-}
-
-// ═══════════════════════════════════════════════════════════════
-// CODE VAULT: Fragmentación extrema del mensaje secreto en partes
-// ═══════════════════════════════════════════════════════════════
 function extremeFragment(secretMsg, totalPartsStr) {
   const chars = secretMsg.split('');
   const charCodes = chars.map(c => c.charCodeAt(0));
@@ -137,13 +52,10 @@ function extremeFragment(secretMsg, totalPartsStr) {
   fragmentationCode += `--[=[ FRAGMENTED INTO ${totalPartsStr} PARTS ]=] `;
   fragmentationCode += `local _fragCount = 0 `;
   
-  const shuffled = [...fragVars].sort(() => Math.random() - 0.5);
-  
-  for (let cycle = 0; cycle < 50; cycle++) {
-    for (const frag of shuffled) {
+  for (let cycle = 0; cycle < 3; cycle++) {
+    for (const frag of fragVars) {
       const scrambledName = generateIlName();
       fragmentationCode += `local ${scrambledName} = ${frag.code} `;
-      fragmentationCode += `if ${scrambledName} ~= ${heavyMath(frag.original.charCodeAt(0))} then local _err = 1 end `;
       fragmentationCode += `_fragCount = _fragCount + 1 `;
     }
   }
@@ -165,7 +77,6 @@ function extremeFragment(secretMsg, totalPartsStr) {
   };
 }
 
-// VM verdadera con Rolling XOR + Salt (CODE VAULT)
 function buildTrueVM(payloadStr) {
   const STACK = generateIlName(); const KEY = generateIlName(); const ORDER = generateIlName()
   const SALT = generateIlName();
@@ -202,7 +113,6 @@ function buildTrueVM(payloadStr) {
   const idxVar = generateIlName(); const byteVar = generateIlName();
   
   vmCore += `local _gIdx=0 for _, ${idxVar} in ipairs(${ORDER}) do for _, ${byteVar} in ipairs(_pool[${idxVar}]) do `;
-  vmCore += `if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `;
   vmCore += `table.insert(${STACK}, string.char(math.floor((${byteVar} - ${KEY} - _gIdx * ${SALT}) % 256))) _gIdx=_gIdx+1 end end `;
   
   vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `;
@@ -235,18 +145,9 @@ function generateJunk(lines = 100) {
   let j = ''
   for (let i = 0; i < lines; i++) {
     const r = Math.random()
-    if (r < 0.2) j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 999))} `
-    else if (r < 0.4) j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
-    else if (r < 0.5) j += `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `
-    else if (r < 0.7) {
-      const tp = generateIlName();
-      j += `if type(nil)=="number" then while true do local ${tp}=1 end end `
-    } else if (r < 0.85) {
-      const vt = generateIlName();
-      j += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `
-    } else {
-      j += `if type(math.pi)=="string" then local _=1 end `
-    }
+    if (r < 0.3) j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 999))} `
+    else if (r < 0.6) j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
+    else j += `local ${generateIlName()}=${heavyMath(1)} `
   }
   return j
 }
@@ -262,39 +163,6 @@ function applyCFF(blocks) {
   return lua
 }
 
-function runtimeString(str) {
-  return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
-}
-
-function getExtraProtections() {
-  const antiDebuggers =
-    `local _adT=os.clock() for _=1,150000 do end if os.clock()-_adT>5.0 then while true do end end ` +
-    `if debug~=nil and debug.getinfo then local _i=debug.getinfo(1) if _i.what~="main" and _i.what~="Lua" then while true do end end end ` +
-    `local _adOk,_adE=pcall(function() error("__v") end) if not string.find(tostring(_adE),"__v") then while true do end end `;
-
-  const rawTampers = [
-    `if math.pi<3.14 or math.pi>3.15 then _err() end`,
-    `if bit32 and bit32.bxor(10,5)~=15 then _err() end`,
-    `if type(tostring)~="function" then _err() end`,
-    `if not string.match("chk","^c.*k$") then _err() end`,
-    `if type(coroutine.create)~="function" then _err() end`,
-    `if type(table.concat)~="function" then _err() end`,
-  ];
-
-  let codeVaultGuards = "";
-  for(let t of rawTampers) {
-    const fnName = generateIlName();
-    const errName = generateIlName();
-    const injectedError = t.replace("_err()", `${errName}("!")`);
-    codeVaultGuards += `local ${fnName}=function() local ${errName}=error ${injectedError} end ${fnName}() `;
-  }
-
-  return antiDebuggers + codeVaultGuards;
-}
-
-// ═════════════════════════════════════════
-// PAYLOAD DEL LOGGER ETA ENAI TKVR ORIGINAL
-// ═════════════════════════════════════════
 const ETA_ENAI_TKVR_PAYLOAD = `
 local logger = function()
     for i = 1, 100 do
@@ -317,86 +185,14 @@ local function p10()
     end
 end
 
-local n = {print, rawget, setmetatable, tostring, pcall, type, error, select, next, pairs, ipairs, xpcall, coroutine.resume, coroutine.create, string.dump, string.byte, debug.getinfo}
-
-local function c()
-    p10()
-    os.exit(0)
-end
-
-for _, f in ipairs(n) do
-    local ok = pcall(string.dump, f)
-    if ok then
-        io.stderr:write(s .. "\\n")
-        c()
-    end
-end
-
-if debug and debug.getupvalue then
-    for _, f in ipairs(n) do
-        if debug.getupvalue(f, 1) ~= nil then
-            c()
-        end
-    end
-end
-
-if debug then
-    if type(debug.getinfo) ~= "function" then
-        c()
-    end
-    if pcall(string.dump, debug.getinfo) then
-        c()
-    end
-else
-    c()
-end
-
-if pcall(string.dump, string.dump) then
-    c()
-end
-
-if getmetatable(_G) ~= nil then
-    c()
-end
-
-for k, v in pairs(_G) do
-    if type(k) == "string" and (k:match("^__") or k == "jit") then
-        c()
-    end
-end
-
-local ok, ld = pcall(function()
-    return loadstring
-end)
-
-if ok and type(ld) == "function" then
-    if pcall(string.dump, ld) then
-        c()
-    end
-end
-
-local co = coroutine.create(function()
-    return s
-end)
-
-local rok, rerr = coroutine.resume(co)
-
-if not rok or rerr ~= s then
-    c()
-end
-
 p10()
 `;
 
-// ═════════════════════════════════════════
-// FUNCIÓN PRINCIPAL DE OFUSCACIÓN CON LOCKER
-// ═════════════════════════════════════════
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
   
   let basePayload = sourceCode || ETA_ENAI_TKVR_PAYLOAD;
   
-  // Fragmentar el mensaje secreto
   const SECRET_MSG = "I really like Rick and Morty";
   const TOTAL_PARTS = "2818373738388392919173737627272727363817256367292822";
   const { code: fragmentCode, msgVarNames } = extremeFragment(SECRET_MSG, TOTAL_PARTS);
@@ -413,16 +209,9 @@ function obfuscate(sourceCode) {
     `--[=[ MSG_VARS: ${msgVarNames.join(',')} ]=] local logger = function()`
   );
   
-  const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.0 then while true do end end `
-  const extraProtections = getExtraProtections()
-  
-  // Construir VM con el payload
   const finalVM = build18xVM(modifiedPayload);
   
-  // Envolver todo en el ANTI-DEBUG LOCKER
-  const lockedCode = buildAntiDebugLocker(finalVM);
-  
-  const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${lockedCode}`
+  const result = `${HEADER} ${generateJunk(50)} ${finalVM}`
   return result.replace(/\s+/g, " ").trim()
 }
 
