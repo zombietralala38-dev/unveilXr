@@ -1,3 +1,6 @@
+// vvmer Obfuscator - Final version
+// Ejecutar con Node.js: node obfuscator.js > output.lua
+
 const HEADER = `--[[ this code it's protected by vvmer obfoscator ]]`
 
 const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
@@ -54,7 +57,6 @@ function detectAndApplyMappings(code) {
   return headers + modified;
 }
 
-// TÉCNICA CODE VAULT: Tarpits, Opaque Predicates y Symbol Waterfalls integrados en la Junk
 function generateJunk(lines = 100) {
   let j = ''
   for (let i = 0; i < lines; i++) {
@@ -90,30 +92,21 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
-// ═══════════════════════════════════════════════════════════════
-// CODE VAULT: Fragmentación extrema del mensaje secreto en partes
-// ═══════════════════════════════════════════════════════════════
 function extremeFragment(secretMsg, totalPartsStr) {
   const chars = secretMsg.split('');
   const charCodes = chars.map(c => c.charCodeAt(0));
   const fragVars = [];
   
-  // Crear variables fragmentadas con nombres aleatorios y MBA
   for (let i = 0; i < chars.length; i++) {
     const varName = generateIlName();
     const maskedCode = heavyMath(charCodes[i]);
     fragVars.push({ name: varName, code: maskedCode, original: chars[i] });
   }
   
-  // Generar la ilusión de muchas partes mediante expresiones anidadas
   let fragmentationCode = '';
-  const totalBig = BigInt(totalPartsStr);
-  const dummyMultiplier = 1000n; // Simbólico para no colapsar
-  
   fragmentationCode += `--[=[ FRAGMENTED INTO ${totalPartsStr} PARTS ]=] `;
   fragmentationCode += `local _fragCount = 0 `;
   
-  // Desordenar las variables en múltiples bloques
   const shuffled = [...fragVars].sort(() => Math.random() - 0.5);
   
   for (let cycle = 0; cycle < 50; cycle++) {
@@ -125,11 +118,7 @@ function extremeFragment(secretMsg, totalPartsStr) {
     }
   }
   
-  // Reconstrucción oculta
   fragmentationCode += `local _secretMsg = "" `;
-  fragmentationCode += `local _idx = 1 `;
-  fragmentationCode += `local _chunkSize = ${heavyMath(chars.length)} `;
-  
   const reconstructVars = fragVars.map(f => f.name);
   fragmentationCode += `local _chars = {${reconstructVars.map(v => `${v}`).join(',')}} `;
   
@@ -144,7 +133,6 @@ function extremeFragment(secretMsg, totalPartsStr) {
   };
 }
 
-// VM verdadera con Rolling XOR + Salt (CODE VAULT)
 function buildTrueVM(payloadStr) {
   const STACK = generateIlName(); const KEY = generateIlName(); const ORDER = generateIlName()
   const SALT = generateIlName();
@@ -222,7 +210,7 @@ function getExtraProtections() {
     `if debug~=nil and debug.getinfo then local _i=debug.getinfo(1) if _i.what~="main" and _i.what~="Lua" then while true do end end end ` +
     `local _adOk,_adE=pcall(function() error("__v") end) if not string.find(tostring(_adE),"__v") then while true do end end ` +
     `if getmetatable(_G)~=nil then while true do end end ` +
-    `if type(print)~="function" then while true do end end `;
+    `if type(print)~="function" then while true do end end`;
 
   const rawTampers = [
     `if math.pi<3.14 or math.pi>3.15 then _err() end`,
@@ -256,7 +244,7 @@ function getExtraProtections() {
 }
 
 // ═════════════════════════════════════════
-// PAYLOAD DEL LOGGER ETA ENAI TKVR ORIGINAL
+// PAYLOAD ORIGINAL (Logger de ejemplo)
 // ═════════════════════════════════════════
 const ETA_ENAI_TKVR_PAYLOAD = `
 local logger = function()
@@ -357,24 +345,19 @@ p10()
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
   
-  // Usar el payload ETA ENAI TKVR como base
   let basePayload = sourceCode || ETA_ENAI_TKVR_PAYLOAD;
   
-  // Fragmentar el mensaje secreto en 2818373738388392919173737627272727363817256367292822 partes
   const SECRET_MSG = "I really like Rick and Morty";
   const TOTAL_PARTS = "2818373738388392919173737627272727363817256367292822";
   const { code: fragmentCode, msgVarNames } = extremeFragment(SECRET_MSG, TOTAL_PARTS);
   
-  // Reemplazar la construcción explícita del array y el mensaje en el payload
   let modifiedPayload = basePayload;
   
-  // Eliminar la tabla explícita y la reconstrucción de 's'
   modifiedPayload = modifiedPayload.replace(
     /local _ = \{[\s\S]*?local s = table\.concat\(r\)/,
     `--[=[ ORIGINAL MESSAGE FRAGMENTED INTO ${TOTAL_PARTS} PARTS ]=] ${fragmentCode} local s = _secretMsg`
   );
   
-  // Añadir los nombres de variables del mensaje como comentario invisible
   modifiedPayload = modifiedPayload.replace(
     /local logger = function\(\)/,
     `--[=[ MSG_VARS: ${msgVarNames.join(',')} ]=] local logger = function()`
@@ -396,9 +379,7 @@ function obfuscate(sourceCode) {
 
 module.exports = { obfuscate };
 
-// ═════════════════════════════════════════
-// USO DEL OFUSCADOR
-// ═════════════════════════════════════════
+// Si se ejecuta directamente, genera el Embed Runtime
 if (require.main === module) {
   const obfuscatedCode = obfuscate(ETA_ENAI_TKVR_PAYLOAD);
   console.log(obfuscatedCode);
