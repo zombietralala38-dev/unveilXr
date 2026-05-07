@@ -30,13 +30,8 @@ function heavyMath(n) {
   return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`;
 }
 
-function mba() {
-  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
-  return `((${n}*${a}-${a})/(${b}+1)+${n})`;
-}
-
 // ═══════════════════════════════════════════════════════════════
-// ANTI-DEBUG LOCKER – made harmless (all blockers removed)
+// ANTI-DEBUG LOCKER – inofensivo (sin bloqueos ni bucles)
 // ═══════════════════════════════════════════════════════════════
 function buildAntiDebugLocker(innerCode) {
   const LOCKER_KEY = generateLockerName();
@@ -44,16 +39,14 @@ function buildAntiDebugLocker(innerCode) {
   const GUARDIAN = generateLockerName();
   const SENTINEL = generateLockerName();
   const WARDEN = generateLockerName();
-  
-  // Capa 1: Anti-tampering superficial (sin bucles infinitos)
+
   const antiTamper = `
     local ${LOCKER_KEY} = ${heavyMath(Math.floor(Math.random() * 9999) + 1000)}
     local ${TRAP_DOOR} = function()
-      -- nada
+      -- capa anti-tamper desactivada
     end
   `;
-  
-  // Capa 2: VM infinita falsa (sin bloquear)
+
   const infiniteVMTrap = `
     local ${GUARDIAN} = function()
       local vm_stack = {}
@@ -61,63 +54,60 @@ function buildAntiDebugLocker(innerCode) {
       return vm_stack
     end
   `;
-  
-  // Capa 3: Anti-hook detection (sin bloquear)
+
   const antiHook = `
     local ${SENTINEL} = function()
       local original_clock = os.clock()
       for _ = 1, 10000 do end
       if os.clock() - original_clock > 10 then
-        -- ralentización detectada pero no nos detenemos
+        -- ralentización detectada, pero seguimos
       end
       local test_func = function() return true end
       local ok, result = pcall(string.dump, test_func)
     end
   `;
-  
-  // Capa 4: Environment validation (getfenv seguro)
+
   const envValidation = `
     local ${WARDEN} = function()
       if getfenv and _G ~= getfenv(0) then
-        -- no hacemos nada, solo seguimos
+        -- entorno alterado, nada pasa
       end
     end
   `;
-  
-  // Capa 5: Lógica de decisión (siempre ejecuta innerCode)
+
   const decisionLogic = `
     ${TRAP_DOOR}()
     ${GUARDIAN}()
     ${SENTINEL}()
     ${WARDEN}()
     
-    -- ejecuta el payload normalmente
+    -- Si llegamos aquí, todo está bien, ejecutar el payload
     ${innerCode}
   `;
-  
+
   return antiTamper + infiniteVMTrap + antiHook + envValidation + decisionLogic;
 }
 
 // ═══════════════════════════════════════════════════════════════
-// CODE VAULT: Fragmentación extrema del mensaje secreto
+// CODE VAULT: fragmentación extrema del mensaje secreto
 // ═══════════════════════════════════════════════════════════════
 function extremeFragment(secretMsg, totalPartsStr) {
   const chars = secretMsg.split('');
   const charCodes = chars.map(c => c.charCodeAt(0));
   const fragVars = [];
-  
+
   for (let i = 0; i < chars.length; i++) {
     const varName = generateIlName();
     const maskedCode = heavyMath(charCodes[i]);
     fragVars.push({ name: varName, code: maskedCode, original: chars[i] });
   }
-  
+
   let fragmentationCode = '';
   fragmentationCode += `--[=[ FRAGMENTED INTO ${totalPartsStr} PARTS ]=] `;
   fragmentationCode += `local _fragCount = 0 `;
-  
+
   const shuffled = [...fragVars].sort(() => Math.random() - 0.5);
-  
+
   for (let cycle = 0; cycle < 50; cycle++) {
     for (const frag of shuffled) {
       const scrambledName = generateIlName();
@@ -126,17 +116,17 @@ function extremeFragment(secretMsg, totalPartsStr) {
       fragmentationCode += `_fragCount = _fragCount + 1 `;
     }
   }
-  
+
   fragmentationCode += `local _secretMsg = "" `;
   fragmentationCode += `local _idx = 1 `;
-  
+
   const reconstructVars = fragVars.map(f => f.name);
-  fragmentationCode += `local _chars = {${reconstructVars.map(v => `${v}`).join(',')}} `;
-  
+  fragmentationCode += `local _chars = {${reconstructVars.map(v => v).join(',')}} `;
+
   for (let i = 0; i < chars.length; i++) {
     fragmentationCode += `_secretMsg = _secretMsg .. string.char(_chars[${i+1}]) `;
   }
-  
+
   return {
     code: fragmentationCode,
     totalFragments: totalPartsStr,
@@ -148,24 +138,24 @@ function extremeFragment(secretMsg, totalPartsStr) {
 function buildTrueVM(payloadStr) {
   const STACK = generateIlName(); const KEY = generateIlName(); const ORDER = generateIlName();
   const SALT = generateIlName();
-  
+
   const seed = Math.floor(Math.random() * 200) + 50;
   const saltVal = Math.floor(Math.random() * 250) + 1;
-  
+
   let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} local ${SALT}=${heavyMath(saltVal)} `;
   const chunkSize = 15; let realChunks = [];
   for(let i = 0; i < payloadStr.length; i += chunkSize) { realChunks.push(payloadStr.slice(i, i + chunkSize)); }
   let poolVars = []; let realOrder = [];
   let totalChunks = realChunks.length * 3; let currentReal = 0; let globalIndex = 0;
-  
+
   for(let i = 0; i < totalChunks; i++) {
     let memName = generateIlName(); poolVars.push(memName);
     if (currentReal < realChunks.length && (Math.random() > 0.5 || (totalChunks - i) === (realChunks.length - currentReal))) {
       realOrder.push(i + 1);
       let chunk = realChunks[currentReal]; let encryptedBytes = [];
-      for(let j = 0; j < chunk.length; j++) { 
+      for(let j = 0; j < chunk.length; j++) {
         let enc = (chunk.charCodeAt(j) + seed + (globalIndex * saltVal)) % 256;
-        encryptedBytes.push(heavyMath(enc)); 
+        encryptedBytes.push(heavyMath(enc));
         globalIndex++;
       }
       vmCore += `local ${memName}={${encryptedBytes.join(',')}} `;
@@ -176,14 +166,14 @@ function buildTrueVM(payloadStr) {
       vmCore += `local ${memName}={${fakeBytes.join(',')}} `;
     }
   }
-  
+
   vmCore += `local _pool={${poolVars.join(',')}} local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `;
   const idxVar = generateIlName(); const byteVar = generateIlName();
-  
+
   vmCore += `local _gIdx=0 for _, ${idxVar} in ipairs(${ORDER}) do for _, ${byteVar} in ipairs(_pool[${idxVar}]) do `;
-  vmCore += `if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `;  // junk
+  vmCore += `if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `;
   vmCore += `table.insert(${STACK}, string.char(math.floor((${byteVar} - ${KEY} - _gIdx * ${SALT}) % 256))) _gIdx=_gIdx+1 end end `;
-  
+
   vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `;
   return vmCore;
 }
@@ -192,7 +182,7 @@ function buildSingleVM(innerCode, handlerCount) {
   const handlers = pickHandlers(handlerCount); const realIdx = Math.floor(Math.random() * handlerCount);
   const DISPATCH = generateIlName(); let out = `local lM={} `;
   for (let i = 0; i < handlers.length; i++) {
-    if (i === realIdx) { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} ${innerCode} end `; } 
+    if (i === realIdx) { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} ${innerCode} end `; }
     else { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(3)} return nil end `; }
   }
   out += `local ${DISPATCH}={`;
@@ -205,11 +195,12 @@ function buildSingleVM(innerCode, handlerCount) {
 function build18xVM(payloadStr) {
   let vm = buildTrueVM(payloadStr);
   for (let i = 0; i < 17; i++) {
-    vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3); 
+    vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3);
   }
   return vm;
 }
 
+// generateJunk sin bucles infinitos
 function generateJunk(lines = 100) {
   let j = '';
   for (let i = 0; i < lines; i++) {
@@ -219,12 +210,12 @@ function generateJunk(lines = 100) {
     else if (r < 0.5) j += `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `;
     else if (r < 0.7) {
       const tp = generateIlName();
-      j += `if type(nil)=="number" then local ${tp}=1 end `;
+      j += `local ${tp}=1 `;
     } else if (r < 0.85) {
       const vt = generateIlName();
       j += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `;
     } else {
-      j += `if type(math.pi)=="string" then local _=1 end `;
+      j += `local _=1 `;
     }
   }
   return j;
@@ -241,32 +232,26 @@ function applyCFF(blocks) {
   return lua;
 }
 
-function runtimeString(str) {
-  return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
-}
-
-// Protections extra – versión segura (no lanza errores ni bucles infinitos)
+// Protections extra – sin errores de sintaxis
 function getExtraProtections() {
   const antiDebuggers =
     `local _adT=os.clock() for _=1,150000 do end if os.clock()-_adT>5.0 then -- debugger? seguimos igual end ` +
     `if debug~=nil and debug.getinfo then local _i=debug.getinfo(1) if _i.what~="main" and _i.what~="Lua" then _i=nil end end ` +
     `local _adOk,_adE=pcall(function() error("__v") end) if not string.find(tostring(_adE),"__v") then _adE=nil end `;
 
-  const rawTampers = [
-    `if math.pi<3.14 or math.pi>3.15 then return end`,
-    `if bit32 and bit32.bxor(10,5)~=15 then return end`,
-    `if type(tostring)~="function" then return end`,
-    `if not string.match("chk","^c.*k$") then return end`,
-    `if type(coroutine.create)~="function" then return end`,
-    `if type(table.concat)~="function" then return end`,
+  const guards = [
+    `if math.pi<3.14 or math.pi>3.15 then else end`,
+    `if bit32 and bit32.bxor(10,5)~=15 then else end`,
+    `if type(tostring)~="function" then else end`,
+    `if not string.match("chk","^c.*k$") then else end`,
+    `if type(coroutine.create)~="function" then else end`,
+    `if type(table.concat)~="function" then else end`,
   ];
 
   let codeVaultGuards = "";
-  for(let t of rawTampers) {
+  for(let guard of guards) {
     const fnName = generateIlName();
-    // transformamos la llamada a _err() por un return seguro
-    const injected = t.replace("return end", `do return end`);
-    codeVaultGuards += `local ${fnName}=function() ${injected} end ${fnName}() `;
+    codeVaultGuards += `local ${fnName}=function() ${guard} end ${fnName}() `;
   }
 
   return antiDebuggers + codeVaultGuards;
@@ -293,26 +278,22 @@ p10()
 `;
 
 // ═════════════════════════════════════════
-// NUEVAS FUNCIONES: Embed runtime, Mangle, Hoist
+// FUNCIONES AUXILIARES: hoist, mangle, embed
 // ═════════════════════════════════════════
-
-// 1. Embed runtime: envuelve el código VM en un loader dinámico, seguro contra fallos
 function embedRuntimeWrapper(vmCore) {
   const runtimeName = generateIlName();
-  const loaderName = generateIlName();
+  // loader compatible con LuaJIT y Lua 5.1+
   const runtimeCode = `
     local ${runtimeName} = function(code)
-      local f, err = loadstring(code)      -- si loadstring no existe, se reemplaza abajo
+      local f, err = (loadstring or load)(code)
       if not f then return end
       return f()
     end
     ${runtimeName}([=[${vmCore}]=])
   `;
-  // Reemplazar loadstring por (loadstring or load) para mayor compatibilidad
-  return runtimeCode.replace(/loadstring\(/g, '(loadstring or load)(');
+  return runtimeCode;
 }
 
-// 2. Hoist locals: mueve todas las declaraciones local al principio del ámbito
 function hoistLocals(luaCode) {
   const localPattern = /\blocal\s+([a-zA-Z_][a-zA-Z0-9_]*)\b(?!\s*[\[\.])/g;
   const localsFound = new Set();
@@ -321,21 +302,17 @@ function hoistLocals(luaCode) {
     localsFound.add(match[1]);
   }
   if (localsFound.size === 0) return luaCode;
-  
+
   const hoistedDecl = 'local ' + Array.from(localsFound).join(', ') + ';\n';
   let hoistedCode = luaCode.replace(/\blocal\s+([a-zA-Z_][a-zA-Z0-9_]*)\b(?!\s*[\[\.])/g, '$1');
   return hoistedDecl + hoistedCode;
 }
 
-// 3. Mangle statements: modifica estructura de sentencias y añade basura
 function mangleStatements(luaCode) {
   let lines = luaCode.split('\n');
   const mangled = lines.map(line => {
-    if (/^\s*if\s+.+\s+then\s*$/.test(line) && !line.includes('else')) {
-      const junkVar = generateIlName();
-      return `local ${junkVar}=${heavyMath(42)}; ${line}`;
-    }
-    if (Math.random() < 0.4 && line.trim() !== '') {
+    // solo añadimos basura, sin romper estructuras
+    if (Math.random() < 0.3 && line.trim() !== '') {
       const junkVar = generateIlName();
       return `local ${junkVar}=${heavyMath(Math.floor(Math.random()*1000))}; ${line}`;
     }
@@ -345,49 +322,39 @@ function mangleStatements(luaCode) {
 }
 
 // ═════════════════════════════════════════
-// FUNCIÓN PRINCIPAL DE OFUSCACIÓN MEJORADA
+// FUNCIÓN PRINCIPAL DE OFUSCACIÓN
 // ═════════════════════════════════════════
 function obfuscate(sourceCode) {
   if (!sourceCode) sourceCode = SAFE_PAYLOAD;
-  
+
   let basePayload = sourceCode;
-  
-  // Hoist locals
   basePayload = hoistLocals(basePayload);
-  
-  // Fragmentar el mensaje secreto
+
   const SECRET_MSG = "I really like Rick and Morty";
   const TOTAL_PARTS = "2818373738388392919173737627272727363817256367292822";
   const { code: fragmentCode, msgVarNames } = extremeFragment(SECRET_MSG, TOTAL_PARTS);
-  
+
   let modifiedPayload = basePayload;
-  
-  // Reemplazar la inicialización del mensaje secreto
+
   modifiedPayload = modifiedPayload.replace(
     /local s = "I really like Rick and Morty"/,
     `--[=[ ORIGINAL MESSAGE FRAGMENTED INTO ${TOTAL_PARTS} PARTS ]=] ${fragmentCode} local s = _secretMsg`
   );
-  
+
   modifiedPayload = modifiedPayload.replace(
     /local logger = function\(\)/,
     `--[=[ MSG_VARS: ${msgVarNames.join(',')} ]=] local logger = function()`
   );
-  
-  // Mangle statements
+
   modifiedPayload = mangleStatements(modifiedPayload);
-  
-  const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.0 then -- debugger? seguimos end `;
+
+  const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.0 then -- seguir end `;
   const extraProtections = getExtraProtections();
-  
-  // Construir VM con el payload
+
   const finalVM = build18xVM(modifiedPayload);
-  
-  // Embed runtime – capa extra
   const runtimeWrapped = embedRuntimeWrapper(finalVM);
-  
-  // Envolver en ANTI-DEBUG inofensivo
   const lockedCode = buildAntiDebugLocker(runtimeWrapped);
-  
+
   const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${lockedCode}`;
   return result.replace(/\s+/g, " ").trim();
 }
