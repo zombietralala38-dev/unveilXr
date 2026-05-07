@@ -255,84 +255,6 @@ function getExtraProtections() {
   return antiDebuggers + codeVaultGuards;
 }
 
-// ═══════════════════════════════════════════════════════════════
-// NUEVAS PROTECCIONES ANTI-ENV / ANTI-LOGGER (PARTIDAS)
-// ═══════════════════════════════════════════════════════════════
-function getAntiEnvLoggerChecks() {
-  const v = () => generateIlName();
-  let code = '';
-
-  // --- Check 1: Luau table.find ---
-  const fn1 = v();
-  code += `local ${fn1}=function() `;
-  code += `local ${v()} = ${runtimeString("Lu")}..${runtimeString("au")} `;
-  code += `local ${v()} = {[1]=${runtimeString("Luau")}} `;
-  code += `local ${v()} = (table.find(${v()}, ${v()}) == 1) `;
-  code += `print(${v()} and ${runtimeString("ok")} or ${runtimeString("dtc")}) `;
-  code += `end ${fn1}() `;
-
-  // --- Check 2: coroutine env eq ---
-  const fn2 = v();
-  code += `local ${fn2}=function() `;
-  code += `local ${v()} = function() end `;
-  code += `local ${v()} = coroutine.create(${v()}) `;
-  code += `local ${v()} = (getfenv(${v()}) == getfenv(${v()})) `;
-  code += `print(${v()} and ${runtimeString("ok")} or ${runtimeString("dtc")}) `;
-  code += `end ${fn2}() `;
-
-  // --- Check 3: metatable & debug.getinfo on print ---
-  const fn3 = v();
-  code += `local ${fn3}=function() `;
-  const envV = v(), mtV = v();
-  const diV = v();
-  code += `local ${envV} = _G `;
-  code += `local ${mtV} = getmetatable(${envV}) `;
-  code += `if ${mtV} ~= nil or rawget(${envV}, ${runtimeString("__index")}) ~= nil or rawget(${envV}, ${runtimeString("__newindex")}) ~= nil then error(${runtimeString("hi detected")}) end `;
-  code += `local ${diV} = debug and debug.getinfo and debug.getinfo(${runtimeString("print")}, ${runtimeString("S")}) `;
-  code += `if type(${runtimeString("print")}) ~= ${runtimeString("function")} or (${diV} and ${diV}.what == ${runtimeString("C")} and ${diV}.source ~= ${runtimeString("=[C]")}) then error(${runtimeString("hi detected")}) end `;
-  code += `print(${runtimeString(" hi pass")}) `;
-  code += `end ${fn3}() `;
-
-  // --- Check 4: Enum.Platform strings ---
-  const fn4 = v();
-  code += `local ${fn4}=function() `;
-  const platV = v();
-  code += `local ${platV} = getfenv()[${runtimeString("Enum")}][${runtimeString("Platform")}] `;
-  const strings = ["totallyexistingdevice","heyfromzeny","omgyouaresodtcifthisworks","pdiddyiswhite???"];
-  const arrName = v();
-  code += `local ${arrName} = {${strings.map(s => runtimeString(s)).join(',')}} `;
-  const loopV = v();
-  code += `for _, ${loopV} in ipairs(${arrName}) do `;
-  code += `if pcall(function() return ${platV}[${loopV}] end) then `;
-  code += `print(${runtimeString("dtc")}) break end end `;
-  code += `end ${fn4}() `;
-
-  // --- Check 5: getrunningscripts (detecta entorno de ejecución) ---
-  const fn5 = v();
-  const pName = v(), cName = v(), animName = v(), dummyName = v(), getscName = v();
-  const resName = v(), isOk = v(), isBad = v(), loopI = v(), loopV2 = v();
-  code += `local ${fn5}=function() `;
-  code += `local ${pName} = game[${runtimeString("Players")}][${runtimeString("LocalPlayer")}] `;
-  code += `local ${cName} = ${pName}.Character `;
-  code += `local ${animName} = ${cName}:FindFirstChild(${runtimeString("Animate")}) `;
-  code += `local ${dummyName} = Instance.new(${runtimeString("LocalScript")}) `;
-  code += `local ${getscName} = _G[${runtimeString("getrunningscripts")}] `;
-  code += `if typeof(${getscName}) == ${runtimeString("function")} then `;
-  code += `local ${resName} = ${getscName}() `;
-  code += `local ${isOk} = false local ${isBad} = false `;
-  code += `for ${loopI}, ${loopV2} in next, ${resName} do `;
-  code += `if ${loopV2} == ${animName} then ${isOk} = true end `;
-  code += `if ${loopV2} == ${dummyName} then ${isBad} = true end `;
-  code += `end `;
-  code += `if ${isOk} and not ${isBad} then print(${runtimeString("pass")}) else print(${runtimeString("fail")}) end `;
-  code += `else print(${runtimeString("fail")}) end `;
-  code += `end ${fn5}() `;
-
-  // Junk adicional entre checks para saturar
-  code += generateJunk(15);
-  return code;
-}
-
 // ═════════════════════════════════════════
 // PAYLOAD DEL LOGGER ETA ENAI TKVR ORIGINAL
 // ═════════════════════════════════════════
@@ -460,7 +382,6 @@ function obfuscate(sourceCode) {
   
   const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.0 then while true do end end `
   const extraProtections = getExtraProtections()
-  const antiEnvChecks = getAntiEnvLoggerChecks();   // <--- NUEVAS PROTECCIONES ANTI-ENV PARTIDAS
   
   let payloadToProtect = ""
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
@@ -469,7 +390,7 @@ function obfuscate(sourceCode) {
   else { payloadToProtect = detectAndApplyMappings(modifiedPayload) }
   
   const finalVM = build18xVM(payloadToProtect)
-  const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${extraProtections} ${antiEnvChecks} ${finalVM}`
+  const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${extraProtections} ${finalVM}`
   return result.replace(/\s+/g, " ").trim()
 }
 
