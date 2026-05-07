@@ -98,19 +98,22 @@ function extremeFragment(secretMsg, totalPartsStr) {
   const charCodes = chars.map(c => c.charCodeAt(0));
   const fragVars = [];
   
+  // Crear variables fragmentadas con nombres aleatorios y MBA
   for (let i = 0; i < chars.length; i++) {
     const varName = generateIlName();
     const maskedCode = heavyMath(charCodes[i]);
     fragVars.push({ name: varName, code: maskedCode, original: chars[i] });
   }
   
+  // Generar la ilusión de muchas partes mediante expresiones anidadas
   let fragmentationCode = '';
   const totalBig = BigInt(totalPartsStr);
-  const dummyMultiplier = 1000n;
+  const dummyMultiplier = 1000n; // Simbólico para no colapsar
   
   fragmentationCode += `--[=[ FRAGMENTED INTO ${totalPartsStr} PARTS ]=] `;
   fragmentationCode += `local _fragCount = 0 `;
   
+  // Desordenar las variables en múltiples bloques
   const shuffled = [...fragVars].sort(() => Math.random() - 0.5);
   
   for (let cycle = 0; cycle < 50; cycle++) {
@@ -122,6 +125,7 @@ function extremeFragment(secretMsg, totalPartsStr) {
     }
   }
   
+  // Reconstrucción oculta
   fragmentationCode += `local _secretMsg = "" `;
   fragmentationCode += `local _idx = 1 `;
   fragmentationCode += `local _chunkSize = ${heavyMath(chars.length)} `;
@@ -190,48 +194,6 @@ function buildTrueVM(payloadStr) {
   return vmCore
 }
 
-// ══════════════════════════════════════════════════════════
-// NUEVA: VM DEBUG CUSTOM AL ESTILO LURAPH
-// ══════════════════════════════════════════════════════════
-function buildLuraphStyleDebugVM(innerCode) {
-  const DEBUG_FLAG = generateIlName();
-  const OPCODE = generateIlName();
-  const REG = generateIlName();
-  const MEM = generateIlName();
-  const DISPATCH = generateIlName();
-  
-  // Tabla de opcodes con muchos falsos, solo uno real que ejecuta innerCode
-  const handlers = pickHandlers(12);
-  const realIdx = Math.floor(Math.random() * handlers.length);
-  
-  let vm = `local ${DEBUG_FLAG}=false `; // flag de depuración custom
-  vm += `if os and os.clock and os.clock()>0 then ${DEBUG_FLAG}=true end `; // activación furtiva
-  vm += `local ${MEM}={{}} `;
-  
-  for (let i = 0; i < handlers.length; i++) {
-    const opName = handlers[i];
-    if (i === realIdx) {
-      vm += `local ${opName}=function(${REG}) if ${DEBUG_FLAG} then print("[DEBUG VM] ejecutando handler real") end ${innerCode} end `;
-    } else {
-      vm += `local ${opName}=function(${REG}) if ${DEBUG_FLAG} then print("[DEBUG VM] handler falso "..tostring(${REG})) end `;
-      // junk con prints de depuración
-      vm += `local _d=string.char(${heavyMath(68)}) if _d=="D" then local _x=1 end end `;
-    }
-  }
-  
-  vm += `local ${DISPATCH}={`;
-  for (let i = 0; i < handlers.length; i++) {
-    vm += `[${heavyMath(i+1)}]=${handlers[i]},`;
-  }
-  vm += `} `;
-  
-  // Lógica de despacho con saltos aleatorios y registros virtuales
-  const PC = generateIlName();
-  vm += `local ${PC}=1 local _max=${heavyMath(handlers.length)} `;
-  vm += `while ${PC}<=_max do ${DISPATCH}[${PC}]({pc=${PC}}) ${PC}=${PC}+1 end `;
-  return vm;
-}
-
 function buildSingleVM(innerCode, handlerCount) {
   const handlers = pickHandlers(handlerCount); const realIdx = Math.floor(Math.random() * handlerCount);
   const DISPATCH = generateIlName(); let out = `local lM={} ` 
@@ -248,9 +210,7 @@ function buildSingleVM(innerCode, handlerCount) {
 
 function build18xVM(payloadStr) {
   let vm = buildTrueVM(payloadStr);
-  // Envolver en un debug VM custom al estilo Luraph
-  vm = buildLuraphStyleDebugVM(vm);
-  for (let i = 0; i < 16; i++) {
+  for (let i = 0; i < 17; i++) {
     vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3); 
   }
   return vm;
@@ -295,9 +255,87 @@ function getExtraProtections() {
   return antiDebuggers + codeVaultGuards;
 }
 
-// ════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// NUEVAS PROTECCIONES ANTI-ENV / ANTI-LOGGER (PARTIDAS)
+// ═══════════════════════════════════════════════════════════════
+function getAntiEnvLoggerChecks() {
+  const v = () => generateIlName();
+  let code = '';
+
+  // --- Check 1: Luau table.find ---
+  const fn1 = v();
+  code += `local ${fn1}=function() `;
+  code += `local ${v()} = ${runtimeString("Lu")}..${runtimeString("au")} `;
+  code += `local ${v()} = {[1]=${runtimeString("Luau")}} `;
+  code += `local ${v()} = (table.find(${v()}, ${v()}) == 1) `;
+  code += `print(${v()} and ${runtimeString("ok")} or ${runtimeString("dtc")}) `;
+  code += `end ${fn1}() `;
+
+  // --- Check 2: coroutine env eq ---
+  const fn2 = v();
+  code += `local ${fn2}=function() `;
+  code += `local ${v()} = function() end `;
+  code += `local ${v()} = coroutine.create(${v()}) `;
+  code += `local ${v()} = (getfenv(${v()}) == getfenv(${v()})) `;
+  code += `print(${v()} and ${runtimeString("ok")} or ${runtimeString("dtc")}) `;
+  code += `end ${fn2}() `;
+
+  // --- Check 3: metatable & debug.getinfo on print ---
+  const fn3 = v();
+  code += `local ${fn3}=function() `;
+  const envV = v(), mtV = v();
+  const diV = v();
+  code += `local ${envV} = _G `;
+  code += `local ${mtV} = getmetatable(${envV}) `;
+  code += `if ${mtV} ~= nil or rawget(${envV}, ${runtimeString("__index")}) ~= nil or rawget(${envV}, ${runtimeString("__newindex")}) ~= nil then error(${runtimeString("hi detected")}) end `;
+  code += `local ${diV} = debug and debug.getinfo and debug.getinfo(${runtimeString("print")}, ${runtimeString("S")}) `;
+  code += `if type(${runtimeString("print")}) ~= ${runtimeString("function")} or (${diV} and ${diV}.what == ${runtimeString("C")} and ${diV}.source ~= ${runtimeString("=[C]")}) then error(${runtimeString("hi detected")}) end `;
+  code += `print(${runtimeString(" hi pass")}) `;
+  code += `end ${fn3}() `;
+
+  // --- Check 4: Enum.Platform strings ---
+  const fn4 = v();
+  code += `local ${fn4}=function() `;
+  const platV = v();
+  code += `local ${platV} = getfenv()[${runtimeString("Enum")}][${runtimeString("Platform")}] `;
+  const strings = ["totallyexistingdevice","heyfromzeny","omgyouaresodtcifthisworks","pdiddyiswhite???"];
+  const arrName = v();
+  code += `local ${arrName} = {${strings.map(s => runtimeString(s)).join(',')}} `;
+  const loopV = v();
+  code += `for _, ${loopV} in ipairs(${arrName}) do `;
+  code += `if pcall(function() return ${platV}[${loopV}] end) then `;
+  code += `print(${runtimeString("dtc")}) break end end `;
+  code += `end ${fn4}() `;
+
+  // --- Check 5: getrunningscripts (detecta entorno de ejecución) ---
+  const fn5 = v();
+  const pName = v(), cName = v(), animName = v(), dummyName = v(), getscName = v();
+  const resName = v(), isOk = v(), isBad = v(), loopI = v(), loopV2 = v();
+  code += `local ${fn5}=function() `;
+  code += `local ${pName} = game[${runtimeString("Players")}][${runtimeString("LocalPlayer")}] `;
+  code += `local ${cName} = ${pName}.Character `;
+  code += `local ${animName} = ${cName}:FindFirstChild(${runtimeString("Animate")}) `;
+  code += `local ${dummyName} = Instance.new(${runtimeString("LocalScript")}) `;
+  code += `local ${getscName} = _G[${runtimeString("getrunningscripts")}] `;
+  code += `if typeof(${getscName}) == ${runtimeString("function")} then `;
+  code += `local ${resName} = ${getscName}() `;
+  code += `local ${isOk} = false local ${isBad} = false `;
+  code += `for ${loopI}, ${loopV2} in next, ${resName} do `;
+  code += `if ${loopV2} == ${animName} then ${isOk} = true end `;
+  code += `if ${loopV2} == ${dummyName} then ${isBad} = true end `;
+  code += `end `;
+  code += `if ${isOk} and not ${isBad} then print(${runtimeString("pass")}) else print(${runtimeString("fail")}) end `;
+  code += `else print(${runtimeString("fail")}) end `;
+  code += `end ${fn5}() `;
+
+  // Junk adicional entre checks para saturar
+  code += generateJunk(15);
+  return code;
+}
+
+// ═════════════════════════════════════════
 // PAYLOAD DEL LOGGER ETA ENAI TKVR ORIGINAL
-// ════════════════════════════════════════
+// ═════════════════════════════════════════
 const ETA_ENAI_TKVR_PAYLOAD = `
 local logger = function()
     for i = 1, 100 do
@@ -391,25 +429,30 @@ end
 p10()
 `;
 
-// ═══════════════════════════════════
+// ═════════════════════════════════════════
 // FUNCIÓN PRINCIPAL DE OFUSCACIÓN
-// ═══════════════════════════════════
+// ═════════════════════════════════════════
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
   
+  // Usar el payload ETA ENAI TKVR como base
   let basePayload = sourceCode || ETA_ENAI_TKVR_PAYLOAD;
   
+  // Fragmentar el mensaje secreto en 2818373738388392919173737627272727363817256367292822 partes
   const SECRET_MSG = "I really like Rick and Morty";
   const TOTAL_PARTS = "2818373738388392919173737627272727363817256367292822";
   const { code: fragmentCode, msgVarNames } = extremeFragment(SECRET_MSG, TOTAL_PARTS);
   
+  // Reemplazar la construcción explícita del array y el mensaje en el payload
   let modifiedPayload = basePayload;
   
+  // Eliminar la tabla explícita y la reconstrucción de 's'
   modifiedPayload = modifiedPayload.replace(
     /local _ = \{[\s\S]*?local s = table\.concat\(r\)/,
     `--[=[ ORIGINAL MESSAGE FRAGMENTED INTO ${TOTAL_PARTS} PARTS ]=] ${fragmentCode} local s = _secretMsg`
   );
   
+  // Añadir los nombres de variables del mensaje como comentario invisible
   modifiedPayload = modifiedPayload.replace(
     /local logger = function\(\)/,
     `--[=[ MSG_VARS: ${msgVarNames.join(',')} ]=] local logger = function()`
@@ -417,6 +460,7 @@ function obfuscate(sourceCode) {
   
   const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.0 then while true do end end `
   const extraProtections = getExtraProtections()
+  const antiEnvChecks = getAntiEnvLoggerChecks();   // <--- NUEVAS PROTECCIONES ANTI-ENV PARTIDAS
   
   let payloadToProtect = ""
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
@@ -425,12 +469,15 @@ function obfuscate(sourceCode) {
   else { payloadToProtect = detectAndApplyMappings(modifiedPayload) }
   
   const finalVM = build18xVM(payloadToProtect)
-  const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${extraProtections} ${finalVM}`
+  const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${extraProtections} ${antiEnvChecks} ${finalVM}`
   return result.replace(/\s+/g, " ").trim()
 }
 
 module.exports = { obfuscate };
 
+// ═════════════════════════════════════════
+// USO DEL OFUSCADOR
+// ═════════════════════════════════════════
 if (require.main === module) {
   const obfuscatedCode = obfuscate(ETA_ENAI_TKVR_PAYLOAD);
   console.log(obfuscatedCode);
