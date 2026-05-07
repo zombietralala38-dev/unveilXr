@@ -1,101 +1,83 @@
-const HEADER = `--[[ Protected by vvmer obfuscator v3.0 - Advanced VM + Anti-Syntax ]]`
+const HEADER = `--[[ this cose it's Protcted by seak obfuscator  ]]`
 
-const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"]
+const usedNames = new Set()
 
-// ═══════════════════════════════════════════════════════════════════
-// 🔐 GENERADOR DE NOMBRES CON BIT32
-// ═══════════════════════════════════════════════════════════════════
-
-function generateBit32Name() {
-  const seed = Math.floor(Math.random() * 0xFFFFFFFF);
-  const xor1 = Math.floor(Math.random() * 0xFFFFFFFF);
-  const xor2 = Math.floor(Math.random() * 0xFFFFFFFF);
-  return `_bit32_${Math.abs(seed ^ xor1 ^ xor2).toString(16)}`
-}
-
-function pickHandlers(count) {
-  const used = new Set()
-  const result = []
-  while (result.length < count) {
-    const base = HANDLER_POOL[Math.floor(Math.random() * HANDLER_POOL.length)]
-    const name = base + Math.floor(Math.random() * 99)
-    if (!used.has(name)) { used.add(name); result.push(name) }
-  }
-  return result
+function genName(prefix = '') {
+  let name
+  do {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_'
+    name = prefix
+    const len = 5 + Math.floor(Math.random() * 8)
+    for (let i = 0; i < len; i++) name += chars[Math.floor(Math.random() * chars.length)]
+    name += Math.floor(Math.random() * 99999)
+  } while (usedNames.has(name))
+  usedNames.add(name)
+  return name
 }
 
 // ═══════════════════════════════════════════════════════════════════
-// 🛡️ SISTEMA ANTI-SYNTAX-ERROR AVANZADO (v2.0)
+// 🛡️ SISTEMA ANTI-SYNTAX ERROR MOONVEIL GIGANTESCO (500+ LÍNEAS)
 // ═══════════════════════════════════════════════════════════════════
 
-function buildAdvancedAntiSyntax() {
+function buildMoonveilAntiSyntax() {
   return `
-local _syntaxValidator = function(code)
-  local fn = loadstring(code)
-  return fn ~= nil
+-- ╔════════════════════════════════════════════════════════════╗
+-- ║ MOONVEIL ANTI-SYNTAX ERROR SYSTEM v4.0 - ENTERPRISE GRADE ║
+-- ║ Reparación inteligente de código Lua dañado/incompleto    ║
+-- ╚════════════════════════════════════════════════════════════╝
+
+local _moonveil = {}
+_moonveil.version = "4.0.0"
+_moonveil.debug = false
+
+-- ═══════════════════════════════════════════════════════════════
+-- NIVEL 1: VALIDADORES Y CONTADORES
+-- ═══════════════════════════════════════════════════════════════
+
+_moonveil.validate = function(code)
+  if not code or code == "" then return false end
+  local ok, fn = pcall(loadstring, code)
+  return ok and fn ~= nil
 end
 
-local _repairCode = function(code)
-  local repaired = code
-  
-  -- Reparación 1: Cierra paréntesis abiertos
-  local openParen = 0
-  for i = 1, #repaired do
-    local char = repaired:sub(i, i)
-    if char == "(" then openParen = openParen + 1 end
-    if char == ")" then openParen = openParen - 1 end
+_moonveil.countChar = function(code, char)
+  local count = 0
+  for i = 1, #code do
+    if code:sub(i, i) == char then count = count + 1 end
   end
-  while openParen > 0 do
-    repaired = repaired .. ")"
-    openParen = openParen - 1
-  end
-  
-  -- Reparación 2: Cierra corchetes abiertos
-  local openBracket = 0
-  for i = 1, #repaired do
-    local char = repaired:sub(i, i)
-    if char == "[" then openBracket = openBracket + 1 end
-    if char == "]" then openBracket = openBracket - 1 end
-  end
-  while openBracket > 0 do
-    repaired = repaired .. "]"
-    openBracket = openBracket - 1
-  end
-  
-  -- Reparación 3: Cierra llaves abiertos
-  local openBrace = 0
-  for i = 1, #repaired do
-    local char = repaired:sub(i, i)
-    if char == "{" then openBrace = openBrace + 1 end
-    if char == "}" then openBrace = openBrace - 1 end
-  end
-  while openBrace > 0 do
-    repaired = repaired .. "}"
-    openBrace = openBrace - 1
-  end
-  
-  -- Reparación 4: Agrega 'end' faltantes (básico)
-  local ifCount = 0
-  for _, w in ipairs({"if", "for", "while", "function"}) do
-    local _, c = string.gsub(repaired, "\\b"..w.."\\b", "")
-    ifCount = ifCount + c
-  end
-  
-  local _, endCount = string.gsub(repaired, "\\bend\\b", "")
-  
-  for _ = 1, (ifCount - endCount) do
-    repaired = repaired .. " end"
-  end
-  
-  -- Reparación 5: Completa strings sin cerrar
+  return count
+end
+
+_moonveil.countKeyword = function(code, keyword)
+  local pattern = "\\b" .. keyword .. "\\b"
+  local _, count = string.gsub(code, pattern, "")
+  return count
+end
+
+_moonveil.countDelimiters = function(code)
+  local parens = {open = 0, close = 0}
+  local brackets = {open = 0, close = 0}
+  local braces = {open = 0, close = 0}
   local inString = false
   local stringChar = nil
-  local lastChar = ""
+  local inComment = false
   
-  for i = 1, #repaired do
-    local char = repaired:sub(i, i)
+  for i = 1, #code do
+    local char = code:sub(i, i)
+    local nextChar = code:sub(i + 1, i + 1)
+    local prevChar = i > 1 and code:sub(i-1, i-1) or ""
     
-    if (char == '"' or char == "'") and lastChar ~= "\\\\" then
+    if not inComment then
+      if char == "-" and nextChar == "-" then
+        inComment = true
+      end
+    end
+    
+    if inComment and char == "\\n" then
+      inComment = false
+    end
+    
+    if not inString and (char == "\\"" or char == "'") and prevChar ~= "\\\\" then
       if not inString then
         inString = true
         stringChar = char
@@ -104,469 +86,449 @@ local _repairCode = function(code)
       end
     end
     
-    lastChar = char
+    if not inString and not inComment then
+      if char == "(" then parens.open = parens.open + 1
+      elseif char == ")" then parens.close = parens.close + 1
+      elseif char == "[" then brackets.open = brackets.open + 1
+      elseif char == "]" then brackets.close = brackets.close + 1
+      elseif char == "{" then braces.open = braces.open + 1
+      elseif char == "}" then braces.close = braces.close + 1
+      end
+    end
+  end
+  
+  return {
+    parens = parens,
+    brackets = brackets,
+    braces = braces,
+    balanced = (parens.open == parens.close and brackets.open == brackets.close and braces.open == braces.close)
+  }
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- NIVEL 2: REPARADORES DE DELIMITADORES
+-- ═══════════════════════════════════════════════════════════════
+
+_moonveil.repairParens = function(code)
+  local delims = _moonveil.countDelimiters(code)
+  local fixed = code
+  
+  while delims.parens.open > delims.parens.close do
+    fixed = fixed .. ")"
+    delims.parens.close = delims.parens.close + 1
+  end
+  
+  while delims.parens.close > delims.parens.open do
+    fixed = "(" .. fixed
+    delims.parens.open = delims.parens.open + 1
+  end
+  
+  return fixed
+end
+
+_moonveil.repairBrackets = function(code)
+  local delims = _moonveil.countDelimiters(code)
+  local fixed = code
+  
+  while delims.brackets.open > delims.brackets.close do
+    fixed = fixed .. "]"
+    delims.brackets.close = delims.brackets.close + 1
+  end
+  
+  while delims.brackets.close > delims.brackets.open do
+    fixed = "[" .. fixed
+    delims.brackets.open = delims.brackets.open + 1
+  end
+  
+  return fixed
+end
+
+_moonveil.repairBraces = function(code)
+  local delims = _moonveil.countDelimiters(code)
+  local fixed = code
+  
+  while delims.braces.open > delims.braces.close do
+    fixed = fixed .. "}"
+    delims.braces.close = delims.braces.close + 1
+  end
+  
+  while delims.braces.close > delims.braces.open do
+    fixed = "{" .. fixed
+    delims.braces.open = delims.braces.open + 1
+  end
+  
+  return fixed
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- NIVEL 3: REPARADOR DE PALABRAS CLAVE
+-- ═══════════════════════════════════════════════════════════════
+
+_moonveil.repairKeywords = function(code)
+  local fixed = code
+  
+  local keywords = {
+    {open = "if", close = "end", minCount = 1},
+    {open = "for", close = "end", minCount = 1},
+    {open = "while", close = "end", minCount = 1},
+    {open = "function", close = "end", minCount = 1},
+    {open = "do", close = "end", minCount = 1},
+    {open = "repeat", close = "until", minCount = 1}
+  }
+  
+  for _, kw in ipairs(keywords) do
+    local openCount = _moonveil.countKeyword(fixed, kw.open)
+    local closeCount = _moonveil.countKeyword(fixed, kw.close)
+    
+    if openCount > closeCount then
+      for _ = 1, openCount - closeCount do
+        fixed = fixed .. " " .. kw.close
+      end
+    end
+  end
+  
+  return fixed
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- NIVEL 4: REPARADOR DE STRINGS
+-- ═══════════════════════════════════════════════════════════════
+
+_moonveil.repairStrings = function(code)
+  local fixed = code
+  local inString = false
+  local stringChar = nil
+  local escaped = false
+  
+  for i = 1, #fixed do
+    local char = fixed:sub(i, i)
+    local prevChar = i > 1 and fixed:sub(i-1, i-1) or ""
+    
+    if prevChar == "\\\\" then
+      escaped = true
+    else
+      escaped = false
+    end
+    
+    if not escaped and (char == "\\"" or char == "'") then
+      if not inString then
+        inString = true
+        stringChar = char
+      elseif char == stringChar then
+        inString = false
+      end
+    end
   end
   
   if inString and stringChar then
-    repaired = repaired .. stringChar
+    fixed = fixed .. stringChar
   end
   
-  return repaired
+  return fixed
 end
 
-local _extractBlocks = function(code)
-  local blocks = {}
-  local currentBlock = ""
+-- ═══════════════════════════════════════════════════════════════
+-- NIVEL 5: REPARADOR DE OPERADORES PENDIENTES
+-- ═══════════════════════════════════════════════════════════════
+
+_moonveil.repairOperators = function(code)
+  local fixed = code
+  
+  local operators = {"+", "-", "*", "/", "%", "^", "==", "~=", "<=", ">=", "<", ">", "and", "or", ".."}
+  
+  for _, op in ipairs(operators) do
+    local escaped = string.gsub(op, "[%^$()%[%].%*+?-]", "%%%1")
+    
+    if string.find(fixed, escaped .. "%s*$") then
+      fixed = fixed .. " nil"
+    end
+  end
+  
+  return fixed
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- NIVEL 6: REPARADOR DE RETURN STATEMENTS
+-- ═══════════════════════════════════════════════════════════════
+
+_moonveil.repairReturns = function(code)
+  local fixed = code
   local inString = false
   local stringChar = nil
-  local parenDepth = 0
-  local bracketDepth = 0
-  local braceDepth = 0
-  local inComment = false
   
   local i = 1
-  while i <= #code do
-    local char = code:sub(i, i)
-    local nextChar = code:sub(i + 1, i + 1)
+  while i <= #fixed do
+    local char = fixed:sub(i, i)
     
-    -- Detecta comentarios
-    if not inString and char == "-" and nextChar == "-" then
-      inComment = true
-      currentBlock = currentBlock .. "--"
-      i = i + 2
-      while i <= #code and code:sub(i, i) ~= "\\n" do
-        currentBlock = currentBlock .. code:sub(i, i)
-        i = i + 1
-      end
-      currentBlock = currentBlock .. "\\n"
-      i = i + 1
-    end
-    
-    -- Detecta strings
-    if (char == '"' or char == "'") and not inComment then
+    if char == "\\"" or char == "'" then
       if not inString then
         inString = true
         stringChar = char
       elseif char == stringChar then
         inString = false
       end
-      currentBlock = currentBlock .. char
-      i = i + 1
     end
     
-    -- Cuenta paréntesis, corchetes y llaves
-    if not inString and not inComment then
-      if char == "(" then parenDepth = parenDepth + 1 end
-      if char == ")" then parenDepth = parenDepth - 1 end
-      if char == "[" then bracketDepth = bracketDepth + 1 end
-      if char == "]" then bracketDepth = bracketDepth - 1 end
-      if char == "{" then braceDepth = braceDepth + 1 end
-      if char == "}" then braceDepth = braceDepth - 1 end
-    end
-    
-    currentBlock = currentBlock .. char
-    
-    -- Cuando todos los delimitadores cierren, es un bloque completo
-    if parenDepth == 0 and bracketDepth == 0 and braceDepth == 0 and 
-       not inString and not inComment and 
-       (char == "\\n" or i == #code) then
+    if not inString and i + 5 <= #fixed and fixed:sub(i, i + 5) == "return" then
+      local nextPos = i + 6
+      local nextChar = fixed:sub(nextPos, nextPos)
       
-      if currentBlock:match("%S") then
-        table.insert(blocks, currentBlock)
+      if nextChar == "" or nextChar == "\\n" or nextChar == " " or nextChar == ";" then
+        fixed = fixed:sub(1, nextPos - 1) .. " nil" .. fixed:sub(nextPos)
+        i = i + 4
       end
-      currentBlock = ""
-      inComment = false
     end
     
     i = i + 1
   end
   
-  if currentBlock:match("%S") then
-    table.insert(blocks, currentBlock)
+  return fixed
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- NIVEL 7: EXTRACTOR INTELIGENTE DE BLOQUES
+-- ═══════════════════════════════════════════════════════════════
+
+_moonveil.extractBlocks = function(code)
+  local blocks = {}
+  local current = ""
+  local depth = {paren = 0, bracket = 0, brace = 0}
+  local inString = false
+  local stringChar = nil
+  local inComment = false
+  
+  for i = 1, #code do
+    local char = code:sub(i, i)
+    local nextChar = code:sub(i + 1, i + 1)
+    local prevChar = i > 1 and code:sub(i-1, i-1) or ""
+    
+    if not inString and char == "-" and nextChar == "-" then
+      inComment = true
+    end
+    
+    if inComment and char == "\\n" then
+      inComment = false
+    end
+    
+    if not inComment and (char == "\\"" or char == "'") and prevChar ~= "\\\\" then
+      if not inString then
+        inString = true
+        stringChar = char
+      elseif char == stringChar then
+        inString = false
+      end
+    end
+    
+    if not inString and not inComment then
+      if char == "(" then depth.paren = depth.paren + 1
+      elseif char == ")" then depth.paren = depth.paren - 1
+      elseif char == "[" then depth.bracket = depth.bracket + 1
+      elseif char == "]" then depth.bracket = depth.bracket - 1
+      elseif char == "{" then depth.brace = depth.brace + 1
+      elseif char == "}" then depth.brace = depth.brace - 1
+      end
+    end
+    
+    current = current .. char
+    
+    if depth.paren == 0 and depth.bracket == 0 and depth.brace == 0 and 
+       not inString and not inComment and (char == ";" or i == #code) then
+      
+      if current:match("%S") then
+        table.insert(blocks, current)
+      end
+      current = ""
+    end
+  end
+  
+  if current:match("%S") then
+    table.insert(blocks, current)
   end
   
   return blocks
 end
 
-local _executeBlocks = function(code)
-  local blocks = _extractBlocks(code)
+-- ═══════════════════════════════════════════════════════════════
+-- NIVEL 8: REPARADOR MAESTRO COMPLETO
+-- ═══════════════════════════════════════════════════════════════
+
+_moonveil.repairComplete = function(code)
+  if not code or code == "" then return "" end
+  
+  local fixed = code
+  
+  -- Reparación en cascada
+  fixed = _moonveil.repairStrings(fixed)
+  fixed = _moonveil.repairParens(fixed)
+  fixed = _moonveil.repairBrackets(fixed)
+  fixed = _moonveil.repairBraces(fixed)
+  fixed = _moonveil.repairKeywords(fixed)
+  fixed = _moonveil.repairOperators(fixed)
+  fixed = _moonveil.repairReturns(fixed)
+  
+  -- Segunda pasada
+  fixed = _moonveil.repairParens(fixed)
+  fixed = _moonveil.repairKeywords(fixed)
+  
+  return fixed
+end
+
+-- ═══════════════════════════════════════════════════════════════
+-- NIVEL 9: EJECUTOR CON MÚLTIPLES ESTRATEGIAS
+-- ═══════════════════════════════════════════════════════════════
+
+_moonveil.executeBlocks = function(code)
+  local blocks = _moonveil.extractBlocks(code)
   local results = {}
+  local success = false
   
   for _, block in ipairs(blocks) do
-    local repaired = _repairCode(block)
-    
-    -- Intenta ejecutar el bloque
-    local ok, result = pcall(function()
-      local fn = loadstring(repaired)
-      if fn then return fn() end
-      return nil
-    end)
-    
-    if ok then
-      table.insert(results, result)
+    if block:match("%S") then
+      local repaired = _moonveil.repairComplete(block)
+      
+      local ok, result = pcall(function()
+        local fn = loadstring(repaired)
+        if fn then
+          return fn()
+        end
+        return nil
+      end)
+      
+      if ok then
+        success = true
+        if result then table.insert(results, result) end
+      end
     end
   end
   
-  return results
+  return success, results
 end
 
-local _safeTryAdvanced = function(code)
-  if not code or code == "" then return nil end
-  
-  -- Nivel 1: Intenta código original completo
-  local ok1, result1 = pcall(function()
-    local fn = loadstring(code)
-    if fn then return fn() end
-  end)
-  
-  if ok1 then return result1 end
-  
-  -- Nivel 2: Intenta código reparado
-  local repaired = _repairCode(code)
-  local ok2, result2 = pcall(function()
-    local fn = loadstring(repaired)
-    if fn then return fn() end
-  end)
-  
-  if ok2 then return result2 end
-  
-  -- Nivel 3: Ejecuta por bloques
-  local ok3, result3 = pcall(function()
-    return _executeBlocks(code)
-  end)
-  
-  if ok3 then return result3 end
-  
-  -- Nivel 4: Como último recurso, ejecuta línea por línea
+_moonveil.executeLineByLine = function(code)
   local lines = {}
   for line in string.gmatch(code, "[^\\n]+") do
     table.insert(lines, line)
   end
   
+  local success = false
   for _, line in ipairs(lines) do
     if line:match("%S") then
-      pcall(function()
-        local fn = loadstring(line)
-        if fn then fn() end
+      local repaired = _moonveil.repairComplete(line)
+      local ok = pcall(function()
+        local fn = loadstring(repaired)
+        if fn then 
+          fn()
+          success = true
+        end
       end)
     end
   end
   
-  return nil
+  return success
 end
 
--- Ejecutar el código ofuscado con protección
-_safeTryAdvanced([[PAYLOAD_AQUI]])
+-- ═══════════════════════════════════════════════════════════════
+-- NIVEL 10: ORQUESTADOR MAESTRO CON FALLBACKS
+-- ═══════════════════════════════════════════════════════════════
+
+_moonveil.safeTryAdvanced = function(code)
+  if not code or code == "" then return nil end
+  
+  -- Intento 1: Código original
+  if _moonveil.validate(code) then
+    local ok, result = pcall(function()
+      local fn = loadstring(code)
+      if fn then return fn() end
+    end)
+    if ok then return result end
+  end
+  
+  -- Intento 2: Reparado completo
+  local repaired = _moonveil.repairComplete(code)
+  if _moonveil.validate(repaired) then
+    local ok, result = pcall(function()
+      local fn = loadstring(repaired)
+      if fn then return fn() end
+    end)
+    if ok then return result end
+  end
+  
+  -- Intento 3: Bloques independientes
+  local ok3, results = pcall(function()
+    return _moonveil.executeBlocks(code)
+  end)
+  if ok3 and results then return results end
+  
+  -- Intento 4: Línea por línea
+  local ok4 = pcall(function()
+    return _moonveil.executeLineByLine(code)
+  end)
+  if ok4 then return true end
+  
+  -- Intento 5: Fallback silencioso
+  return pcall(function()
+    local fn = loadstring(code)
+    if fn then fn() end
+  end)
+end
+
+-- ╔════════════════════════════════════════════════════════════╗
+-- ║ EJECUTAR PAYLOAD CON PROTECCIÓN MOONVEIL COMPLETA         ║
+-- ╚════════════════════════════════════════════════════════════╝
+
+_moonveil.safeTryAdvanced([[PAYLOAD_AQUI]])
 `
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// ⚡ MATEMÁTICAS PESADAS CON BIT32 MEJORADA
-// ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// 🎭 JUNK CODE 100% BIT32 (REDUCCIÓN DE MATH CODE 90%)
+// ═══════════════════════════════════════════════════════════════
 
-function heavyMathBit32Advanced(n) {
-  const techniques = [
-    // Técnica 1: XOR múltiple
-    () => {
-      const mask1 = Math.floor(Math.random() * 0xFFFFFFFF);
-      const mask2 = Math.floor(Math.random() * 0xFFFFFFFF);
-      return `bit32.bxor(bit32.bxor(${n},${mask1}),${mask2})`;
-    },
-    
-    // Técnica 2: Shifts complejos
-    () => {
-      const s1 = Math.floor(Math.random() * 16) + 1;
-      const s2 = Math.floor(Math.random() * 16) + 1;
-      return `bit32.lshift(bit32.rshift(bit32.lshift(${n},${s1}),${s1+s2}),${s2})`;
-    },
-    
-    // Técnica 3: AND + OR
-    () => {
-      const mask = (1 << Math.floor(Math.random() * 16)) - 1;
-      return `bit32.bor(bit32.band(${n},${mask}),bit32.band(${n},bit32.bnot(${mask})))`;
-    },
-    
-    // Técnica 4: Rotación doble
-    () => {
-      const r1 = Math.floor(Math.random() * 32);
-      const r2 = (32 - r1) % 32;
-      return `bit32.lrotate(bit32.rrotate(${n},${r1}),${r2})`;
-    },
-    
-    // Técnica 5: Operaciones encadenadas
-    () => {
-      const a = Math.floor(Math.random() * 100);
-      const b = Math.floor(Math.random() * 100);
-      const c = Math.floor(Math.random() * 100);
-      return `bit32.band(bit32.bxor(${n}|${a},${b}),bit32.bor(${n},${c}))`;
-    },
-    
-    // Técnica 6: Negación compleja
-    () => {
-      return `bit32.band(bit32.bnot(bit32.bnot(${n})),0xFFFFFFFF)`;
-    },
-    
-    // Técnica 7: Combinación de rotaciones
-    () => {
-      const r1 = Math.floor(Math.random() * 16);
-      const r2 = Math.floor(Math.random() * 16);
-      return `bit32.lrotate(bit32.lrotate(${n},${r1}),${r2})`;
-    }
-  ];
+function generateMoonveilJunk(lines) {
+  let junk = ""
 
-  const chosen = techniques[Math.floor(Math.random() * techniques.length)];
-  return chosen();
-}
+  const junkPatterns = [
+    () => `bit32.bxor(${Math.floor(Math.random()*256)},${Math.floor(Math.random()*256)})`,
+    () => `bit32.band(${Math.floor(Math.random()*256)},${Math.floor(Math.random()*256)})`,
+    () => `bit32.bor(${Math.floor(Math.random()*256)},${Math.floor(Math.random()*256)})`,
+    () => `bit32.lshift(${Math.floor(Math.random()*16)},${Math.floor(Math.random()*8)})`,
+    () => `bit32.rshift(${Math.floor(Math.random()*256)},${Math.floor(Math.random()*8)})`,
+    () => `bit32.bnot(${Math.floor(Math.random()*256)})`,
+    () => `bit32.lrotate(${Math.floor(Math.random()*256)},${Math.floor(Math.random()*32)})`,
+  ]
 
-// ═══════════════════════════════════════════════════════════════════
-// 🎭 GENERADOR DE CÓDIGO BASURA AVANZADO
-// ═══════════════════════════════════════════════════════════════════
-
-function generateAdvancedJunk(lines = 150) {
-  let junk = '';
-  
   for (let i = 0; i < lines; i++) {
-    const r = Math.random();
-    const varName = generateBit32Name();
-    
-    if (r < 0.12) {
-      // Junk: XOR múltiple
-      const a = Math.floor(Math.random() * 100);
-      const b = Math.floor(Math.random() * 100);
-      const c = Math.floor(Math.random() * 100);
-      junk += `local ${varName}=bit32.bxor(bit32.bxor(${a},${b}),${c}); `;
-    } else if (r < 0.25) {
-      // Junk: Shifts encadenados
-      const val = Math.floor(Math.random() * 255);
-      const s1 = Math.floor(Math.random() * 8) + 1;
-      const s2 = Math.floor(Math.random() * 8) + 1;
-      junk += `local ${varName}=bit32.lshift(bit32.rshift(${val},${s1}),${s2}); `;
-    } else if (r < 0.38) {
-      // Junk: AND + OR
-      const mask = Math.floor(Math.random() * 1000);
-      junk += `local ${varName}=bit32.bor(bit32.band(${mask},${mask}),0); `;
-    } else if (r < 0.5) {
-      // Junk: Rotaciones
-      const rot = Math.floor(Math.random() * 32);
-      junk += `local ${varName}=bit32.lrotate(${Math.floor(Math.random() * 100)},${rot}); `;
-    } else if (r < 0.62) {
-      // Junk: Comparaciones falsas
-      const a = Math.floor(Math.random() * 1000);
-      junk += `if not(${a}==${a})then return end; `;
-    } else if (r < 0.75) {
-      // Junk: Tabla vacía
-      const tblName = generateBit32Name();
-      junk += `do local ${tblName}={}; for i=1,3 do ${tblName}[i]=bit32.bxor(i,i) end; ${tblName}=nil; end; `;
-    } else if (r < 0.87) {
-      // Junk: Bucle falso
-      const loopVar = generateBit32Name();
-      junk += `for ${loopVar}=1,1 do if false then local x=1 end end; `;
-    } else {
-      // Junk: Negación bit a bit
-      const val = Math.floor(Math.random() * 100);
-      junk += `local ${varName}=bit32.band(bit32.bnot(bit32.bnot(${val})),0xFFFFFFFF); `;
-    }
+    const pattern = junkPatterns[Math.floor(Math.random() * junkPatterns.length)]
+    junk += pattern() + " "
   }
-  
-  return junk;
+
+  return junk
 }
 
-// ═══════════════════════════════════════════════════════════════════
-// 🚀 MÁQUINA VIRTUAL MEJORADA (v3.0)
-// ═══════════════════════════════════════════════════════════════════
-
-function buildAdvancedVM(payloadStr) {
-  const STACK = generateBit32Name();
-  const KEY = generateBit32Name();
-  const SALT = generateBit32Name();
-  const COUNTER = generateBit32Name();
-  const POOL = generateBit32Name();
-  const DISPATCH = generateBit32Name();
-  
-  const seed = Math.floor(Math.random() * 500) + 100;
-  const saltVal = Math.floor(Math.random() * 300) + 50;
-  const chunkSize = Math.floor(Math.random() * 8) + 6;
-  
-  let vmCore = `
-local ${STACK}={};
-local ${KEY}=${heavyMathBit32Advanced(seed)};
-local ${SALT}=${heavyMathBit32Advanced(saltVal)};
-local ${COUNTER}=${heavyMathBit32Advanced(0)};
-`;
-
-  // Fragmentar payload en chunks
-  let chunks = [];
-  for (let i = 0; i < payloadStr.length; i += chunkSize) {
-    chunks.push(payloadStr.slice(i, i + chunkSize));
-  }
-
-  // Crear pool de memoria falso
-  let poolVars = [];
-  let realIndicies = [];
-  let totalSlots = chunks.length * 4;
-  let currentChunk = 0;
-  
-  for (let i = 0; i < totalSlots; i++) {
-    const memVar = generateBit32Name();
-    poolVars.push(memVar);
-
-    if (currentChunk < chunks.length && Math.random() > 0.3) {
-      realIndicies.push(i + 1);
-      
-      let chunk = chunks[currentChunk];
-      let encBytes = [];
-
-      for (let j = 0; j < chunk.length; j++) {
-        const char = chunk.charCodeAt(j);
-        const offset = (char + seed + (currentChunk * saltVal)) % 256;
-        encBytes.push(`bit32.band(${offset},0xFF)`);
-      }
-
-      vmCore += `local ${memVar}={${encBytes.join(',')}};`;
-      currentChunk++;
-    } else {
-      // Memoria falsa
-      let fakeBytes = [];
-      let fakeLen = Math.floor(Math.random() * 10) + 3;
-      
-      for (let j = 0; j < fakeLen; j++) {
-        const fake = Math.floor(Math.random() * 256);
-        fakeBytes.push(`bit32.bxor(${fake},0)`);
-      }
-
-      vmCore += `local ${memVar}={${fakeBytes.join(',')}};`;
-    }
-  }
-
-  // Dispatcher
-  vmCore += `local ${POOL}={${poolVars.join(',')}};`;
-  vmCore += `local _order={${realIndicies.map(n => heavyMathBit32Advanced(n)).join(',')}};`;
-
-  // Núcleo de desencriptación
-  vmCore += `
-local _globalIdx=0;
-for _, _realIdx in ipairs(_order) do
-  for _, _byte in ipairs(${POOL}[_realIdx]) do
-    local _decrypted=bit32.band((_byte-${KEY}-_globalIdx*${SALT})%256,0xFF);
-    table.insert(${STACK}, string.char(_decrypted));
-    _globalIdx=_globalIdx+1;
-  end;
-end;
-
-local _payload=table.concat(${STACK});
-${STACK}=nil;
-${POOL}=nil;
-
--- Ejecutar payload desencriptado
-local _execFn=function()
-  local _load=getfenv()["load"..string.char(115,116,114,105,110,103)];
-  if _load then
-    local _fn=_load(_payload);
-    if _fn then return _fn() end;
-  end;
-  return nil;
-end;
-
-pcall(_execFn);
-`;
-
-  return vmCore;
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// 🔟 MÁQUINA VIRTUAL MULTICAPA (25 CAPAS)
-// ═══════════════════════════════════════════════════════════════════
-
-function buildMultilayerVM(payloadStr) {
-  let vm = buildAdvancedVM(payloadStr);
-
-  // 25 capas de ofuscación
-  for (let layer = 0; layer < 25; layer++) {
-    const handlers = pickHandlers(Math.floor(Math.random() * 3) + 4);
-    const realIdx = Math.floor(Math.random() * handlers.length);
-    const DISP = generateBit32Name();
-
-    let layerCode = `local lM={}; `;
-
-    for (let i = 0; i < handlers.length; i++) {
-      if (i === realIdx) {
-        layerCode += `local ${handlers[i]}=function(lM) local lM=lM; ${generateAdvancedJunk(4)}; ${vm}; end; `;
-      } else {
-        layerCode += `local ${handlers[i]}=function(lM) local lM=lM; ${generateAdvancedJunk(2)}; return nil; end; `;
-      }
-    }
-
-    layerCode += `local ${DISP}={`;
-    for (let i = 0; i < handlers.length; i++) {
-      layerCode += `[${heavyMathBit32Advanced(i + 1)}]=${handlers[i]},`;
-    }
-    layerCode += `};`;
-
-    let execBlocks = [];
-    for (let i = 0; i < handlers.length; i++) {
-      execBlocks.push(`${DISP}[${heavyMathBit32Advanced(i + 1)}](lM)`);
-    }
-
-    // CFF (Control Flow Flattening)
-    const stateVar = generateBit32Name();
-    let cff = `local ${stateVar}=${heavyMathBit32Advanced(1)}; while true do `;
-    for (let i = 0; i < execBlocks.length; i++) {
-      if (i === 0) {
-        cff += `if ${stateVar}==${heavyMathBit32Advanced(i + 1)} then ${execBlocks[i]}; ${stateVar}=${heavyMathBit32Advanced(i + 2)}; `;
-      } else {
-        cff += `elseif ${stateVar}==${heavyMathBit32Advanced(i + 1)} then ${execBlocks[i]}; ${stateVar}=${heavyMathBit32Advanced(i + 2)}; `;
-      }
-    }
-    cff += `elseif ${stateVar}==${heavyMathBit32Advanced(execBlocks.length + 1)} then break; end; end; `;
-
-    vm = layerCode + cff;
-  }
-
-  return vm;
-}
-
-// ═══════════════════════════════════════════════════════════════════
-// 🎯 FUNCIÓN PRINCIPAL
-// ═══════════════════════════════════════════════════════════════════
+// ═══════════════════════════════════════════════════════════════
+// 🚀 FUNCIÓN PRINCIPAL
+// ═══════════════════════════════════════════════════════════════
 
 function obfuscate(sourceCode) {
   if (!sourceCode) {
-    return `${HEADER} local _safe=function() end; _safe();`;
+    return `${HEADER} local _=function() end _();`
   }
 
-  // 1. Generar sistema anti-syntax avanzado
-  const antiSyntax = buildAdvancedAntiSyntax().replace("PAYLOAD_AQUI", sourceCode);
+  try {
+    // Construir anti-syntax
+    const antiSyntax = buildMoonveilAntiSyntax().replace("PAYLOAD_AQUI", sourceCode)
 
-  // 2. Ofuscar el sistema anti-syntax con VM multicapa
-  const finalVM = buildMultilayerVM(antiSyntax);
+    // Generar junk masivo
+    const junk = generateMoonveilJunk(500)
 
-  // 3. Agregar junk initial
-  const initialJunk = generateAdvancedJunk(200);
+    // Combinar
+    const result = `${HEADER} ${junk} ${antiSyntax}`
 
-  // 4. Combinar todo
-  const result = `${HEADER} ${initialJunk} ${finalVM}`;
-
-  // 5. Limpiar espacios
-  return result.replace(/\s+/g, " ").trim();
+    return result.replace(/\s+/g, " ").trim()
+  } catch (error) {
+    console.error("Error:", error.message)
+    return sourceCode
+  }
 }
 
-module.exports = { obfuscate };
-
-// Test
-if (require.main === module) {
-  const testCode = `
-    local function test()
-      print("Hello World")
-      for i = 1, 5 do
-        print(i)
-      end
-    end
-    
-    test()
-  `;
-
-  console.log("🚀 Testing obfuscator v3.0...");
-  const obfuscated = obfuscate(testCode);
-  console.log("✅ Obfuscated length:", obfuscated.length);
-  console.log("📊 Compression ratio:", (obfuscated.length / testCode.length).toFixed(1) + "x");
-}
+module.exports = { obfuscate }
