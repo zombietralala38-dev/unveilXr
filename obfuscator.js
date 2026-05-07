@@ -1,4 +1,4 @@
-// vvmer Obfuscator - Final version (VM mejorada)
+// vvmer Obfuscator - Final Enhanced Version
 // Ejecutar con Node.js: node obfuscator.js > output.lua
 
 const HEADER = `--[[ this code it's protected by vvmer obfoscator ]]`
@@ -133,138 +133,152 @@ function extremeFragment(secretMsg, totalPartsStr) {
   };
 }
 
-// ═══════ VM MEJORADA ═══════
+// ═════════════════════════════════════════
+// VM MEJORADA: orden dinámico con máquina de estados
+// ═════════════════════════════════════════
 function buildTrueVM(payloadStr) {
   const STACK = generateIlName();
   const KEY = generateIlName();
   const SALT = generateIlName();
-  const ENV_KEY = generateIlName();   // clave derivada del entorno
-  const DECRYPT_FUNC = generateIlName();
-  const CHECKSUM_VAR = generateIlName();
   
   const seed = Math.floor(Math.random() * 200) + 50;
   const saltVal = Math.floor(Math.random() * 250) + 1;
   
-  // Clave ambiental (basada en timestamp)
-  let vmCore = `local ${ENV_KEY}=os.clock()*1000 `
-  vmCore += `local ${KEY}=${heavyMath(seed)} local ${SALT}=${heavyMath(saltVal)} `
-  
-  // Función de descifrado no lineal (2 rondas)
-  vmCore += `local ${DECRYPT_FUNC}=function(b,i,k,s,ek) `
-  vmCore += `local t=(b-(k+s*i)*0.5)%256 `   // ronda 1
-  vmCore += `local x=t~math.floor(ek%256) `   // XOR con clave ambiental
-  vmCore += `x=((x+k)*7+ek*13)%256 `           // ronda 2
-  vmCore += `return math.floor(x) end `
+  // Variables extra para el orden dinámico
+  const NEXT_STATE = generateIlName();
+  const G_IDX = generateIlName();
+  const LAST_BYTE = generateIlName();
+  const CHUNK_ID = generateIlName();
+  const BYTE_VAR = generateIlName();
+  const USED = generateIlName();
+  const MAX_CHUNKS = generateIlName();
+  const SOME_SLOT = generateIlName();  // un "slot" fijo que actúa como pivote
   
   const chunkSize = 15;
   let realChunks = [];
-  for(let i = 0; i < payloadStr.length; i += chunkSize) { realChunks.push(payloadStr.slice(i, i + chunkSize)); }
-  let poolVars = []; let realOrder = [];
-  let totalChunks = realChunks.length * 3; let currentReal = 0; let globalIndex = 0;
-  
-  // Cálculo de checksum de todos los bytes reales
-  let realBytes = [];
-  for(let chunk of realChunks) {
-    for(let j=0; j<chunk.length; j++) realBytes.push(chunk.charCodeAt(j));
+  for(let i = 0; i < payloadStr.length; i += chunkSize) {
+    realChunks.push(payloadStr.slice(i, i + chunkSize));
   }
-  // CRC-16 simple (polinomio 0xA001)
-  let crc = 0xFFFF;
-  for(let b of realBytes) {
-    crc ^= b;
-    for(let j=0; j<8; j++) {
-      if(crc & 1) crc = (crc >> 1) ^ 0xA001;
-      else crc >>= 1;
-    }
-  }
-  const expectedCrc = (crc & 0xFFFF) ^ (seed * saltVal);
   
-  // Clave para ofuscar índices de la pool
-  const idxKey = Math.floor(Math.random() * 40) + 10;
-  const idxShift = Math.floor(Math.random() * 50) + 5;
+  let totalChunks = realChunks.length * 3; // añade muchos basura
+  let poolVars = [];
+  let currentReal = 0;
+  // Para identificar los índices con contenido real (1-indexados)
+  let realIndices = [];
+  
+  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} local ${SALT}=${heavyMath(saltVal)} `;
   
   for(let i = 0; i < totalChunks; i++) {
-    let memName = generateIlName(); poolVars.push(memName);
+    const memName = generateIlName();
+    poolVars.push(memName);
+    
     if (currentReal < realChunks.length && (Math.random() > 0.5 || (totalChunks - i) === (realChunks.length - currentReal))) {
-      realOrder.push(i + 1);
-      let chunk = realChunks[currentReal]; let encryptedBytes = [];
-      for(let j = 0; j < chunk.length; j++) { 
-        // Cifrado con la nueva función (simulado aquí para obtener el valor a almacenar)
-        // En tiempo de ejecución se invierte con DECRYPT_FUNC
-        let b = chunk.charCodeAt(j);
-        // Inverso: debemos almacenar un valor tal que DECRYPT_FUNC(valor,i,k,s,ek) == b
-        // Para no complicar, usaremos una aproximación: guardamos (b + key + idx*salt) ofuscado de otra manera
-        // Pero para la mejora real, aquí generamos una expresión que será descifrada por la función no lineal.
-        // A continuación se muestra un método simplificado (en un ofuscador real se haría con resolución de ecuaciones).
-        // Para este ejemplo, mantendremos el cifrado anterior como base, pero la VM usará DECRYPT_FUNC para revertirlo.
-        let enc = (b + seed + (globalIndex * saltVal)) % 256;
-        encryptedBytes.push(heavyMath(enc)); 
-        globalIndex++;
+      // chunk real
+      realIndices.push(i + 1);
+      let chunk = realChunks[currentReal];
+      let encryptedBytes = [];
+      for(let j = 0; j < chunk.length; j++) {
+        let enc = (chunk.charCodeAt(j) + seed + (i * saltVal)) % 256;
+        encryptedBytes.push(heavyMath(enc));
       }
       vmCore += `local ${memName}={${encryptedBytes.join(',')}} `;
       currentReal++;
     } else {
-      let fakeBytes = []; let fakeLen = Math.floor(Math.random() * 20) + 5;
-      for(let j = 0; j < fakeLen; j++) { fakeBytes.push(heavyMath(Math.floor(Math.random() * 255))); }
+      // chunk basura
+      let fakeBytes = [];
+      let fakeLen = Math.floor(Math.random() * 20) + 5;
+      for(let j = 0; j < fakeLen; j++) {
+        fakeBytes.push(heavyMath(Math.floor(Math.random() * 255)));
+      }
       vmCore += `local ${memName}={${fakeBytes.join(',')}} `;
     }
   }
   
-  // Indices de la pool cifrados
-  const encOrder = realOrder.map(n => (n ^ idxKey) + idxShift);
   vmCore += `local _pool={${poolVars.join(',')}} `;
-  vmCore += `local _encOrder={${encOrder.map(n => heavyMath(n)).join(',')}} `;
-  vmCore += `local _dk=${heavyMath(idxKey)} + ${heavyMath(idxShift)} `;
   
-  // Descifrado con verificación de integridad
-  vmCore += `local ${CHECKSUM_VAR}=0 `;
-  vmCore += `local _gIdx=0 `;
-  vmCore += `for _, _encIdx in ipairs(_encOrder) do `;
-  vmCore += `local _realIdx=(_encIdx - ${heavyMath(idxShift)}) ~ _dk `; // recuperar índice real
-  // Condición opaca para añadir fragmentos señuelo a veces
-  vmCore += `if math.pi>3.14 and _realIdx<=${heavyMath(poolVars.length)} then `;
-  vmCore += `for __, ${generateIlName()} in ipairs(_pool[_realIdx]) do `;
-  vmCore += `local _dec = ${DECRYPT_FUNC}(${generateIlName()}, _gIdx, ${KEY}, ${SALT}, ${ENV_KEY}) `;
+  // Configuración de la máquina de estados
+  // El slot fijo será el índice del primer chunk real, usado como base de cálculo
+  const slotValue = realIndices[0]; // siempre existe al menos uno
+  const slotVar = `local ${SOME_SLOT}=${heavyMath(slotValue)} `;
+  vmCore += slotVar;
+  
+  vmCore += `local ${MAX_CHUNKS}=${totalChunks} `;
+  vmCore += `local ${USED}={} `;
+  vmCore += `local ${G_IDX}=0 `;
+  vmCore += `local ${LAST_BYTE}=0 `;
+  vmCore += `local ${NEXT_STATE}=0 `;
+  
+  // Bucle dinámico en lugar de ipairs(ORDER)
+  vmCore += `while true do `;
+  
+  // Cálculo del siguiente chunk según el estado
+  vmCore += `if ${NEXT_STATE}==0 then `;
+  vmCore += `${CHUNK_ID}=(${SOME_SLOT}+7)%${MAX_CHUNKS}+1 `;
+  vmCore += `elseif ${NEXT_STATE}==1 then `;
+  vmCore += `${CHUNK_ID}=(${LAST_BYTE}+${SOME_SLOT}*${SALT})%${MAX_CHUNKS}+1 `;
+  vmCore += `else `;
+  vmCore += `${CHUNK_ID}=(${KEY}*101+${G_IDX})%${MAX_CHUNKS}+1 `;
+  vmCore += `end `;
+  
+  // Si ya visitamos ese chunk, terminamos
+  vmCore += `if ${USED}[${CHUNK_ID}] then break end `;
+  vmCore += `${USED}[${CHUNK_ID}]=true `;
+  
+  // Procesar el chunk
+  vmCore += `for _, ${BYTE_VAR} in ipairs(_pool[${CHUNK_ID}]) do `;
+  vmCore += `if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `;
+  vmCore += `local _dec = math.floor((${BYTE_VAR} - ${KEY} - ${G_IDX} * ${SALT}) % 256) `;
   vmCore += `table.insert(${STACK}, string.char(_dec)) `;
-  // actualizar checksum con el byte descifrado
-  vmCore += `${CHECKSUM_VAR}=(${CHECKSUM_VAR}+_dec*7+_gIdx*13)%65535 `;
-  vmCore += `_gIdx=_gIdx+1 `;
-  vmCore += `end `;
-  vmCore += `end `;
+  vmCore += `${LAST_BYTE}=_dec `;
+  vmCore += `${G_IDX}=${G_IDX}+1 `;
   vmCore += `end `;
   
-  // Verificación del checksum
-  vmCore += `if ${CHECKSUM_VAR} ~= ${heavyMath(expectedCrc)} then `;
-  vmCore += `error("Integrity check failed") `;
-  vmCore += `end `;
+  // Actualizar el estado para la siguiente iteración
+  vmCore += `${NEXT_STATE}=(${LAST_BYTE}+${G_IDX}+${KEY})%3 `;
+  vmCore += `end `; // fin del while
   
   vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `;
   const ASSERT = `getfenv()[${runtimeString("assert")}]`;
   const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`;
   const GAME = `getfenv()[${runtimeString("game")}]`;
   const HTTPGET = runtimeString("HttpGet");
-  if (payloadStr.includes("http")) { vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME}, _e)))() ` } 
-  else { vmCore += `${ASSERT}(${LOADSTRING}(_e))() ` }
-  return vmCore
+  if (payloadStr.includes("http")) {
+    vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME}, _e)))() `;
+  } else {
+    vmCore += `${ASSERT}(${LOADSTRING}(_e))() `;
+  }
+  return vmCore;
 }
 
 function buildSingleVM(innerCode, handlerCount) {
-  const handlers = pickHandlers(handlerCount); const realIdx = Math.floor(Math.random() * handlerCount);
-  const DISPATCH = generateIlName(); let out = `local lM={} ` 
+  const handlers = pickHandlers(handlerCount);
+  const realIdx = Math.floor(Math.random() * handlerCount);
+  const DISPATCH = generateIlName();
+  let out = `local lM={} `;
   for (let i = 0; i < handlers.length; i++) {
-    if (i === realIdx) { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} ${innerCode} end ` } 
-    else { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(3)} return nil end ` }
+    if (i === realIdx) {
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} ${innerCode} end `;
+    } else {
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(3)} return nil end `;
+    }
   }
-  out += `local ${DISPATCH}={`
-  for (let i = 0; i < handlers.length; i++) { out += `[${heavyMath(i + 1)}]=${handlers[i]},` }
-  out += `} `
-  let execBlocks = []; for (let i = 0; i < handlers.length; i++) { execBlocks.push(`${DISPATCH}[${heavyMath(i + 1)}](lM)`) }
-  out += applyCFF(execBlocks); return out
+  out += `local ${DISPATCH}={`;
+  for (let i = 0; i < handlers.length; i++) {
+    out += `[${heavyMath(i + 1)}]=${handlers[i]},`;
+  }
+  out += `} `;
+  let execBlocks = [];
+  for (let i = 0; i < handlers.length; i++) {
+    execBlocks.push(`${DISPATCH}[${heavyMath(i + 1)}](lM)`);
+  }
+  out += applyCFF(execBlocks);
+  return out;
 }
 
 function build18xVM(payloadStr) {
   let vm = buildTrueVM(payloadStr);
   for (let i = 0; i < 17; i++) {
-    vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3); 
+    vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3);
   }
   return vm;
 }
@@ -404,9 +418,6 @@ end
 p10()
 `;
 
-// ═════════════════════════════════════════
-// FUNCIÓN PRINCIPAL DE OFUSCACIÓN
-// ═════════════════════════════════════════
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
   
@@ -444,7 +455,6 @@ function obfuscate(sourceCode) {
 
 module.exports = { obfuscate };
 
-// Si se ejecuta directamente, genera el Embed Runtime
 if (require.main === module) {
   const obfuscatedCode = obfuscate(ETA_ENAI_TKVR_PAYLOAD);
   console.log(obfuscatedCode);
