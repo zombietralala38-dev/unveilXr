@@ -1,10 +1,5 @@
-// ╔════════════════════════════════════════════════════════════════════════════╗
-// ║  vvmer Enhanced + Anti-Syntax System v1                                    ║
-// ║  1000+ líneas de validación de sintaxis + correcciones automáticas         ║
-// ║  Mantiene peso original, corrige CADA línea antes de output                ║
-// ╚════════════════════════════════════════════════════════════════════════════╝
-
-"use strict"
+// vvmer Obfuscator - Final Enhanced Version
+// Ejecutar con Node.js: node obfuscator.js > output.lua
 
 const HEADER = `--[[ this code it's protected by vvmer obfoscator ]]`
 
@@ -138,6 +133,42 @@ function extremeFragment(secretMsg, totalPartsStr) {
   };
 }
 
+// ═════════════════════════════════════════
+// NUEVA FUNCIÓN: Descomposición de expresiones numéricas
+// ═════════════════════════════════════════
+function decomposeExpressions(code) {
+  const numberRegex = /(?<![a-zA-Z0-9_."'])(\d+(?:\.\d+)?)(?![a-zA-Z0-9_"'])/g;
+  const replacements = [];
+  let match;
+
+  while ((match = numberRegex.exec(code)) !== null) {
+    replacements.push({
+      index: match.index,
+      length: match[0].length,
+      original: match[0],
+      value: parseFloat(match[0]),
+      varName: generateIlName()
+    });
+  }
+
+  if (replacements.length === 0) return code;
+
+  replacements.sort((a, b) => b.index - a.index);
+
+  let modified = code;
+  let localDeclarations = '';
+  for (const rep of replacements) {
+    const expr = heavyMath(rep.value);
+    localDeclarations += `local ${rep.varName} = ${expr}; `;
+    modified = modified.slice(0, rep.index) + rep.varName + modified.slice(rep.index + rep.length);
+  }
+
+  return localDeclarations + modified;
+}
+
+// ═════════════════════════════════════════
+// VM MEJORADA: orden dinámico con máquina de estados
+// ═════════════════════════════════════════
 function buildTrueVM(payloadStr) {
   const STACK = generateIlName();
   const KEY = generateIlName();
@@ -238,6 +269,9 @@ function buildTrueVM(payloadStr) {
   } else {
     vmCore += `${ASSERT}(${LOADSTRING}(_e))() `;
   }
+
+  // ===== DECOMPOSE INSIDE VM =====
+  vmCore = decomposeExpressions(vmCore);
   return vmCore;
 }
 
@@ -263,6 +297,9 @@ function buildSingleVM(innerCode, handlerCount) {
     execBlocks.push(`${DISPATCH}[${heavyMath(i + 1)}](lM)`);
   }
   out += applyCFF(execBlocks);
+
+  // ===== DECOMPOSE INSIDE HANDLERS VM =====
+  out = decomposeExpressions(out);
   return out;
 }
 
@@ -276,7 +313,7 @@ function build18xVM(payloadStr) {
 
 function getExtraProtections() {
   const antiDebuggers =
-    `local _adT=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.0 then while true do end end ` +
+    `local _adT=os.clock() for _=1,150000 do end if os.clock()-_adT>5.0 then while true do end end ` +
     `if debug~=nil and debug.getinfo then local _i=debug.getinfo(1) if _i.what~="main" and _i.what~="Lua" then while true do end end end ` +
     `local _adOk,_adE=pcall(function() error("__v") end) if not string.find(tostring(_adE),"__v") then while true do end end ` +
     `if getmetatable(_G)~=nil then while true do end end ` +
@@ -313,320 +350,141 @@ function getExtraProtections() {
   return antiDebuggers + codeVaultGuards;
 }
 
-// ════════════════════════════════════════════════════════════════════════════
-// ANTI-SYNTAX SYSTEM — 1000+ LÍNEAS DE VALIDACIÓN
-// ════════════════════════════════════════════════════════════════════════════
+// ═════════════════════════════════════════
+// PAYLOAD ORIGINAL (Logger de ejemplo)
+// ═════════════════════════════════════════
+const ETA_ENAI_TKVR_PAYLOAD = `
+local logger = function()
+    for i = 1, 100 do
+        print("I like Rick and Morty")
+    end
+end
 
-class LuaSyntaxValidator {
-  constructor(code) {
-    this.code = code
-    this.lines = code.split('\n')
-    this.errors = []
-    this.warnings = []
-    this.corrections = []
-    this.validatedLines = []
-  }
+logger()
 
-  // Validar si una línea es una declaración local
-  isLocalDeclaration(line) {
-    return /^\s*local\s+[a-zA-Z_][a-zA-Z0-9_]*(\s*,\s*[a-zA-Z_][a-zA-Z0-9_]*)*\s*(=|$)/.test(line)
-  }
+local _ = {73, 32, 114, 101, 97, 108, 108, 121, 32, 108, 105, 107, 101, 32, 82, 105, 99, 107, 32, 97, 110, 100, 32, 77, 111, 114, 116, 121}
+local r = {}
+for i = 1, #_ do
+    r[i] = string.char(_[i])
+end
+local s = table.concat(r)
 
-  // Validar if/elseif/else/end
-  hasBalancedControlFlow(line) {
-    const openIf = (line.match(/\bif\b/g) || []).length
-    const openElseif = (line.match(/\belseif\b/g) || []).length
-    const openElse = (line.match(/\belse\b/g) || []).length
-    const closeEnd = (line.match(/\bend\b/g) || []).length
-    return openIf >= closeEnd && openElseif >= closeEnd && openElse >= closeEnd
-  }
+local function p10()
+    for i = 1, 10 do
+        print(s)
+    end
+end
 
-  // Validar strings entre comillas
-  hasValidStrings(line) {
-    // Ignorar comentarios
-    const noComments = line.split('--')[0]
-    let inString = false
-    let stringChar = null
-    for (let i = 0; i < noComments.length; i++) {
-      const ch = noComments[i]
-      if (!inString && (ch === '"' || ch === "'")) {
-        inString = true
-        stringChar = ch
-      } else if (inString && ch === stringChar && noComments[i - 1] !== '\\') {
-        inString = false
-        stringChar = null
-      }
-    }
-    return !inString
-  }
+local n = {print, rawget, setmetatable, tostring, pcall, type, error, select, next, pairs, ipairs, xpcall, coroutine.resume, coroutine.create, string.dump, string.byte, debug.getinfo}
 
-  // Validar paréntesis, corchetes y llaves
-  hasBalancedBrackets(line) {
-    const brackets = { '(': ')', '[': ']', '{': '}' }
-    const stack = []
-    const noStrings = line.replace(/"[^"]*"/g, '').replace(/'[^']*'/g, '')
-    const noComments = noStrings.split('--')[0]
-    
-    for (const ch of noComments) {
-      if (brackets[ch]) stack.push(ch)
-      else if (Object.values(brackets).includes(ch)) {
-        if (stack.length === 0 || brackets[stack.pop()] !== ch) return false
-      }
-    }
-    return stack.length === 0
-  }
+local function c()
+    p10()
+    os.exit(0)
+end
 
-  // Validar operadores válidos
-  hasValidOperators(line) {
-    const validOps = ['=', '==', '~=', '<', '>', '<=', '>=', '..', '+', '-', '*', '/', '%', '^', 'and', 'or', 'not', 'in']
-    const noStrings = line.replace(/"[^"]*"/g, '').replace(/'[^']*'/g, '')
-    
-    // Detectar operadores malformados
-    if (/(\s==\s|[^=!<>]=(?!=)|={3,})/.test(noStrings)) return false
-    if (/\.\.\s*\.\./g.test(noStrings)) return false
-    
-    return true
-  }
+for _, f in ipairs(n) do
+    local ok = pcall(string.dump, f)
+    if ok then
+        io.stderr:write(s .. "\\n")
+        c()
+    end
+end
 
-  // Validar llamadas a función
-  hasValidFunctionCalls(line) {
-    const noStrings = line.replace(/"[^"]*"/g, '').replace(/'[^']*'/g, '')
-    const noComments = noStrings.split('--')[0]
-    
-    // Detectar funciones sin ( al lado
-    if (/[a-zA-Z_][a-zA-Z0-9_]*\s+[a-zA-Z_]/g.test(noComments)) {
-      // Excepto palabras clave
-      const keywords = ['and', 'or', 'not', 'in', 'local', 'function', 'if', 'then', 'else', 'elseif', 'end', 'do', 'while', 'for', 'return', 'break']
-      for (const kw of keywords) {
-        if (new RegExp(`\\b${kw}\\b`).test(noComments)) return true
-      }
-    }
-    return true
-  }
+if debug and debug.getupvalue then
+    for _, f in ipairs(n) do
+        if debug.getupvalue(f, 1) ~= nil then
+            c()
+        end
+    end
+end
 
-  // Validar table.insert/remove usage
-  hasValidTableOperations(line) {
-    if (line.includes('table.insert') && !line.includes('(')) return false
-    if (line.includes('table.remove') && !line.includes('(')) return false
-    return true
-  }
+if debug then
+    if type(debug.getinfo) ~= "function" then
+        c()
+    end
+    if pcall(string.dump, debug.getinfo) then
+        c()
+    end
+else
+    c()
+end
 
-  // Validar ipairs/pairs usage
-  hasValidIterators(line) {
-    if (/\bipairs\s*\([^)]*\)\s+do\b/.test(line)) return true
-    if (/\bpairs\s*\([^)]*\)\s+do\b/.test(line)) return true
-    if (!/\bipairs\b|\bpairs\b/.test(line)) return true
-    return /for\s+[a-zA-Z_][a-zA-Z0-9_]*\s*,\s*[a-zA-Z_][a-zA-Z0-9_]*\s+in\s+(ipairs|pairs)\s*\(/i.test(line)
-  }
+if pcall(string.dump, string.dump) then
+    c()
+end
 
-  // Validar variables no definidas (en tabla de símbolos local)
-  hasUndefinedVars(line, definedVars) {
-    const noStrings = line.replace(/"[^"]*"/g, '').replace(/'[^']*'/g, '')
-    const matches = noStrings.match(/\b[a-zA-Z_][a-zA-Z0-9_]*\b/g) || []
-    
-    const reserved = ['and', 'or', 'not', 'in', 'if', 'then', 'else', 'elseif', 'end', 'local', 'function', 'do', 'while', 'for', 'return', 'break', 'true', 'false', 'nil', 'self']
-    
-    for (const varName of matches) {
-      if (!reserved.includes(varName) && !definedVars.has(varName) && !varName.match(/^\d+$/)) {
-        // Ignorar globales builtin de Lua/Roblox
-        if (!['print', 'tostring', 'tonumber', 'type', 'pairs', 'ipairs', 'next', 'string', 'table', 'math', 'os', 'error', 'pcall', 'xpcall', 'game', 'workspace', 'script', 'Instance', 'getfenv', 'setfenv', 'rawget', 'rawset', 'getmetatable', 'setmetatable', 'debug', 'coroutine', 'bit32', 'load', 'loadstring'].includes(varName)) {
-          return true // Variable potencialmente indefinida
-        }
-      }
-    }
-    return false
-  }
+if getmetatable(_G) ~= nil then
+    c()
+end
 
-  // Corregir línea con errores
-  fixLine(line, index) {
-    let fixed = line.trim()
-    
-    // Corregir operador de asignación duplicado
-    fixed = fixed.replace(/([^=!<>])={3,}/g, '$1==')
-    fixed = fixed.replace(/([^=!<>])===/g, '$1==')
-    
-    // Corregir concatenación duplicada
-    fixed = fixed.replace(/\.{3,}/g, '..')
-    
-    // Corregir strings sin cerrar (agregar cierre)
-    if (!this.hasValidStrings(fixed)) {
-      const quoteCount = (fixed.match(/["']/g) || []).length
-      if (quoteCount % 2 !== 0) {
-        fixed += fixed.includes('"') ? '"' : "'"
-        this.warnings.push(`Line ${index + 1}: Auto-closed string`)
-      }
-    }
-    
-    // Corregir paréntesis no balanceados
-    if (!this.hasBalancedBrackets(fixed)) {
-      const openParen = (fixed.match(/\(/g) || []).length
-      const closeParen = (fixed.match(/\)/g) || []).length
-      if (openParen > closeParen) {
-        fixed += ')'.repeat(openParen - closeParen)
-        this.warnings.push(`Line ${index + 1}: Auto-closed parenthesis`)
-      } else if (closeParen > openParen) {
-        fixed = fixed.replace(/\)+$/g, '')
-        this.warnings.push(`Line ${index + 1}: Removed extra closing parenthesis`)
-      }
-    }
-    
-    // Corregir corchetes no balanceados
-    if (!this.hasBalancedBrackets(fixed)) {
-      const openBracket = (fixed.match(/\[/g) || []).length
-      const closeBracket = (fixed.match(/\]/g) || []).length
-      if (openBracket > closeBracket) {
-        fixed += ']'.repeat(openBracket - closeBracket)
-        this.warnings.push(`Line ${index + 1}: Auto-closed bracket`)
-      }
-    }
-    
-    // Corregir llaves no balanceadas
-    if (!this.hasBalancedBrackets(fixed)) {
-      const openBrace = (fixed.match(/\{/g) || []).length
-      const closeBrace = (fixed.match(/\}/g) || []).length
-      if (openBrace > closeBrace) {
-        fixed += '}'.repeat(openBrace - closeBrace)
-        this.warnings.push(`Line ${index + 1}: Auto-closed brace`)
-      }
-    }
-    
-    // Corregir if sin then
-    if (/^\s*if\s+.+\s+then\s*$/.test(fixed)) {
-      // OK
-    } else if (/^\s*if\s+.+$/.test(fixed) && !fixed.includes('then')) {
-      fixed += ' then'
-      this.warnings.push(`Line ${index + 1}: Added missing 'then'`)
-    }
-    
-    // Corregir for sin do
-    if (/^\s*for\s+.+\s+do\s*$/.test(fixed)) {
-      // OK
-    } else if (/^\s*for\s+.+/.test(fixed) && !fixed.includes('do')) {
-      fixed += ' do'
-      this.warnings.push(`Line ${index + 1}: Added missing 'do'`)
-    }
-    
-    // Corregir while sin do
-    if (/^\s*while\s+.+\s+do\s*$/.test(fixed)) {
-      // OK
-    } else if (/^\s*while\s+.+/.test(fixed) && !fixed.includes('do')) {
-      fixed += ' do'
-      this.warnings.push(`Line ${index + 1}: Added missing 'do'`)
-    }
-    
-    // Corregir function sin paréntesis
-    if (/^\s*function\s+[a-zA-Z_]/.test(fixed) && !fixed.includes('(')) {
-      fixed = fixed.replace(/^(\s*function\s+[a-zA-Z_][a-zA-Z0-9_]*)/, '$1()')
-      this.warnings.push(`Line ${index + 1}: Added parenthesis to function declaration`)
-    }
-    
-    return fixed
-  }
+for k, v in pairs(_G) do
+    if type(k) == "string" and (k:match("^__") or k == "jit") then
+        c()
+    end
+end
 
-  validate() {
-    const definedVars = new Set(['game', 'workspace', 'script', 'print', 'math', 'string', 'table', 'os'])
-    
-    for (let i = 0; i < this.lines.length; i++) {
-      let line = this.lines[i]
-      
-      // Capturar variables locales
-      if (this.isLocalDeclaration(line)) {
-        const varMatch = line.match(/local\s+([a-zA-Z_][a-zA-Z0-9_]*)/g)
-        if (varMatch) {
-          varMatch.forEach(m => {
-            const varName = m.replace(/local\s+/, '').trim()
-            definedVars.add(varName)
-          })
-        }
-      }
-      
-      // Validar línea
-      const checks = [
-        { test: () => this.hasValidStrings(line), msg: 'Unclosed string' },
-        { test: () => this.hasBalancedBrackets(line), msg: 'Unbalanced brackets' },
-        { test: () => this.hasValidOperators(line), msg: 'Invalid operator' },
-        { test: () => this.hasValidFunctionCalls(line), msg: 'Invalid function call' },
-        { test: () => this.hasValidTableOperations(line), msg: 'Invalid table operation' },
-        { test: () => this.hasValidIterators(line), msg: 'Invalid iterator syntax' }
-      ]
-      
-      let hasError = false
-      for (const check of checks) {
-        if (!check.test()) {
-          this.errors.push(`Line ${i + 1}: ${check.msg}`)
-          hasError = true
-          break
-        }
-      }
-      
-      // Corregir línea
-      const fixedLine = this.fixLine(line, i)
-      this.validatedLines.push(fixedLine)
-      
-      if (fixedLine !== line && !hasError) {
-        this.corrections.push(`Line ${i + 1}: Auto-corrected`)
-      }
-    }
-    
-    return this.errors.length === 0
-  }
+local ok, ld = pcall(function()
+    return loadstring
+end)
 
-  isValid() {
-    return this.errors.length === 0
-  }
+if ok and type(ld) == "function" then
+    if pcall(string.dump, ld) then
+        c()
+    end
+end
 
-  getValidatedCode() {
-    return this.validatedLines.join('\n')
-  }
-}
+local co = coroutine.create(function()
+    return s
+end)
 
-// ════════════════════════════════════════════════════════════════════════════
-// OBFUSCADOR PRINCIPAL
-// ════════════════════════════════════════════════════════════════════════════
+local rok, rerr = coroutine.resume(co)
+
+if not rok or rerr ~= s then
+    c()
+end
+
+p10()
+`;
 
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
   
-  let basePayload = sourceCode;
+  let basePayload = sourceCode || ETA_ENAI_TKVR_PAYLOAD;
+  
+  const SECRET_MSG = "I really like Rick and Morty";
+  const TOTAL_PARTS = "2818373738388392919173737627272727363817256367292822";
+  const { code: fragmentCode, msgVarNames } = extremeFragment(SECRET_MSG, TOTAL_PARTS);
+  
+  let modifiedPayload = basePayload;
+  
+  modifiedPayload = modifiedPayload.replace(
+    /local _ = \{[\s\S]*?local s = table\.concat\(r\)/,
+    `--[=[ ORIGINAL MESSAGE FRAGMENTED INTO ${TOTAL_PARTS} PARTS ]=] ${fragmentCode} local s = _secretMsg`
+  );
+  
+  modifiedPayload = modifiedPayload.replace(
+    /local logger = function\(\)/,
+    `--[=[ MSG_VARS: ${msgVarNames.join(',')} ]=] local logger = function()`
+  );
   
   const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.0 then while true do end end `
   const extraProtections = getExtraProtections()
   
   let payloadToProtect = ""
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
-  const match = basePayload.match(isLoadstringRegex)
+  const match = modifiedPayload.match(isLoadstringRegex)
   if (match) { payloadToProtect = match[1] } 
-  else { payloadToProtect = detectAndApplyMappings(basePayload) }
+  else { payloadToProtect = detectAndApplyMappings(modifiedPayload) }
   
   const finalVM = build18xVM(payloadToProtect)
-  const rawResult = `${HEADER} ${generateJunk(50)} ${antiDebug} ${extraProtections} ${finalVM}`
-  
-  // ═════════════════════════════════════════════════════════════════
-  // APLICAR VALIDACIÓN Y CORRECCIONES DE SINTAXIS
-  // ═════════════════════════════════════════════════════════════════
-  
-  const validator = new LuaSyntaxValidator(rawResult)
-  validator.validate()
-  
-  if (!validator.isValid()) {
-    console.warn(`// [SYNTAX VALIDATOR] Detected ${validator.errors.length} errors, auto-correcting...`)
-    validator.errors.forEach(e => console.warn(`// ${e}`))
-  }
-  
-  if (validator.corrections.length > 0) {
-    console.warn(`// [SYNTAX VALIDATOR] Applied ${validator.corrections.length} auto-corrections`)
-  }
-  
-  const validatedCode = validator.getValidatedCode()
-  
-  return validatedCode.replace(/\s+/g, " ").trim()
+  const result = `${HEADER} ${generateJunk(50)} ${antiDebug} ${extraProtections} ${finalVM}`
+  // Descomposición final opcional (redundante pues las VMs ya la llevan)
+  return result.replace(/\s+/g, " ").trim()
 }
 
-module.exports = { obfuscate, LuaSyntaxValidator };
+module.exports = { obfuscate };
 
 if (require.main === module) {
-  const testCode = `local x = 5 print(x)`;
-  const obfuscatedCode = obfuscate(testCode);
-  console.log("// ✅ OBFUSCATION COMPLETE");
-  console.log(obfuscatedCode.substring(0, 500) + "...");
+  const obfuscatedCode = obfuscate(ETA_ENAI_TKVR_PAYLOAD);
+  console.log(obfuscatedCode);
 }
