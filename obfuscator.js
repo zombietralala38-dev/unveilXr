@@ -1,3 +1,10 @@
+// ═════════════════════════════════════════════════════════════════
+// OFUSCADOR LUA + SISTEMA ANTI‑SINTAXIS INTEGRADO (COLOSSAL v2)
+// ═════════════════════════════════════════════════════════════════
+// Genera código ofuscado y lo repara automáticamente
+// para que nunca falle por errores de sintaxis.
+// ═════════════════════════════════════════════════════════════════
+
 // --[[ this code it's protected by vvmer obfoscator ]]
 const HEADER = '--[[THIS CODE ITS PROTECTED BY SEAK OBFUSCATOR ]]'
 const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
@@ -32,7 +39,6 @@ function getVolatileNumber() {
 function generateSelfRefOpaque() {
   const ops = ["==", "~="]
   const op = ops[Math.floor(Math.random() * ops.length)]
-  // Usar _OPQ definida globalmente (metatabla que siempre retorna 42)
   if (Math.random() < 0.7) {
     return `_OPQ[${getVolatileNumber()}] ${op} _OPQ[${getVolatileNumber()}]`
   } else {
@@ -53,7 +59,6 @@ function generateRuntimeOpaque() {
 
 function heavyMath(n) {
   if (Math.random() < 0.6) {
-    // Envolver con términos volátiles que cancelan (+0, *1)
     const volatileTerm = `((${getVolatileNumber()} - ${getVolatileNumber()}) + (os.clock() - os.clock()))`
     return `((${n}) + ${volatileTerm})`
   }
@@ -75,7 +80,6 @@ function mba() {
   return base;
 }
 
-// Modificar generateJunk para incluir opacos
 function generateJunk(lines = 100) {
   let j = ''
   for (let i = 0; i < lines; i++) {
@@ -391,6 +395,112 @@ end
 p10()
 `;
 
+// ═════════════════════════════════════════════════════
+// 🛡️ SANITIZADOR DE SINTAXIS LUA (ANTI‑ERRORS SYSTEM)
+// ═════════════════════════════════════════════════════
+function isInsideString(code, pos) {
+    let inString = false, stringChar = null;
+    for (let i = 0; i < pos; i++) {
+        const c = code[i], prev = i > 0 ? code[i - 1] : '';
+        if ((c === '"' || c === "'") && prev !== '\\') {
+            if (!inString) {
+                inString = true;
+                stringChar = c;
+            } else if (c === stringChar) {
+                inString = false;
+                stringChar = null;
+            }
+        }
+    }
+    return inString;
+}
+
+function fixVarargsJS(luaCode) {
+    const lines = luaCode.split(/\r?\n/);
+    let hasMisuse = false;
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+        const dotsIndex = line.indexOf('...');
+        if (dotsIndex !== -1 && !isInsideString(line, dotsIndex)) {
+            // Comprobar si estamos dentro de una función que acepta ...
+            let funcDepth = 0, inVarargFunc = false;
+            for (let j = i; j >= 0; j--) {
+                const l = lines[j];
+                if (/function\s*\(.*\.\.\..*\)/.test(l)) {
+                    inVarargFunc = true;
+                    break;
+                }
+                if (/\bfunction\s*\(/.test(l) || /\bfunction\s/.test(l)) funcDepth++;
+                if (/\bend\b/.test(l)) funcDepth--;
+            }
+            if (!inVarargFunc) {
+                hasMisuse = true;
+                break;
+            }
+        }
+    }
+    if (!hasMisuse) return luaCode;
+    // Envolver todo el código en (function(...) ... end)()
+    return `(function(...)\n${luaCode}\nend)()`;
+}
+
+function balanceDelimitersJS(code, open, close) {
+    let depth = 0;
+    for (let i = 0; i < code.length; i++) {
+        const c = code[i];
+        if (c === open && !isInsideString(code, i)) depth++;
+        else if (c === close && !isInsideString(code, i)) depth--;
+    }
+    if (depth > 0) return code + close.repeat(depth);
+    else if (depth < 0) return open.repeat(-depth) + code;
+    return code;
+}
+
+function fixOpenStringsJS(code) {
+    let inString = false, stringChar = null;
+    for (let i = 0; i < code.length; i++) {
+        const c = code[i], prev = i > 0 ? code[i - 1] : '';
+        if ((c === '"' || c === "'") && prev !== '\\') {
+            if (!inString) {
+                inString = true;
+                stringChar = c;
+            } else if (c === stringChar) {
+                inString = false;
+                stringChar = null;
+            }
+        }
+    }
+    return inString ? code + stringChar : code;
+}
+
+function sanitizeLua(luaCode) {
+    let code = fixOpenStringsJS(luaCode);
+    code = balanceDelimitersJS(code, '(', ')');
+    code = balanceDelimitersJS(code, '[', ']');
+    code = balanceDelimitersJS(code, '{', '}');
+    
+    // Añadir 'end' faltantes
+    let needEnd = 0;
+    const keywords = ['if', 'for', 'while', 'function', 'do'];
+    for (const kw of keywords) {
+        const regex = new RegExp(`\\b${kw}\\b`, 'g');
+        const matches = code.match(regex);
+        if (matches) needEnd += matches.length;
+    }
+    const endMatches = (code.match(/\bend\b/g) || []).length;
+    const untilMatches = (code.match(/\buntil\b/g) || []).length;
+    const missing = needEnd - (endMatches + untilMatches);
+    if (missing > 0) code += '\n' + 'end\n'.repeat(missing);
+    
+    // Reparar varargs fuera de función
+    code = fixVarargsJS(code);
+    
+    return code;
+}
+
+// ═════════════════════════════════════════════════════
+// FUNCIÓN PRINCIPAL DE OFUSCACIÓN (MODIFICADA)
+// ═════════════════════════════════════════════════════
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
   
@@ -431,12 +541,18 @@ function obfuscate(sourceCode) {
   else { payloadToProtect = detectAndApplyMappings(modifiedPayload) }
   
   const finalVM = build18xVM(payloadToProtect)
-  const result = `${HEADER} ${opaqueTableDef} ${generateJunk(50)} ${antiDebug} ${extraProtections} ${finalVM}`
-  return result.replace(/\s+/g, " ").trim()
+  let result = `${HEADER} ${opaqueTableDef} ${generateJunk(50)} ${antiDebug} ${extraProtections} ${finalVM}`
+  result = result.replace(/\s+/g, " ").trim()
+  
+  // ════════════════ APLICAR SANITIZADOR ════════════════
+  result = sanitizeLua(result);
+  
+  return result
 }
 
 module.exports = { obfuscate };
 
+// Si se ejecuta directamente, mostrar el resultado
 if (require.main === module) {
   const obfuscatedCode = obfuscate(ETA_ENAI_TKVR_PAYLOAD);
   console.log(obfuscatedCode);
