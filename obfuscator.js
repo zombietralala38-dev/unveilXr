@@ -1,9 +1,8 @@
-const HEADER = `--[[ this code it's protected by vvmer obfoscator ]]`
+// --[[ this code it's protected by vvmer obfoscator ]]
 
 const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"]
 
-// ===== Funciones base =====
 function generateIlName() {
   return IL_POOL[Math.floor(Math.random() * IL_POOL.length)] + Math.floor(Math.random() * 99999)
 }
@@ -19,31 +18,91 @@ function pickHandlers(count) {
   return result
 }
 
-// ----- MEJORA 2: Predicados opacos dependientes del contexto (os.clock) -----
-function heavyMath(n, volatile = false) {
-  if (!volatile && Math.random() < 0.8) return n.toString()
+// ========== MEJORAS: PREDICADOS OPACOS COMPLEJOS ==========
+function getVolatileNumber() {
+  const type = Math.floor(Math.random() * 4)
+  switch(type) {
+    case 0: return `(math.floor(os.clock()*1e4) % 1000)`
+    case 1: return `(os.time() % 997)`
+    case 2: return `(tonumber(tostring({}):match("%d+")) or 42)`
+    default: return `(select('#', ...) + 123)`
+  }
+}
+
+function generateSelfRefOpaque() {
+  const ops = ["==", "~="]
+  const op = ops[Math.floor(Math.random() * ops.length)]
+  // Usar _OPQ definida globalmente (metatabla que siempre retorna 42)
+  if (Math.random() < 0.7) {
+    return `_OPQ[${getVolatileNumber()}] ${op} _OPQ[${getVolatileNumber()}]`
+  } else {
+    return `(function() local a=_OPQ[1]; local b=_OPQ[2]; return a ${op} b end)()`
+  }
+}
+
+function generateRuntimeOpaque() {
+  const type = Math.floor(Math.random() * 5)
+  switch(type) {
+    case 0: return `(os.clock() == os.clock())`
+    case 1: return `(function() local t=os.clock(); return t==t end)()`
+    case 2: return `(type({}) == "table") and (os.time() == os.time())`
+    case 3: return `(math.random(1,1000) <= 1000 or (os.clock()~=os.clock()))`
+    default: return `(getfenv() == getfenv())`
+  }
+}
+
+function heavyMath(n) {
+  if (Math.random() < 0.6) {
+    // Envolver con términos volátiles que cancelan (+0, *1)
+    const volatileTerm = `((${getVolatileNumber()} - ${getVolatileNumber()}) + (os.clock() - os.clock()))`
+    return `((${n}) + ${volatileTerm})`
+  }
+  if (Math.random() < 0.8) return n.toString();
   let a = Math.floor(Math.random() * 3000) + 500
   let b = Math.floor(Math.random() * 50) + 2
   let c = Math.floor(Math.random() * 800) + 10
   let d = Math.floor(Math.random() * 20) + 2
-  let expr = `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`
-  if (volatile) {
-    // Inserta os.clock() de forma que no afecte el resultado
-    expr = `((os.clock()*0+${n}+${a})*${b}/${b}-${a}+(os.clock()*0+${c})*${d}/${d}-${c})`
-  }
-  return expr
+  return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`
 }
 
-function mba(volatile = false) {
-  let n = Math.random() > 0.5 ? 1 : 2
-  let a = Math.floor(Math.random() * 70) + 15
-  let b = Math.floor(Math.random() * 40) + 8
-  let base = `((${n}*${a}-${a})/(${b}+1)+${n})`
-  if (volatile) {
-    base = `((os.clock()*0+${n}*${a}-${a})/(${b}+1)+${n})`
+function mba() {
+  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
+  let base = `((${n}*${a}-${a})/(${b}+1)+${n})`;
+  if (Math.random() < 0.5) {
+    const opaque = generateSelfRefOpaque()
+    return `(function() if ${opaque} then return ${base} else return ${n} end end)()`
   }
-  return base
+  return base;
 }
+
+// Modificar generateJunk para incluir opacos
+function generateJunk(lines = 100) {
+  let j = ''
+  for (let i = 0; i < lines; i++) {
+    const r = Math.random()
+    if (r < 0.15) j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 999))} `
+    else if (r < 0.3) j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
+    else if (r < 0.45) {
+      const pred = generateRuntimeOpaque()
+      j += `if ${pred} then local x=1 else local y=2 end `
+    }
+    else if (r < 0.6) {
+      const pred = generateSelfRefOpaque()
+      j += `if ${pred} then local x=1 end `
+    }
+    else if (r < 0.75) {
+      j += `if type(nil)=="number" then while true do local ${generateIlName()}=1 end end `
+    } else if (r < 0.9) {
+      const vt = generateIlName();
+      j += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `
+    } else {
+      j += `if (function() return (os.clock() - os.clock()) == 0 end)() then local _=1 end `
+    }
+  }
+  return j
+}
+
+// ========== FIN MEJORAS ==========
 
 const MAPEO = {
   "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
@@ -56,10 +115,10 @@ function detectAndApplyMappings(code) {
   for (const [word, tech] of Object.entries(MAPEO)) {
     const regex = new RegExp(`\\b${word}\\b`, "g");
     if (regex.test(modified)) {
-      let replacement = `"${word}"`
+      let replacement = `"${word}"`;
       if (tech.includes("Aggressive Renaming")) { const v = generateIlName(); headers += `local ${v}="${word}";`; replacement = v; }
-      else if (tech.includes("String to Math")) replacement = `string.char(${word.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`
-      else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mba()}==1 or true)and"${word}")`
+      else if (tech.includes("String to Math")) replacement = `string.char(${word.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
+      else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mba()}==1 or true)and"${word}")`;
       regex.lastIndex = 0;
       modified = modified.replace(regex, (match) => `game[${replacement}]`);
     }
@@ -67,209 +126,137 @@ function detectAndApplyMappings(code) {
   return headers + modified;
 }
 
-// ----- MEJORA 6: Junk code que simula código real con llamadas a APIs -----
-function generateJunk(lines = 100, realistic = true) {
-  let j = ''
-  for (let i = 0; i < lines; i++) {
-    const r = Math.random()
-    if (r < 0.15) {
-      j += `local ${generateIlName()}=${heavyMath(Math.floor(Math.random() * 999), true)} `
-    } else if (r < 0.3) {
-      j += `local ${generateIlName()}=string.char(${heavyMath(Math.floor(Math.random()*255), true)}) `
-    } else if (r < 0.45) {
-      j += `if not(${heavyMath(1, true)}==${heavyMath(1, true)}) then local x=1 end `
-    } else if (r < 0.6) {
-      const tp = generateIlName();
-      j += `if type(nil)=="number" then while true do local ${tp}=1 end end `
-    } else if (realistic && r < 0.75) {
-      // Simula llamadas a APIs reales
-      const api = ["Instance.new(\"Part\")", "game:GetService(\"Players\")", "workspace.CurrentCamera", "math.noise(1,2,3)"][Math.floor(Math.random()*4)]
-      j += `local ${generateIlName()}=${api} `
-    } else if (realistic && r < 0.85) {
-      j += `pcall(function() local _=game:GetService(\"RunService\").Heartbeat end) `
-    } else if (r < 0.95) {
-      const vt = generateIlName();
-      j += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `
-    } else {
-      j += `if type(math.pi)=="string" then local _=1 end `
-    }
-  }
-  return j
-}
-
-// ----- MEJORA 5: Flujo de control oculto con indirección de tablas y MBA -----
 function applyCFF(blocks) {
   const stateVar = generateIlName()
-  // El estado se actualiza con MBA en lugar de valor directo
-  let lua = `local ${stateVar}=${heavyMath(1, true)} while true do `
+  let lua = `local ${stateVar}=${heavyMath(1)} while true do `
   for (let i = 0; i < blocks.length; i++) {
-    const nextState = heavyMath(i + 2, true)
-    const condState = heavyMath(i + 1, true)
-    if (i === 0) {
-      lua += `if ${stateVar}==${condState} then ${blocks[i]} ${stateVar}=${nextState} `
-    } else {
-      lua += `elseif ${stateVar}==${condState} then ${blocks[i]} ${stateVar}=${nextState} `
-    }
+    if (i === 0) lua += `if ${stateVar}==${heavyMath(1)} then ${blocks[i]} ${stateVar}=${heavyMath(2)} `
+    else lua += `elseif ${stateVar}==${heavyMath(i + 1)} then ${blocks[i]} ${stateVar}=${heavyMath(i + 2)} `
   }
-  // Añade un índice señuelo que nunca se alcanza
-  lua += `elseif ${stateVar}==${heavyMath(blocks.length + 500, true)} then ${stateVar}=${heavyMath(1, true)} `
-  lua += `elseif ${stateVar}==${heavyMath(blocks.length + 1, true)} then break end end `
+  lua += `elseif ${stateVar}==${heavyMath(blocks.length + 1)} then break end end `
   return lua
 }
 
 function runtimeString(str) {
-  return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0), true)).join(',')})`;
+  return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
-// ----- MEJORA 4: Cifrado multicapa con RC4 derivando clave del entorno -----
-// RC4 generado como código Lua
-function buildRC4Cipher(keyExpr) {
-  const S = generateIlName()
-  const K = generateIlName()
-  const iVar = generateIlName()
-  const jVar = generateIlName()
-  const tVar = generateIlName()
-  const out = generateIlName()
-  const data = generateIlName()
-  const key = generateIlName()
-  return `
-local function ${out}(${data})
-  local ${S},${K},${iVar},${jVar},${tVar}={},${keyExpr},0,0
-  for _=0,255 do ${S}[_]=_ end
-  for _=0,255 do
-    ${iVar}=(${iVar}+${S}[_]+${K}[_%${keyExpr}:len()]%256)%256
-    ${tVar}=${S}[_];${S}[_]=${S}[${iVar}];${S}[${iVar}]=${tVar}
-  end
-  ${iVar},${jVar}=0,0
-  local ${out}={}
-  for _=1,#${data} do
-    ${iVar}=(${iVar}+1)%256
-    ${jVar}=(${jVar}+${S}[${iVar}])%256
-    ${tVar}=${S}[${iVar}];${S}[${iVar}]=${S}[${jVar}];${S}[${jVar}]=${tVar}
-    local __=${S}[(${S}[${iVar}]+${S}[${jVar}])%256]
-    ${out}[_]=string.char((${data}[_]~__)%256)
-  end
-  return table.concat(${out})
-end
-`
-}
-
-// ----- MEJORA 3: VM polimórfica con mutación en tiempo real (multietapa) -----
-function buildTrueVM(payloadStr, selfMutate = true) {
-  const STACK = generateIlName(); const KEY = generateIlName(); const ORDER = generateIlName()
-  const SALT = generateIlName()
-
-  const seed = Math.floor(Math.random() * 200) + 50
-  const saltVal = Math.floor(Math.random() * 250) + 1
-
-  // Cifrado RC4 en lugar de XOR simple
-  const rc4Key = `getfenv()[${runtimeString("game")}]:GetService("HttpService"):GenerateGUID():sub(1,16)`
-  const rc4FuncName = generateIlName()
-  const rc4Code = buildRC4Cipher(rc4Key)
-
-  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed, true)} local ${SALT}=${heavyMath(saltVal, true)} `
-  vmCore += rc4Code
-
-  const chunkSize = 15
-  let realChunks = []
-  for(let i = 0; i < payloadStr.length; i += chunkSize) { realChunks.push(payloadStr.slice(i, i + chunkSize)) }
-  let poolVars = []
-  let realOrder = []
-  let totalChunks = realChunks.length * 3
-  let currentReal = 0
-  let globalIndex = 0
-
-  for(let i = 0; i < totalChunks; i++) {
-    let memName = generateIlName()
-    poolVars.push(memName)
-    if (currentReal < realChunks.length && (Math.random() > 0.5 || (totalChunks - i) === (realChunks.length - currentReal))) {
-      realOrder.push(i + 1)
-      let chunk = realChunks[currentReal]
-      // Cifrar con RC4: aplicamos XOR con la misma clave (simulamos RC4 más abajo)
-      let encryptedBytes = []
-      for(let j = 0; j < chunk.length; j++) {
-        // Usamos XOR con clave derivada (simplificado para VM, luego descifrará con RC4)
-        // En realidad descifrará con la función RC4, así que almacenamos bytes cifrados con RC4.
-        // Para no ejecutar RC4 en JS, construimos una llamada que cifre dinámicamente.
-        // Mejor: almacenamos el chunk en claro pero lo pasamos por RC4 dentro de la VM.
-        // Entonces guardamos el chunk en una variable temporal que luego en la VM se cifra.
-        // Para simplificar, almacenamos los bytes ya cifrados mediante una expresión que llama a rc4.
-        // Pero RC4 requiere estado, es complejo. Optamos por guardar el chunk y llamar a la función RC4 sobre él.
-        // Cambiamos: el chunk se almacena como array de bytes (en claro) y luego en la VM se cifra y descifra.
-        // Eso añade otra capa. Lo hago así:
-        encryptedBytes.push(chunk.charCodeAt(j)) // Guardamos el valor original, luego en VM se aplica RC4 inverso
-      }
-      vmCore += `local ${memName}={${encryptedBytes.join(',')}} `  // Guarda claro, se cifrará on-the-fly
-      currentReal++
-    } else {
-      let fakeBytes = []
-      let fakeLen = Math.floor(Math.random() * 20) + 5
-      for(let j=0; j < fakeLen; j++) { fakeBytes.push(Math.floor(Math.random() * 255)) }
-      vmCore += `local ${memName}={${fakeBytes.join(',')}} `
+function extremeFragment(secretMsg, totalPartsStr) {
+  const chars = secretMsg.split('');
+  const charCodes = chars.map(c => c.charCodeAt(0));
+  const fragVars = [];
+  
+  for (let i = 0; i < chars.length; i++) {
+    const varName = generateIlName();
+    const maskedCode = heavyMath(charCodes[i]);
+    fragVars.push({ name: varName, code: maskedCode, original: chars[i] });
+  }
+  
+  let fragmentationCode = '';
+  const totalBig = BigInt(totalPartsStr);
+  const dummyMultiplier = 1000n;
+  
+  fragmentationCode += `--[=[ FRAGMENTED INTO ${totalPartsStr} PARTS ]=] `;
+  fragmentationCode += `local _fragCount = 0 `;
+  
+  const shuffled = [...fragVars].sort(() => Math.random() - 0.5);
+  
+  for (let cycle = 0; cycle < 50; cycle++) {
+    for (const frag of shuffled) {
+      const scrambledName = generateIlName();
+      fragmentationCode += `local ${scrambledName} = ${frag.code} `;
+      fragmentationCode += `if ${scrambledName} ~= ${heavyMath(frag.original.charCodeAt(0))} then local _err = 1 end `;
+      fragmentationCode += `_fragCount = _fragCount + 1 `;
     }
   }
+  
+  fragmentationCode += `local _secretMsg = "" `;
+  fragmentationCode += `local _idx = 1 `;
+  fragmentationCode += `local _chunkSize = ${heavyMath(chars.length)} `;
+  
+  const reconstructVars = fragVars.map(f => f.name);
+  fragmentationCode += `local _chars = {${reconstructVars.map(v => `${v}`).join(',')}} `;
+  
+  for (let i = 0; i < chars.length; i++) {
+    fragmentationCode += `_secretMsg = _secretMsg .. string.char(_chars[${i+1}]) `;
+  }
+  
+  return {
+    code: fragmentationCode,
+    totalFragments: totalPartsStr,
+    msgVarNames: reconstructVars
+  };
+}
 
-  vmCore += `local _pool={${poolVars.join(',')}} local ${ORDER}={${realOrder.map(n => heavyMath(n, true)).join(',')}} `
-  const idxVar = generateIlName(); const byteVar = generateIlName()
-
-  // Descifrado usando RC4: se aplica rc4FuncName a cada chunk leído
-  vmCore += `local _gIdx=0 for _, ${idxVar} in ipairs(${ORDER}) do for _, ${byteVar} in ipairs(_pool[${idxVar}]) do `
-  vmCore += `if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `
-  // Incorporamos basura: usa una variable temporal calc con MBA
-  vmCore += `local _tmp=${mba(true)}; _gIdx=_gIdx+1 `
-  // Descifrar: en lugar de XOR directo, usamos RC4
-  vmCore += `table.insert(${STACK}, string.char( (${byteVar} + 256 - (${KEY} + _gIdx * ${SALT}) % 256) % 256 )) `
-  vmCore += `end end `
-
-  // Aplicamos RC4 sobre el stack completo para mayor ofuscación (segunda capa)
-  vmCore += `local _e = ${rc4FuncName}(${STACK}) ${STACK}=nil `
+function buildTrueVM(payloadStr) {
+  const STACK = generateIlName(); const KEY = generateIlName(); const ORDER = generateIlName()
+  const SALT = generateIlName();
+  
+  const seed = Math.floor(Math.random() * 200) + 50
+  const saltVal = Math.floor(Math.random() * 250) + 1
+  
+  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} local ${SALT}=${heavyMath(saltVal)} `
+  const chunkSize = 15; let realChunks = [];
+  for(let i = 0; i < payloadStr.length; i += chunkSize) { realChunks.push(payloadStr.slice(i, i + chunkSize)); }
+  let poolVars = []; let realOrder = [];
+  let totalChunks = realChunks.length * 3; let currentReal = 0; let globalIndex = 0;
+  
+  for(let i = 0; i < totalChunks; i++) {
+    let memName = generateIlName(); poolVars.push(memName);
+    if (currentReal < realChunks.length && (Math.random() > 0.5 || (totalChunks - i) === (realChunks.length - currentReal))) {
+      realOrder.push(i + 1);
+      let chunk = realChunks[currentReal]; let encryptedBytes = [];
+      for(let j = 0; j < chunk.length; j++) { 
+        let enc = (chunk.charCodeAt(j) + seed + (globalIndex * saltVal)) % 256;
+        encryptedBytes.push(heavyMath(enc)); 
+        globalIndex++;
+      }
+      vmCore += `local ${memName}={${encryptedBytes.join(',')}} `;
+      currentReal++;
+    } else {
+      let fakeBytes = []; let fakeLen = Math.floor(Math.random() * 20) + 5;
+      for(let j = 0; j < fakeLen; j++) { fakeBytes.push(heavyMath(Math.floor(Math.random() * 255))); }
+      vmCore += `local ${memName}={${fakeBytes.join(',')}} `;
+    }
+  }
+  
+  vmCore += `local _pool={${poolVars.join(',')}} local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `;
+  const idxVar = generateIlName(); const byteVar = generateIlName();
+  
+  vmCore += `local _gIdx=0 for _, ${idxVar} in ipairs(${ORDER}) do for _, ${byteVar} in ipairs(_pool[${idxVar}]) do `;
+  vmCore += `if type(math.pi)=="string" then ${KEY}=(${KEY}+137)%256 end `;
+  vmCore += `table.insert(${STACK}, string.char(math.floor((${byteVar} - ${KEY} - _gIdx * ${SALT}) % 256))) _gIdx=_gIdx+1 end end `;
+  
+  vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `;
   const ASSERT = `getfenv()[${runtimeString("assert")}]`;
   const LOADSTRING = `getfenv()[${runtimeString("loadstring")}]`;
   const GAME = `getfenv()[${runtimeString("game")}]`;
   const HTTPGET = runtimeString("HttpGet");
-
-  if (payloadStr.includes("http")) {
-    vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME}, _e)))() `
-  } else {
-    vmCore += `${ASSERT}(${LOADSTRING}(_e))() `
-  }
-
-  // Mutación: si selfMutate es true, el código resultante es una VM que genera otra VM
-  if (selfMutate) {
-    // Envolvemos todo para que sea un string que se carga y ejecuta, creando una cadena de VMs
-    const nextVM = buildTrueVM(payloadStr, false) // segunda VM sin mutación para no infinito
-    vmCore = `local _gen=${generateIlName()} _gen=function() ${vmCore} end ${ASSERT}(${LOADSTRING}(_gen()))()`
-  }
+  if (payloadStr.includes("http")) { vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME}, _e)))() ` } 
+  else { vmCore += `${ASSERT}(${LOADSTRING}(_e))() ` }
   return vmCore
 }
 
 function buildSingleVM(innerCode, handlerCount) {
-  const handlers = pickHandlers(handlerCount)
-  const realIdx = Math.floor(Math.random() * handlerCount)
-  const DISPATCH = generateIlName()
-  let out = `local lM={} `
+  const handlers = pickHandlers(handlerCount); const realIdx = Math.floor(Math.random() * handlerCount);
+  const DISPATCH = generateIlName(); let out = `local lM={} ` 
   for (let i = 0; i < handlers.length; i++) {
-    if (i === realIdx) {
-      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5, true)} ${innerCode} end `
-    } else {
-      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(3, true)} return nil end `
-    }
+    if (i === realIdx) { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} ${innerCode} end ` } 
+    else { out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(3)} return nil end ` }
   }
   out += `local ${DISPATCH}={`
-  for (let i = 0; i < handlers.length; i++) { out += `[${heavyMath(i + 1, true)}]=${handlers[i]},` }
+  for (let i = 0; i < handlers.length; i++) { out += `[${heavyMath(i + 1)}]=${handlers[i]},` }
   out += `} `
-  let execBlocks = []
-  for (let i = 0; i < handlers.length; i++) { execBlocks.push(`${DISPATCH}[${heavyMath(i + 1, true)}](lM)`) }
-  out += applyCFF(execBlocks)
-  return out
+  let execBlocks = []; for (let i = 0; i < handlers.length; i++) { execBlocks.push(`${DISPATCH}[${heavyMath(i + 1)}](lM)`) }
+  out += applyCFF(execBlocks); return out
 }
 
 function build18xVM(payloadStr) {
-  let vm = buildTrueVM(payloadStr, true); // primera etapa muta
+  let vm = buildTrueVM(payloadStr);
   for (let i = 0; i < 17; i++) {
-    vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3)
+    vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3); 
   }
-  return vm
+  return vm;
 }
 
 function getExtraProtections() {
@@ -311,47 +298,6 @@ function getExtraProtections() {
   return antiDebuggers + codeVaultGuards;
 }
 
-// Fragmentación original (mantenida pero con predicados volátiles)
-function extremeFragment(secretMsg, totalPartsStr) {
-  const chars = secretMsg.split('');
-  const charCodes = chars.map(c => c.charCodeAt(0));
-  const fragVars = [];
-  for (let i = 0; i < chars.length; i++) {
-    const varName = generateIlName();
-    const maskedCode = heavyMath(charCodes[i], true);
-    fragVars.push({ name: varName, code: maskedCode, original: chars[i] });
-  }
-
-  let fragmentationCode = '';
-  fragmentationCode += `--[=[ FRAGMENTED INTO ${totalPartsStr} PARTS ]=] `;
-  fragmentationCode += `local _fragCount = 0 `;
-  const shuffled = [...fragVars].sort(() => Math.random() - 0.5);
-  for (let cycle = 0; cycle < 50; cycle++) {
-    for (const frag of shuffled) {
-      const scrambledName = generateIlName();
-      fragmentationCode += `local ${scrambledName} = ${frag.code} `;
-      fragmentationCode += `if ${scrambledName} ~= ${heavyMath(frag.original.charCodeAt(0), true)} then local _err = 1 end `;
-      fragmentationCode += `_fragCount = _fragCount + 1 `;
-    }
-  }
-
-  fragmentationCode += `local _secretMsg = "" `;
-  fragmentationCode += `local _idx = 1 `;
-  fragmentationCode += `local _chunkSize = ${heavyMath(chars.length, true)} `;
-  const reconstructVars = fragVars.map(f => f.name);
-  fragmentationCode += `local _chars = {${reconstructVars.map(v => `${v}`).join(',')}} `;
-  for (let i = 0; i < chars.length; i++) {
-    fragmentationCode += `_secretMsg = _secretMsg .. string.char(_chars[${i+1}]) `;
-  }
-
-  return {
-    code: fragmentationCode,
-    totalFragments: totalPartsStr,
-    msgVarNames: reconstructVars
-  };
-}
-
-// Payload original (sin cambios)
 const ETA_ENAI_TKVR_PAYLOAD = `
 local logger = function()
     for i = 1, 100 do
@@ -447,30 +393,45 @@ p10()
 
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
+  
   let basePayload = sourceCode || ETA_ENAI_TKVR_PAYLOAD;
+  
   const SECRET_MSG = "I really like Rick and Morty";
   const TOTAL_PARTS = "2818373738388392919173737627272727363817256367292822";
   const { code: fragmentCode, msgVarNames } = extremeFragment(SECRET_MSG, TOTAL_PARTS);
+  
   let modifiedPayload = basePayload;
   modifiedPayload = modifiedPayload.replace(
     /local _ = \{[\s\S]*?local s = table\.concat\(r\)/,
     `--[=[ ORIGINAL MESSAGE FRAGMENTED INTO ${TOTAL_PARTS} PARTS ]=] ${fragmentCode} local s = _secretMsg`
   );
+  
   modifiedPayload = modifiedPayload.replace(
     /local logger = function\(\)/,
     `--[=[ MSG_VARS: ${msgVarNames.join(',')} ]=] local logger = function()`
   );
-
+  
+  // Definir tabla autorreferencial para predicados opacos
+  const opaqueTableDef = `
+    do
+      local _mt = { __index = function(t,k) return 42 end }
+      _OPQ = setmetatable({}, _mt)
+      _OPQ[0] = 0
+      for i=1,10 do _OPQ[i] = i end
+    end
+  `;
+  
   const antiDebug = `local _clk=os.clock local _t=_clk() for _=1,150000 do end if os.clock()-_t>5.0 then while true do end end `
   const extraProtections = getExtraProtections()
+  
   let payloadToProtect = ""
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
   const match = modifiedPayload.match(isLoadstringRegex)
-  if (match) { payloadToProtect = match[1] }
+  if (match) { payloadToProtect = match[1] } 
   else { payloadToProtect = detectAndApplyMappings(modifiedPayload) }
-
+  
   const finalVM = build18xVM(payloadToProtect)
-  const result = `${HEADER} ${generateJunk(50, true)} ${antiDebug} ${extraProtections} ${finalVM}`
+  const result = `${HEADER} ${opaqueTableDef} ${generateJunk(50)} ${antiDebug} ${extraProtections} ${finalVM}`
   return result.replace(/\s+/g, " ").trim()
 }
 
