@@ -1,5 +1,5 @@
 // --[[ this code it's protected by vvmer obfoscator ]]
-
+const HEADER = '--[[THIS CODE ITS PROTECTED BY SEAK OBFUSCATOR ]]'
 const IL_POOL = ["IIIIIIII1", "vvvvvv1", "vvvvvvvv2", "vvvvvv3", "IIlIlIlI1", "lvlvlvlv2", "I1","l1","v1","v2","v3","II","ll","vv", "I2"]
 const HANDLER_POOL = ["KQ","HF","W8","SX","Rj","nT","pL","qZ","mV","xB","yC","wD"]
 
