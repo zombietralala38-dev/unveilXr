@@ -1,8 +1,3 @@
-if (typeof File === "undefined") {
-  const { File: NodeFile } = require("buffer");
-  global.File = NodeFile;
-}
-
 const fs = require("node:fs");
 const path = require("node:path");
 const {
@@ -15,6 +10,9 @@ const {
   REST,
   Routes,
   SlashCommandBuilder,
+  ActionRowBuilder,
+  ButtonBuilder,
+  ButtonStyle,
 } = require("discord.js");
 const { fetch } = require("undici");
 const { obfuscate } = require("./obfuscator.js");
@@ -23,14 +21,21 @@ const TOKEN = process.env.DISCORD_BOT_TOKEN;
 const CLIENT_ID = process.env.DISCORD_CLIENT_ID;
 
 if (!TOKEN || !CLIENT_ID) {
-  console.error("Missing DISCORD_BOT_TOKEN or DISCORD_CLIENT_ID environment variables.");
+  console.error("Faltan DISCORD_BOT_TOKEN o DISCORD_CLIENT_ID");
   process.exit(1);
 }
 
 const FOOTER_MESSAGE = "⏱️ Time";
-const COLOR_BLUE = 0x3b82f6;
 const COLOR_RED = 0xef4444;
 const COLOR_GREEN = 0x22c55e;
+
+const obfuscatedStore = new Map();
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, { expiresAt }] of obfuscatedStore.entries()) {
+    if (now > expiresAt) obfuscatedStore.delete(key);
+  }
+}, 60000);
 
 function formatDuration(ms) {
   if (ms < 1000) return `${ms}ms`;
@@ -39,7 +44,7 @@ function formatDuration(ms) {
 
 async function readAttachmentText(url) {
   const res = await fetch(url);
-  if (!res.ok) throw new Error(`Error: ${res.status}`);
+  if (!res.ok) throw new Error(`Error ${res.status}: ${res.statusText}`);
   return await res.text();
 }
 
@@ -51,20 +56,12 @@ function buildErrorEmbed(title, description) {
     .setFooter({ text: FOOTER_MESSAGE });
 }
 
-const LUA_KEYWORDS = [/\bload\b/, /\blocal\b/, /\bprint\b/];
-
-function isLuaCode(rawSrc) {
-  const src = (rawSrc || "").trim();
-  if (!src) return false;
-  return LUA_KEYWORDS.some((re) => re.test(src));
-}
-
 const commandDefs = [
   new SlashCommandBuilder()
     .setName("obf")
-    .setDescription("Obfuscate Lua code")
-    .addStringOption((o) => o.setName("code").setDescription("Lua code").setRequired(false))
-    .addAttachmentOption((o) => o.setName("file").setDescription(".lua or .txt file").setRequired(false))
+    .setDescription("Ofusca código Lua")
+    .addStringOption((o) => o.setName("code").setDescription("Código Lua").setRequired(false))
+    .addAttachmentOption((o) => o.setName("file").setDescription("Archivo .lua o .txt").setRequired(false))
     .toJSON(),
 ];
 
@@ -83,12 +80,7 @@ async function handleObfuscate(interaction) {
   if (!codeOption && !fileOption) {
     const elapsed = Date.now() - startedAt;
     return await interaction.editReply({
-      embeds: [
-        buildErrorEmbed(
-          "No input provided",
-          `Provide code or upload a .lua/.txt file\n\`${formatDuration(elapsed)}\``
-        ),
-      ],
+      embeds: [buildErrorEmbed("No input provided", `Provide code or upload .lua/.txt file\n\`${formatDuration(elapsed)}\``)],
     });
   }
 
@@ -98,7 +90,9 @@ async function handleObfuscate(interaction) {
       source = codeOption;
     } else if (fileOption) {
       const name = (fileOption.name || "").toLowerCase();
-      if (!name.endsWith(".lua") && !name.endsWith(".txt")) throw new Error("Only .lua or .txt files");
+      if (!name.endsWith(".lua") && !name.endsWith(".txt")) {
+        throw new Error("Only .lua or .txt files allowed");
+      }
       source = await readAttachmentText(fileOption.url);
     }
   } catch (err) {
@@ -108,12 +102,31 @@ async function handleObfuscate(interaction) {
     });
   }
 
-  // ⚠️ Aquí estaba la detección de Lua qa NO se ejecutará.
-  // Se procede directamente a ofuscar.
+  if (!source || source.trim().length === 0) {
+    const elapsed = Date.now() - startedAt;
+    return await interaction.editReply({
+      embeds: [buildErrorEmbed("Empty code", "Cannot obfuscate empty code.\n\`${formatDuration(elapsed)}\``)],
+    });
+  }
 
   try {
     const obfuscated = obfuscate(source);
     const elapsed = Date.now() - startedAt;
+
+    const storeId = `copy_${Date.now()}_${Math.random().toString(36).substring(2, 8)}`;
+    obfuscatedStore.set(storeId, {
+      code: obfuscated,
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    });
+
+    // ✅ Botón con etiqueta en inglés "Copy full code"
+    const copyButton = new ButtonBuilder()
+      .setCustomId(storeId)
+      .setLabel("📋 Copy full code")
+      .setStyle(ButtonStyle.Primary);
+
+    const row = new ActionRowBuilder().addComponents(copyButton);
+
     const attachment = new AttachmentBuilder(Buffer.from(obfuscated, "utf8"), { name: "obfuscated.lua" });
     const preview = obfuscated.slice(0, 300);
 
@@ -123,11 +136,15 @@ async function handleObfuscate(interaction) {
       .addFields(
         { name: "Size", value: `${obfuscated.length} bytes`, inline: true },
         { name: "Time", value: `\`${formatDuration(elapsed)}\``, inline: true },
-        { name: "Preview", value: `\`\`\`lua\n${preview}...\n\`\`\`` }
+        { name: "Preview", value: `\`\`\`lua\n${preview}${obfuscated.length > 300 ? "..." : ""}\n\`\`\`` }
       )
       .setFooter({ text: FOOTER_MESSAGE });
 
-    await interaction.editReply({ embeds: [embed], files: [attachment] });
+    await interaction.editReply({
+      embeds: [embed],
+      files: [attachment],
+      components: [row],
+    });
   } catch (err) {
     const elapsed = Date.now() - startedAt;
     await interaction.editReply({
@@ -141,19 +158,32 @@ client.once(Events.ClientReady, (c) => {
 });
 
 client.on(Events.InteractionCreate, async (interaction) => {
-  if (!interaction.isChatInputCommand()) return;
-  try {
-    if (interaction.commandName === "obf") {
-      await handleObfuscate(interaction);
+  if (interaction.isChatInputCommand() && interaction.commandName === "obf") {
+    await handleObfuscate(interaction);
+    return;
+  }
+
+  if (interaction.isButton()) {
+    const storeId = interaction.customId;
+    const stored = obfuscatedStore.get(storeId);
+
+    if (!stored) {
+      return interaction.reply({
+        content: "❌ Code no longer available. Run `/obf` again.",
+        ephemeral: true,
+      });
     }
-  } catch (err) {
-    console.error("Error:", err);
-    const embed = buildErrorEmbed("Error", err.message);
-    if (interaction.replied) {
-      await interaction.editReply({ embeds: [embed] }).catch(() => {});
-    } else {
-      await interaction.reply({ embeds: [embed], ephemeral: true }).catch(() => {});
-    }
+
+    const { code } = stored;
+    obfuscatedStore.delete(storeId);
+
+    const attachment = new AttachmentBuilder(Buffer.from(code, "utf8"), { name: "obfuscated.lua" });
+
+    await interaction.reply({
+      content: "📄 **Full obfuscated code** (attached file):",
+      files: [attachment],
+      ephemeral: true,
+    });
   }
 });
 
@@ -164,7 +194,7 @@ async function registerCommands() {
     await rest.put(Routes.applicationCommands(CLIENT_ID), { body: commandDefs });
     console.log("✅ Commands registered");
   } catch (err) {
-    console.error("❌ Error:", err);
+    console.error("❌ Error registering commands:", err);
   }
 }
 
