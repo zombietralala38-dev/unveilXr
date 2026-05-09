@@ -206,55 +206,40 @@ function getExtraProtections() {
 }
 
 /**
- * Construye el payload del anti‑env logger (todos los checks en una línea),
- * lo cifra con XOR, lo divide en 20 fragmentos y añade un reconstructor con verificación de checksum.
+ * Construye el anti‑env logger SIN OFUSCAR, solo fragmentado en muchas partes pequeñas.
+ * Los fragmentos se devuelven como statements que asignan un string a una variable local.
+ * Además se devuelve el reconstructor que las junta y ejecuta.
  */
 function buildAntiEnvProtection() {
-  // Código combinado de todos los checks (largos + FlameCoderV2) en una sola línea.
-  // Si se detecta algo, entra en bucle infinito (while true do end).
+  // Código anti‑env completo compactado en una sola línea
   const antiEnvCode = `local _r,_n={},0 local function _push(v) _n=_n+1;_r[_n]=v and 1 or 0 end do local p=true pcall(function() local ts=game:GetService("TweenService") if not ts then return end local f=Instance.new("Frame") local tw=ts:Create(f,TweenInfo.new(0.1),{Size=UDim2.new(1,0,1,0)}) local t=os.clock() tw:Play() tw.Completed:Wait() if math.abs(os.clock()-t-0.1)>0.05 then p=false end f:Destroy() end) _push(p) end do local p=true pcall(function() local s=Instance.new("Sound") if pcall(function() s.PlaybackLoudness=99 end) then p=false end s:Destroy() end) _push(p) end do local p=true pcall(function() if not Instance then return end local f=Instance.new("Frame") if typeof(f)~="Instance" then p=false end f:Destroy() end) _push(p) end do local p=true pcall(function() if not game then return end if game.PlaceId==game.GameId then p=false end end) _push(p) end do local p=true pcall(function() local tb=Instance.new("TextBox") if pcall(function() tb.TextBounds=Vector2.new(1,1) end) then p=false end tb:Destroy() end) _push(p) end local _s=0 for i=1,_n do _s=_s+_r[i] end if _s~=_n then while true do end end`;
 
-  const key = Math.floor(Math.random() * 200) + 30;
-  const bytes = Buffer.from(antiEnvCode, 'utf8');
-  const encrypted = bytes.map(b => b ^ key);
-  const checksum = bytes.reduce((s, b) => s + b, 0) % 65536;
-
-  // Exactamente 20 fragmentos
-  const numChunks = 20;
-  const chunkSize = Math.ceil(encrypted.length / numChunks);
-  const chunks = [];
-  for (let i = 0; i < numChunks; i++) {
-    chunks.push(encrypted.slice(i * chunkSize, (i + 1) * chunkSize));
+  // Dividir en fragmentos pequeños (longitud fija de 30-40 caracteres para que haya muchos)
+  const fragSize = 35; 
+  const fragments = [];
+  for (let i = 0; i < antiEnvCode.length; i += fragSize) {
+    fragments.push(antiEnvCode.slice(i, i + fragSize));
   }
 
-  const chunkVars = [];
-  const assignments = [];
-  for (let i = 0; i < chunks.length; i++) {
+  // Crear variables para cada fragmento y el reconstructor
+  const fragVars = [];
+  const fragStatements = [];
+  for (const frag of fragments) {
     const varName = randomName();
-    chunkVars.push(varName);
-    // Solo números enteros crudos (sin heavyMath, sin decimales raros)
-    assignments.push(`local ${varName}={${chunks[i].join(',')}}`);
+    fragVars.push(varName);
+    // El fragmento es un string literal normal (sin ofuscar)
+    fragStatements.push(`local ${varName}=${JSON.stringify(frag)}`);
   }
 
-  // Reconstructor simple: XOR + string.char + checksum
+  // Reconstructor simple: junta todos los fragmentos en orden y ejecuta
+  const reconstructVar = randomName();
   const reconstruct = `
-    local key=${key};
-    local checksum=${checksum};
-    local decrypted={};
-    local sum=0;
-    for _,v in ipairs({${chunkVars.join(',')}}) do
-      for _,b in ipairs(v) do
-        local d=bit32.bxor(b,key);
-        sum=sum+d;
-        table.insert(decrypted,string.char(d));
-      end;
-    end;
-    if sum~=checksum then while true do end end;
-    local code=table.concat(decrypted);
-    assert(loadstring(code))();
+    local ${reconstructVar}=""
+    ${fragVars.map(v => `${reconstructVar}=${reconstructVar}..${v}`).join(' ')}
+    assert(loadstring(${reconstructVar}))()
   `;
 
-  return { assignments: assignments.join(';'), reconstruct, chunkVars };
+  return { fragStatements, reconstruct };
 }
 
 /**
@@ -265,22 +250,22 @@ function obfuscate(sourceCode) {
 
   const antiEnv = buildAntiEnvProtection();
 
+  // Generar basura (junk lines)
   const junkLines = [];
-  const totalJunk = 60;
+  const totalJunk = 80; // un poco más para que haya espacio
   for (let i = 0; i < totalJunk; i++) {
     junkLines.push(generateSingleJunkLine());
   }
 
-  // Insertar fragmentos del anti‑env en posiciones aleatorias
-  const assignmentStatements = antiEnv.assignments.split(';').filter(s => s.trim() !== '');
-  assignmentStatements.forEach(stmt => {
+  // Insertar los fragmentos del anti‑env en posiciones totalmente aleatorias
+  for (const stmt of antiEnv.fragStatements) {
     const pos = Math.floor(Math.random() * junkLines.length);
     junkLines.splice(pos, 0, stmt);
-  });
+  }
 
-  // El reconstructor se coloca después del ~70% de la basura
-  const reconstructPos = Math.floor(junkLines.length * 0.7);
-  junkLines.splice(reconstructPos, 0, antiEnv.reconstruct);
+  // Insertar el reconstructor también en una posición aleatoria (pero después de todos los fragmentos, no importa)
+  const reconPos = Math.floor(Math.random() * junkLines.length);
+  junkLines.splice(reconPos, 0, antiEnv.reconstruct);
 
   const combinedJunk = junkLines.join(' ');
   const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `;
