@@ -1,5 +1,5 @@
 // ------------------------------------------------------------
-//  Seak Obfuscator
+//  Seak Obfuscator - Modo Caos Total
 // ------------------------------------------------------------
 const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
@@ -97,17 +97,17 @@ function buildTrueVM(payloadStr) {
   const seed = Math.floor(Math.random() * 200) + 50
 
   let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} `
-  const chunkSize = 15
+  const chunkSize = 10  // más pequeño = más caos
   let realChunks = []
   for(let i = 0; i < payloadStr.length; i += chunkSize)
     realChunks.push(payloadStr.slice(i, i + chunkSize))
 
-  let poolVars = [], realOrder = [], totalChunks = realChunks.length * 3, currentReal = 0, globalIndex = 0
+  let poolVars = [], realOrder = [], totalChunks = realChunks.length * 4, currentReal = 0, globalIndex = 0
 
   for(let i = 0; i < totalChunks; i++) {
     let memName = randomName()
     poolVars.push(memName)
-    if (currentReal < realChunks.length && (Math.random() > 0.5 || (totalChunks - i) === (realChunks.length - currentReal))) {
+    if (currentReal < realChunks.length && (Math.random() > 0.6 || (totalChunks - i) === (realChunks.length - currentReal))) {
       realOrder.push(i + 1)
       let chunk = realChunks[currentReal], encryptedBytes = []
       for(let j = 0; j < chunk.length; j++) {
@@ -119,7 +119,7 @@ function buildTrueVM(payloadStr) {
       currentReal++
     } else {
       let fakeBytes = []
-      for(let j = 0; j < Math.floor(Math.random() * 20) + 5; j++)
+      for(let j = 0; j < Math.floor(Math.random() * 25) + 5; j++)
         fakeBytes.push(heavyMath(Math.floor(Math.random() * 255)))
       vmCore += `local ${memName}={${fakeBytes.join(',')}} `
     }
@@ -151,9 +151,9 @@ function buildSingleVM(innerCode, handlerCount) {
   let out = `local lM={} `
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx)
-      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(5)} ${innerCode} end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(8)} ${innerCode} end `
     else
-      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(3)} return nil end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(4)} return nil end `
   }
   out += `local ${DISPATCH}={`
   for (let i = 0; i < handlers.length; i++)
@@ -168,7 +168,7 @@ function buildSingleVM(innerCode, handlerCount) {
 
 function build18xVM(payloadStr) {
   let vm = buildTrueVM(payloadStr)
-  for (let i = 0; i < 17; i++)
+  for (let i = 0; i < 25; i++)  // Más capas (25 en vez de 18)
     vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3)
   return vm
 }
@@ -206,14 +206,13 @@ function getExtraProtections() {
 }
 
 /**
- * Anti‑env logger camuflado dentro del resto del código ofuscado.
- * Fragmentos: string.char(heavyMath(...)) para parecer basura normal.
- * Reconstructor: colocado al final del bloque para garantizar que todos los fragmentos existan.
+ * Anti‑env logger al extremo: fragmentos microscópicos (3‑7 caracteres).
+ * Cada uno convertido en string.char(heavyMath) para máximo camuflaje.
  */
 function buildAntiEnvProtection() {
   const antiEnvCode = `local _r,_n={},0 local function _push(v) _n=_n+1;_r[_n]=v and 1 or 0 end do local p=true pcall(function() local ts=game:GetService("TweenService") if not ts then return end local f=Instance.new("Frame") local tw=ts:Create(f,TweenInfo.new(0.1),{Size=UDim2.new(1,0,1,0)}) local t=os.clock() tw:Play() tw.Completed:Wait() if math.abs(os.clock()-t-0.1)>0.05 then p=false end f:Destroy() end) _push(p) end do local p=true pcall(function() local s=Instance.new("Sound") if pcall(function() s.PlaybackLoudness=99 end) then p=false end s:Destroy() end) _push(p) end do local p=true pcall(function() if not Instance then return end local f=Instance.new("Frame") if typeof(f)~="Instance" then p=false end f:Destroy() end) _push(p) end do local p=true pcall(function() if not game then return end if game.PlaceId==game.GameId then p=false end end) _push(p) end do local p=true pcall(function() local tb=Instance.new("TextBox") if pcall(function() tb.TextBounds=Vector2.new(1,1) end) then p=false end tb:Destroy() end) _push(p) end local _s=0 for i=1,_n do _s=_s+_r[i] end if _s~=_n then while true do end end`;
 
-  const fragSize = 12 + Math.floor(Math.random() * 8);
+  const fragSize = 4 + Math.floor(Math.random() * 4); // entre 4 y 7 caracteres -> caos máximo
   const fragments = [];
   for (let i = 0; i < antiEnvCode.length; i += fragSize) {
     fragments.push(antiEnvCode.slice(i, i + fragSize));
@@ -228,7 +227,6 @@ function buildAntiEnvProtection() {
     fragStatements.push(`local ${varName}=string.char(${bytes.join(',')})`);
   }
 
-  // Reconstructor: se ejecutará después de todos los fragmentos
   const tempArray = randomName();
   const reconstruct = `local ${tempArray}={${fragVars.join(',')}};local _reco=table.concat(${tempArray});assert(loadstring(_reco))();`;
 
@@ -236,7 +234,7 @@ function buildAntiEnvProtection() {
 }
 
 /**
- * Función principal de ofuscación.
+ * Función principal de ofuscación (Modo Demencial)
  */
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR';
@@ -244,19 +242,18 @@ function obfuscate(sourceCode) {
   const antiEnv = buildAntiEnvProtection();
 
   const junkLines = [];
-  const totalJunk = 80;
+  const totalJunk = 150;  // 150 líneas de basura pura
   for (let i = 0; i < totalJunk; i++) {
     junkLines.push(generateSingleJunkLine());
   }
 
-  // Insertar fragmentos del anti‑env en posiciones aleatorias dentro de la basura
+  // Mezclar fragmentos del anti‑env aleatoriamente
   for (const stmt of antiEnv.fragStatements) {
     const pos = Math.floor(Math.random() * junkLines.length);
     junkLines.splice(pos, 0, stmt);
   }
 
-  // IMPORTANTE: el reconstructor se añade AL FINAL de todo el bloque combinado
-  // para asegurar que todas las variables de fragmentos ya existen.
+  // Reconstructor AL FINAL (seguro)
   junkLines.push(antiEnv.reconstruct);
 
   const combinedJunk = junkLines.join(' ');
