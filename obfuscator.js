@@ -203,21 +203,19 @@ function getExtraProtections() {
 }
 
 /**
- * Construye el payload del anti‑env logger (todos los checks en una línea),
- * lo cifra con XOR, lo divide en fragmentos y añade un reconstructor con verificación de checksum.
+ * Construye el payload cifrado del anti‑env logger (todos los checks en una línea),
+ * lo fragmenta en 7 tablas y añade un reconstructor con verificación de suma.
  */
 function buildAntiEnvProtection() {
-  // Todos los checks combinados en una sola línea con detención al detectar
-  const antiEnvCode = `local d=false;local s,r=pcall(function()local c=coroutine.create(function()coroutine.yield()end)coroutine.resume(c)return coroutine.status(c)=="suspended"end)if not s or not r then d=true end;local w=workspace;local o=w.DistributedGameTime;local ok,err=pcall(function()sethiddenproperty(w,"DistributedGameTime",67)end)if not ok then d=true else wait(0.01)local v=w.DistributedGameTime if v==67 or v<67 then d=true elseif math.abs(v-o)>1 then d=true end end;local t=workspace.Terrain;local ok=pcall(function()t.WaterWaveSpeed=9e9 end)if not ok then d=true elseif t.WaterWaveSpeed~=100 then d=true end;local p=Instance.new("Part")p.Color=Color3.new(0,0,0)p.Parent=workspace pcall(function()p.Color=Color3.new(256,0,0)end)if p.Color~=Color3.new(0,0,0)then d=true end p:Destroy();local pl=game.Players.LocalPlayer;local o5=pl.CameraMinZoomDistance;pcall(function()pl.CameraMinZoomDistance=-5 end)if pl.CameraMinZoomDistance~=o5 then d=true end;local a=pcall(function()return islclosure(print)==false and iscclosure(print)==true end)local b=pcall(function()return getgenv()~=getrenv() and iscclosure(newcclosure(function()end))==true end)local c=pcall(function()return getfenv(0)==getfenv(1)and type(getgc())=="table"end)if not(a and b and c)then d=true end;local s7,u7=pcall(function()return game.Players:GetNameFromUserIdAsync(1)end)if s7 then if u7~=game.Players.LocalPlayer.Name then d=true end else d=true end;if d then print("detected")return end`
+  // Todos los checks (más de 40) en una sola línea, con parada inmediata si se detecta.
+  const antiEnvCode = `local d=false;local function Q(f)local s,r=pcall(f)if not s then d=true end return r end;local function E(n)return _G[n]~=nil end;local s,r=pcall(function()local c=coroutine.create(function()coroutine.yield()end)coroutine.resume(c)return coroutine.status(c)=="suspended"end)if not s or not r then d=true end;local w=workspace;local o=w.DistributedGameTime;local ok,err=pcall(function()sethiddenproperty(w,"DistributedGameTime",67)end)if not ok then d=true else task.wait(0.01)local v=w.DistributedGameTime if v==67 or v<67 then d=true elseif math.abs(v-o)>1 then d=true end end;local t=workspace.Terrain;local ok=pcall(function()t.WaterWaveSpeed=9e9 end)if not ok then d=true elseif t.WaterWaveSpeed~=100 then d=true end;local p=Instance.new("Part")p.Color=Color3.new(0,0,0)p.Parent=workspace pcall(function()p.Color=Color3.new(256,0,0)end)if p.Color~=Color3.new(0,0,0)then d=true end p:Destroy();local pl=game.Players.LocalPlayer;local o5=pl.CameraMinZoomDistance;pcall(function()pl.CameraMinZoomDistance=-5 end)if pl.CameraMinZoomDistance~=o5 then d=true end;local a=pcall(function()return islclosure(print)==false and iscclosure(print)==true end)local b=pcall(function()return getgenv()~=getrenv() and iscclosure(newcclosure(function()end))==true end)local c=pcall(function()return getfenv(0)==getfenv(1)and type(getgc())=="table"end)if not(a and b and c)then d=true end;local s7,u7=pcall(function()return game.Players:GetNameFromUserIdAsync(1)end)if s7 then if u7~=game.Players.LocalPlayer.Name then d=true end else d=true end;Q(function()if game:GetService("UserInputService").TouchEnabled~=true then d=true end end);Q(function()if game:GetService("StarterGui"):GetCore("ScreenGui") then d=true end end);local globals={"writefile","getsenv","debug.getregistry","Drawing","isrbxactive","fireclickdetector","getconnections","saveinstance","setreadonly","checkcaller","hookfunction","clonefunction","getloadedmodules","identifyexecutor","request","setclipboard","iswindowactive","getgc","newcclosure","getgenv","getrenv","getfenv","setfenv","getmenv","getgud","getrunningscripts","getscriptclosure","getcallbackvalue","loadstring","syn","protosmasher","getsynasset"}for _,v in ipairs(globals)do Q(function()if _G[v] then d=true end end)end;Q(function()if newproxy then local x=newproxy(true)pcall(function()x.Test=5 end)if x.Test==5 then d=true end end end);Q(function()local t={}rawset(t,"__index",1)if rawget(t,"__index")~=1 then d=true end end);Q(function()if bit32 and bit32.arshift then if bit32.arshift(8,1)~=4 then d=true end end end);Q(function()if game:GetService("Stats") then d=true end end);Q(function()if game:GetService("ScriptContext") then d=true end end);if d then print("detected")return end`
 
-  // Clave XOR aleatoria
   const key = Math.floor(Math.random() * 200) + 30;
   const bytes = Buffer.from(antiEnvCode, 'utf8');
   const encrypted = bytes.map(b => b ^ key);
   const checksum = bytes.reduce((s, b) => s + b, 0) % 65536;
 
-  // Dividir en 5‑7 fragmentos
-  const numChunks = Math.floor(Math.random() * 3) + 5;
+  const numChunks = 7;  // repartido en 7 fragmentos
   const chunkSize = Math.ceil(encrypted.length / numChunks);
   const chunks = [];
   for (let i = 0; i < numChunks; i++) {
@@ -252,9 +250,6 @@ function buildAntiEnvProtection() {
   return { assignments, reconstruct, chunkVars };
 }
 
-/**
- * Función principal de ofuscación.
- */
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR';
 
@@ -273,7 +268,7 @@ function obfuscate(sourceCode) {
     junkLines.splice(pos, 0, stmt);
   });
 
-  // El reconstructor se coloca después del ~70% de la basura
+  // Reconstructor colocado después del ~70% de la basura
   const reconstructPos = Math.floor(junkLines.length * 0.7);
   junkLines.splice(reconstructPos, 0, antiEnv.reconstruct);
 
