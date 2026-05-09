@@ -1,4 +1,7 @@
-const HEADER = `--[[ this code it's protected by vvmer obfuscator ]]`
+// ------------------------------------------------------------
+//  Seak Obfuscator
+// ------------------------------------------------------------
+const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
 function randomName() {
   return "_" + Math.random().toString(36).substring(2, 8) + Math.floor(Math.random() * 1000)
@@ -203,53 +206,60 @@ function getExtraProtections() {
 }
 
 /**
- * Construye el payload cifrado del anti‑env logger (todos los checks en una línea),
- * lo fragmenta en 7 tablas y añade un reconstructor con verificación de suma.
+ * Construye el payload del anti‑env logger (todos los checks en una línea),
+ * lo cifra con XOR, lo divide en 20 fragmentos y añade un reconstructor con verificación de checksum.
  */
 function buildAntiEnvProtection() {
-  // Todos los checks (más de 40) en una sola línea, con parada inmediata si se detecta.
-  const antiEnvCode = `local d=false;local function Q(f)local s,r=pcall(f)if not s then d=true end return r end;local function E(n)return _G[n]~=nil end;local s,r=pcall(function()local c=coroutine.create(function()coroutine.yield()end)coroutine.resume(c)return coroutine.status(c)=="suspended"end)if not s or not r then d=true end;local w=workspace;local o=w.DistributedGameTime;local ok,err=pcall(function()sethiddenproperty(w,"DistributedGameTime",67)end)if not ok then d=true else task.wait(0.01)local v=w.DistributedGameTime if v==67 or v<67 then d=true elseif math.abs(v-o)>1 then d=true end end;local t=workspace.Terrain;local ok=pcall(function()t.WaterWaveSpeed=9e9 end)if not ok then d=true elseif t.WaterWaveSpeed~=100 then d=true end;local p=Instance.new("Part")p.Color=Color3.new(0,0,0)p.Parent=workspace pcall(function()p.Color=Color3.new(256,0,0)end)if p.Color~=Color3.new(0,0,0)then d=true end p:Destroy();local pl=game.Players.LocalPlayer;local o5=pl.CameraMinZoomDistance;pcall(function()pl.CameraMinZoomDistance=-5 end)if pl.CameraMinZoomDistance~=o5 then d=true end;local a=pcall(function()return islclosure(print)==false and iscclosure(print)==true end)local b=pcall(function()return getgenv()~=getrenv() and iscclosure(newcclosure(function()end))==true end)local c=pcall(function()return getfenv(0)==getfenv(1)and type(getgc())=="table"end)if not(a and b and c)then d=true end;local s7,u7=pcall(function()return game.Players:GetNameFromUserIdAsync(1)end)if s7 then if u7~=game.Players.LocalPlayer.Name then d=true end else d=true end;Q(function()if game:GetService("UserInputService").TouchEnabled~=true then d=true end end);Q(function()if game:GetService("StarterGui"):GetCore("ScreenGui") then d=true end end);local globals={"writefile","getsenv","debug.getregistry","Drawing","isrbxactive","fireclickdetector","getconnections","saveinstance","setreadonly","checkcaller","hookfunction","clonefunction","getloadedmodules","identifyexecutor","request","setclipboard","iswindowactive","getgc","newcclosure","getgenv","getrenv","getfenv","setfenv","getmenv","getgud","getrunningscripts","getscriptclosure","getcallbackvalue","loadstring","syn","protosmasher","getsynasset"}for _,v in ipairs(globals)do Q(function()if _G[v] then d=true end end)end;Q(function()if newproxy then local x=newproxy(true)pcall(function()x.Test=5 end)if x.Test==5 then d=true end end end);Q(function()local t={}rawset(t,"__index",1)if rawget(t,"__index")~=1 then d=true end end);Q(function()if bit32 and bit32.arshift then if bit32.arshift(8,1)~=4 then d=true end end end);Q(function()if game:GetService("Stats") then d=true end end);Q(function()if game:GetService("ScriptContext") then d=true end end);if d then print("detected")return end`
+  // Código combinado de todos los checks (largos + FlameCoderV2) en una sola línea.
+  // Si se detecta algo, entra en bucle infinito (while true do end).
+  const antiEnvCode = `local _r,_n={},0 local function _push(v) _n=_n+1;_r[_n]=v and 1 or 0 end do local p=true pcall(function() local ts=game:GetService("TweenService") if not ts then return end local f=Instance.new("Frame") local tw=ts:Create(f,TweenInfo.new(0.1),{Size=UDim2.new(1,0,1,0)}) local t=os.clock() tw:Play() tw.Completed:Wait() if math.abs(os.clock()-t-0.1)>0.05 then p=false end f:Destroy() end) _push(p) end do local p=true pcall(function() local s=Instance.new("Sound") if pcall(function() s.PlaybackLoudness=99 end) then p=false end s:Destroy() end) _push(p) end do local p=true pcall(function() if not Instance then return end local f=Instance.new("Frame") if typeof(f)~="Instance" then p=false end f:Destroy() end) _push(p) end do local p=true pcall(function() if not game then return end if game.PlaceId==game.GameId then p=false end end) _push(p) end do local p=true pcall(function() local tb=Instance.new("TextBox") if pcall(function() tb.TextBounds=Vector2.new(1,1) end) then p=false end tb:Destroy() end) _push(p) end local _s=0 for i=1,_n do _s=_s+_r[i] end if _s~=_n then while true do end end`;
 
   const key = Math.floor(Math.random() * 200) + 30;
   const bytes = Buffer.from(antiEnvCode, 'utf8');
   const encrypted = bytes.map(b => b ^ key);
   const checksum = bytes.reduce((s, b) => s + b, 0) % 65536;
 
-  const numChunks = 7;  // repartido en 7 fragmentos
+  // Exactamente 20 fragmentos
+  const numChunks = 20;
   const chunkSize = Math.ceil(encrypted.length / numChunks);
   const chunks = [];
   for (let i = 0; i < numChunks; i++) {
     chunks.push(encrypted.slice(i * chunkSize, (i + 1) * chunkSize));
   }
 
-  const chunkVars = chunks.map(() => randomName());
-  let assignments = chunkVars.map((v, i) => {
-    const numbers = chunks[i].map(b => heavyMath(b)).join(',');
-    return `local ${v}={${numbers}}`;
-  }).join(';');
+  const chunkVars = [];
+  const assignments = [];
+  for (let i = 0; i < chunks.length; i++) {
+    const varName = randomName();
+    chunkVars.push(varName);
+    // Solo números enteros crudos (sin heavyMath, sin decimales raros)
+    assignments.push(`local ${varName}={${chunks[i].join(',')}}`);
+  }
 
-  const keyVar = randomName(), checksumVar = randomName(), decryptedVar = randomName(), sumVar = randomName(), codeVar = randomName();
-
-  let reconstruct = `
-    local ${keyVar}=${heavyMath(key)};
-    local ${checksumVar}=${heavyMath(checksum)};
-    local ${decryptedVar}={};
-    local ${sumVar}=0;
+  // Reconstructor simple: XOR + string.char + checksum
+  const reconstruct = `
+    local key=${key};
+    local checksum=${checksum};
+    local decrypted={};
+    local sum=0;
     for _,v in ipairs({${chunkVars.join(',')}}) do
       for _,b in ipairs(v) do
-        local _d=bit32.bxor(b,${keyVar});
-        ${sumVar}=${sumVar}+_d;
-        table.insert(${decryptedVar},string.char(_d));
+        local d=bit32.bxor(b,key);
+        sum=sum+d;
+        table.insert(decrypted,string.char(d));
       end;
     end;
-    if ${sumVar}~=${checksumVar} then while true do end end;
-    local ${codeVar}=table.concat(${decryptedVar});
-    assert(loadstring(${codeVar}))();
+    if sum~=checksum then while true do end end;
+    local code=table.concat(decrypted);
+    assert(loadstring(code))();
   `;
 
-  return { assignments, reconstruct, chunkVars };
+  return { assignments: assignments.join(';'), reconstruct, chunkVars };
 }
 
+/**
+ * Función principal de ofuscación.
+ */
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR';
 
@@ -268,7 +278,7 @@ function obfuscate(sourceCode) {
     junkLines.splice(pos, 0, stmt);
   });
 
-  // Reconstructor colocado después del ~70% de la basura
+  // El reconstructor se coloca después del ~70% de la basura
   const reconstructPos = Math.floor(junkLines.length * 0.7);
   junkLines.splice(reconstructPos, 0, antiEnv.reconstruct);
 
@@ -288,4 +298,4 @@ function obfuscate(sourceCode) {
   return result.replace(/\s+/g, " ").trim();
 }
 
-module.exports = { obfuscate }
+module.exports = { obfuscate };
