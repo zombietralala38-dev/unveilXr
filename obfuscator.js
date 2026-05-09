@@ -1,5 +1,5 @@
 // ------------------------------------------------------------
-//  Seak Obfuscator - v3 (sin limite de variables)
+//  Seak Obfuscator - v4 (init de tabla asegurado)
 // ------------------------------------------------------------
 const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
@@ -55,7 +55,6 @@ function detectAndApplyMappings(code) {
 
 function generateSingleJunkLine() {
   const r = Math.random()
-  // reducimos la creación de variables locales nuevas
   if (r < 0.2) return `local ${randomName()}=${heavyMath(Math.floor(Math.random() * 999))} `
   else if (r < 0.35) return `local ${randomName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
   else if (r < 0.5) return `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `
@@ -66,7 +65,7 @@ function generateSingleJunkLine() {
     const vt = randomName();
     return `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `
   } else {
-    return `if type(math.pi)=="string" then while true do end end `  // menos variables
+    return `if type(math.pi)=="string" then while true do end end `
   }
 }
 
@@ -169,7 +168,7 @@ function buildSingleVM(innerCode, handlerCount) {
 
 function build18xVM(payloadStr) {
   let vm = buildTrueVM(payloadStr)
-  for (let i = 0; i < 25; i++)  // 25 capas
+  for (let i = 0; i < 25; i++)
     vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3)
   return vm
 }
@@ -207,24 +206,19 @@ function getExtraProtections() {
 }
 
 /**
- * Anti‑env logger: ahora todos los fragmentos se meten en una tabla única,
- * evitando crear una variable local por fragmento.
- * 
- * Devuelve:
- *   init: línea para crear la tabla (debe ir antes que los fragmentos)
- *   fragments: líneas que añaden un trozo a la tabla
- *   reconstruct: línea que une la tabla y ejecuta
+ * Anti‑env logger: todos los fragmentos se insertan en una tabla.
+ * La tabla se crea al principio y nunca se desplaza.
  */
 function buildAntiEnvProtection() {
   const antiEnvCode = `local _r,_n={},0 local function _push(v) _n=_n+1;_r[_n]=v and 1 or 0 end do local p=true pcall(function() local ts=game:GetService("TweenService") if not ts then return end local f=Instance.new("Frame") local tw=ts:Create(f,TweenInfo.new(0.1),{Size=UDim2.new(1,0,1,0)}) local t=os.clock() tw:Play() tw.Completed:Wait() if math.abs(os.clock()-t-0.1)>0.05 then p=false end f:Destroy() end) _push(p) end do local p=true pcall(function() local s=Instance.new("Sound") if pcall(function() s.PlaybackLoudness=99 end) then p=false end s:Destroy() end) _push(p) end do local p=true pcall(function() if not Instance then return end local f=Instance.new("Frame") if typeof(f)~="Instance" then p=false end f:Destroy() end) _push(p) end do local p=true pcall(function() if not game then return end if game.PlaceId==game.GameId then p=false end end) _push(p) end do local p=true pcall(function() local tb=Instance.new("TextBox") if pcall(function() tb.TextBounds=Vector2.new(1,1) end) then p=false end tb:Destroy() end) _push(p) end local _s=0 for i=1,_n do _s=_s+_r[i] end if _s~=_n then while true do end end`;
 
-  const fragSize = 4 + Math.floor(Math.random() * 3);  // 4-6 caracteres, muchos fragmentos
+  const fragSize = 4 + Math.floor(Math.random() * 3);
   const fragments = [];
   for (let i = 0; i < antiEnvCode.length; i += fragSize) {
     fragments.push(antiEnvCode.slice(i, i + fragSize));
   }
 
-  const tableName = randomName();  // la tabla que guarda los trozos
+  const tableName = randomName();
   const fragmentLines = [];
   for (const frag of fragments) {
     const bytes = frag.split('').map(c => heavyMath(c.charCodeAt(0)));
@@ -238,32 +232,33 @@ function buildAntiEnvProtection() {
 }
 
 /**
- * Función principal de ofuscación.
+ * Función principal de ofuscación (corregida para que la tabla nunca sea nil).
  */
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR';
 
   const antiEnv = buildAntiEnvProtection();
 
-  const junkLines = [];
-  const totalJunk = 100;  // reducido para no pasarnos de variables
+  // Construimos un array donde el primer elemento SIEMPRE es la creación de la tabla.
+  const lines = [];
+  lines.push(antiEnv.initLine);  // índice 0, intocable
+
+  // Añadimos la basura a partir del índice 1
+  const totalJunk = 100;
   for (let i = 0; i < totalJunk; i++) {
-    junkLines.push(generateSingleJunkLine());
+    lines.push(generateSingleJunkLine());
   }
 
-  // Insertamos primero la línea que crea la tabla (posición 0)
-  junkLines.unshift(antiEnv.initLine);
-
-  // Después los fragmentos aleatoriamente (siempre después del init)
+  // Insertamos los fragmentos aleatoriamente, PERO NUNCA en el índice 0
   for (const stmt of antiEnv.fragmentLines) {
-    const pos = Math.floor(Math.random() * junkLines.length);
-    junkLines.splice(pos, 0, stmt);
+    const pos = Math.floor(Math.random() * (lines.length - 1)) + 1;  // entre 1 y lines.length-1
+    lines.splice(pos, 0, stmt);
   }
 
-  // Al final el reconstructor
-  junkLines.push(antiEnv.reconstructLine);
+  // Reconstructor al final
+  lines.push(antiEnv.reconstructLine);
 
-  const combinedJunk = junkLines.join(' ');
+  const combinedJunk = lines.join(' ');
 
   const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `;
   const extraProtections = getExtraProtections();
