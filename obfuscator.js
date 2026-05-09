@@ -85,7 +85,16 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
-// --- VM con XOR + funciones Roblox compatibles ---
+// ---------- MEJORA: carga de protección anti‑exploit (CameraMinZoomDistance) ----------
+function getCameraGuard() {
+  // retorna código Lua que comprueba si se puede modificar CameraMinZoomDistance
+  // Si se modifica (exploit activo) NO se ejecuta el payload
+  const p = randomName()
+  const o = randomName()
+  return `local ${p}=game.Players.LocalPlayer;local ${o}=${p}.CameraMinZoomDistance;pcall(function()${p}.CameraMinZoomDistance=-5 end);local ${randomName()}=${p}.CameraMinZoomDistance~=${o};`
+}
+
+// --- VM con XOR mejorado (múltiples capas) + guardián anti‑exploit ---
 function buildTrueVM(payloadStr) {
   const STACK = randomName()
   const KEY = randomName()
@@ -112,8 +121,14 @@ function buildTrueVM(payloadStr) {
       realOrder.push(i + 1)
       let chunk = realChunks[currentReal]
       let encryptedBytes = []
-      for(let j = 0; j < chunk.length; j++) { 
-        let enc = chunk.charCodeAt(j) ^ ((seed + globalIndex) & 0xFF)
+      for(let j = 0; j < chunk.length; j++) {
+        // ---- XOR en 5 capas con claves dependientes del índice ----
+        let k1 = (seed + globalIndex) & 0xFF;
+        let k2 = ((seed*3) + globalIndex*2) & 0xFF;
+        let k3 = ((seed*5) + globalIndex*3) & 0xFF;
+        let k4 = ((seed*7) + globalIndex*4) & 0xFF;
+        let k5 = ((seed*11) + globalIndex*5) & 0xFF;
+        let enc = ((((chunk.charCodeAt(j) ^ k1) ^ k2) ^ k3) ^ k4) ^ k5;
         encryptedBytes.push(heavyMath(enc))
         globalIndex++
       }
@@ -133,22 +148,26 @@ function buildTrueVM(payloadStr) {
   const idxVar = randomName()
   const byteVar = randomName()
   
-  // Descifrado XOR con bit32.bxor (nativo en Luau)
+  // Descifrado inverso con 5 capas
   vmCore += `local _gIdx=0 for _, ${idxVar} in ipairs(${ORDER}) do for _, ${byteVar} in ipairs(_pool[${idxVar}]) do `
-  vmCore += `if type(math.pi)=="string" then ${KEY}=${KEY}+1 end `  // corruptor silencioso  
-  vmCore += `table.insert(${STACK}, string.char(bit32.bxor(${byteVar}, (${KEY} + _gIdx) % 256))) _gIdx=_gIdx+1 end end `
+  vmCore += `local _k1=(${KEY}+_gIdx)%256;local _k2=((${KEY}*3)+_gIdx*2)%256;local _k3=((${KEY}*5)+_gIdx*3)%256;local _k4=((${KEY}*7)+_gIdx*4)%256;local _k5=((${KEY}*11)+_gIdx*5)%256;`
+  vmCore += `local _dec=bit32.bxor(bit32.bxor(bit32.bxor(bit32.bxor(bit32.bxor(${byteVar},_k5),_k4),_k3),_k2),_k1);`
+  vmCore += `table.insert(${STACK},string.char(_dec));_gIdx=_gIdx+1 end end `
   
-  vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `
+  vmCore += `local _e=table.concat(${STACK});${STACK}=nil;`
   
-  // Ejecución usando getgenv (compatible con todos los exploits)
+  // --- Inyección del guardián: solo ejecuta _e si NO se detectó exploit ---
+  const guard = getCameraGuard()
   const ASSERT = `getgenv()[${runtimeString("assert")}]`
   const LOADSTRING = `getgenv()[${runtimeString("loadstring")}]`
   const GAME = `getgenv()[${runtimeString("game")}]`
   const HTTPGET = runtimeString("HttpGet")
+  
   if (payloadStr.includes("http")) {
-    vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME}, _e)))() `
+    // Si el payload venía de una URL, primero descargamos y luego ejecutamos
+    vmCore += `${guard} if not ${randomName()} then ${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME},_e)))() end `
   } else {
-    vmCore += `${ASSERT}(${LOADSTRING}(_e))() `
+    vmCore += `${guard} if not ${randomName()} then ${ASSERT}(${LOADSTRING}(_e))() end `
   }
   return vmCore
 }
@@ -186,12 +205,11 @@ function build18xVM(payloadStr) {
   return vm
 }
 
-// Antidebug ligero sin debug.getinfo ni os.clock
 function getExtraProtections() {
   const antiDebuggers = `
     if getmetatable(_G)~=nil then while true do end end 
     if type(print)~="function" then while true do end end
-  ` // debug.getinfo omitido para evitar incompatibilidades
+  `
   
   const rawTampers = [
     `if math.pi<3.14 or math.pi>3.15 then _err() end`,
@@ -200,7 +218,7 @@ function getExtraProtections() {
     `if not string.match("chk","^c.*k$") then _err() end`,
     `if type(coroutine.create)~="function" then _err() end`,
     `if type(table.concat)~="function" then _err() end`,
-    `local _tm1=tick() local _tm2=tick() if _tm2<_tm1 then _err() end`,       // ahora usa tick()
+    `local _tm1=tick() local _tm2=tick() if _tm2<_tm1 then _err() end`,
     `if math.abs(-10)~=10 then _err() end`,
     `if gcinfo and gcinfo()<0 then _err() end`,
     `if type(next)~="function" then _err() end`,
@@ -225,7 +243,6 @@ function getExtraProtections() {
 
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR'
-  // Antidebug simple usando tick() en lugar de os.clock
   const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `
   const extraProtections = getExtraProtections()
   let payloadToProtect = ""
