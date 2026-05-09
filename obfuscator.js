@@ -1,13 +1,13 @@
 // ============================================================
-//  Seak Obfuscator v8.0 - Estructura Robusta + XOR/Luraph
+//  Seak Obfuscator v9.0 - Anti‑env estable + VM Luraph
 // ============================================================
 
 const CONFIG = {
     watermark: "--[[ this code it's protected by Seak obfuscator ]]",
     antiEnv: true,
-    vmCapas: 12,            // capas de dispatcher
-    junkLines: 50,          // basura general
-    xorIntensity: 0.7       // 70% números con XOR
+    vmCapas: 12,
+    junkLines: 50,
+    xorIntensity: 0.7
 };
 
 const HEADER = CONFIG.watermark;
@@ -112,7 +112,7 @@ function buildDispatcher(innerCode) {
     return code;
 }
 
-// ---------- ANTI-ENV LOGGER (BLOQUE SEGURO) ----------
+// ---------- ANTI-ENV LOGGER (SIN TABLAS, 100% ESTABLE) ----------
 function buildAntiEnvBlock() {
     const envCode = `local _r,_n={},0;local function _p(v) _n=_n+1;_r[_n]=v and 1 or 0;end;do local p=true;pcall(function() local ts=game:GetService("TweenService") if not ts then return end local f=Instance.new("Frame") local tw=ts:Create(f,TweenInfo.new(0.1),{Size=UDim2.new(1,0,1,0)}) local t=os.clock() tw:Play() tw.Completed:Wait() if math.abs(os.clock()-t-0.1)>0.05 then p=false end f:Destroy() end) _p(p) end;do local p=true;pcall(function() local s=Instance.new("Sound") if pcall(function() s.PlaybackLoudness=99 end) then p=false end s:Destroy() end) _p(p) end;do local p=true;pcall(function() if not Instance then return end local f=Instance.new("Frame") if typeof(f)~="Instance" then p=false end f:Destroy() end) _p(p) end;do local p=true;pcall(function() if not game then return end if game.PlaceId==game.GameId then p=false end end) _p(p) end;do local p=true;pcall(function() local tb=Instance.new("TextBox") if pcall(function() tb.TextBounds=Vector2.new(1,1) end) then p=false end tb:Destroy() end) _p(p) end;local _s=0;for i=1,_n do _s=_s+_r[i] end;if _s~=_n then while true do end end`;
 
@@ -122,53 +122,36 @@ function buildAntiEnvBlock() {
         chunks.push(envCode.slice(i, i + chunkSize));
     }
 
-    const tableName = randomName();
-    const block = [];
+    const accVar = randomName();  // acumulador
+    const key = Math.floor(Math.random() * 200) + 30; // misma clave para todos los fragmentos
 
-    // 1. Crear la tabla al inicio del bloque
-    block.push(`local ${tableName} = {};`);
+    let block = `local ${accVar} = ""; `;
 
-    // 2. Por cada fragmento, añadimos la línea y después una línea de basura (camuflaje)
-    chunks.forEach((chunk, index) => {
-        const { bytes, key } = xorStringToBytes(chunk);
-        block.push(`table.insert(${tableName}, {${obfNumber(key)}, {${bytes.join(',')}}});`);
-        // Insertar basura entre fragmentos (excepto después del último para no alargar demasiado)
-        if (index < chunks.length - 1 && Math.random() < 0.5) {
-            block.push(generateJunkLine());
-        }
+    chunks.forEach((chunk, idx) => {
+        const encrypted = chunk.split('').map(c => obfNumber(c.charCodeAt(0) ^ key));
+        const chunkStr = `string.char(${encrypted.join(',')})`;
+        block += `${accVar} = ${accVar} .. ${chunkStr}; `;
     });
 
-    // 3. Reconstructor al final del bloque
-    const reconstVar = randomName();
-    block.push(`
-        local ${reconstVar} = "";
-        for _, __entry in ipairs(${tableName}) do
-            local __key = __entry[1];
-            local __bytes = __entry[2];
-            for _, __b in ipairs(__bytes) do
-                ${reconstVar} = ${reconstVar} .. string.char(bit32.bxor(__b, __key));
-            end
-        end
-        assert(loadstring(${reconstVar}))();
-    `);
+    // Reconstructor simple
+    block += `assert(loadstring(${accVar}))();`;
 
-    return block.join(' ');
+    return block;
 }
 
 // ---------- OFUSCACIÓN PRINCIPAL ----------
 function obfuscate(sourceCode) {
     if (!sourceCode) return '--ERROR';
 
-    // Bloque anti‑env (completo y seguro)
+    // Bloque anti‑env (sin tablas inestables)
     const antiEnvBlock = CONFIG.antiEnv ? buildAntiEnvBlock() : '';
 
-    // Basura adicional
+    // Basura
     const junk = [];
     for (let i = 0; i < CONFIG.junkLines; i++) {
         junk.push(generateJunkLine());
     }
 
-    // Anti‑debugger
     const antiDebug = `if getmetatable(_G)~=nil then while true do end end;`;
 
     // Payload
@@ -184,10 +167,9 @@ function obfuscate(sourceCode) {
         vmCode = buildDispatcher(vmCode);
     }
 
-    // Resultado final:
-    // HEADER + antiDebug + (antiEnvBlock + basura + VM) todo compactado
+    // Construir resultado sin compactación agresiva
     const result = `${HEADER} ${antiDebug} ${antiEnvBlock} ${junk.join(' ')} ${vmCode}`;
-    return result.replace(/\s+/g, " ").trim();
+    return result.trim();
 }
 
 module.exports = { obfuscate };
