@@ -1,5 +1,5 @@
 // ------------------------------------------------------------
-//  Seak Obfuscator - Modo Caos Total
+//  Seak Obfuscator - v3 (sin limite de variables)
 // ------------------------------------------------------------
 const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
@@ -55,8 +55,9 @@ function detectAndApplyMappings(code) {
 
 function generateSingleJunkLine() {
   const r = Math.random()
+  // reducimos la creación de variables locales nuevas
   if (r < 0.2) return `local ${randomName()}=${heavyMath(Math.floor(Math.random() * 999))} `
-  else if (r < 0.4) return `local ${randomName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
+  else if (r < 0.35) return `local ${randomName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
   else if (r < 0.5) return `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `
   else if (r < 0.7) {
     const tp = randomName();
@@ -65,7 +66,7 @@ function generateSingleJunkLine() {
     const vt = randomName();
     return `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `
   } else {
-    return `if type(math.pi)=="string" then local _=1 end `
+    return `if type(math.pi)=="string" then while true do end end `  // menos variables
   }
 }
 
@@ -97,7 +98,7 @@ function buildTrueVM(payloadStr) {
   const seed = Math.floor(Math.random() * 200) + 50
 
   let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} `
-  const chunkSize = 10  // más pequeño = más caos
+  const chunkSize = 10
   let realChunks = []
   for(let i = 0; i < payloadStr.length; i += chunkSize)
     realChunks.push(payloadStr.slice(i, i + chunkSize))
@@ -168,7 +169,7 @@ function buildSingleVM(innerCode, handlerCount) {
 
 function build18xVM(payloadStr) {
   let vm = buildTrueVM(payloadStr)
-  for (let i = 0; i < 25; i++)  // Más capas (25 en vez de 18)
+  for (let i = 0; i < 25; i++)  // 25 capas
     vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3)
   return vm
 }
@@ -206,35 +207,38 @@ function getExtraProtections() {
 }
 
 /**
- * Anti‑env logger al extremo: fragmentos microscópicos (3‑7 caracteres).
- * Cada uno convertido en string.char(heavyMath) para máximo camuflaje.
+ * Anti‑env logger: ahora todos los fragmentos se meten en una tabla única,
+ * evitando crear una variable local por fragmento.
+ * 
+ * Devuelve:
+ *   init: línea para crear la tabla (debe ir antes que los fragmentos)
+ *   fragments: líneas que añaden un trozo a la tabla
+ *   reconstruct: línea que une la tabla y ejecuta
  */
 function buildAntiEnvProtection() {
   const antiEnvCode = `local _r,_n={},0 local function _push(v) _n=_n+1;_r[_n]=v and 1 or 0 end do local p=true pcall(function() local ts=game:GetService("TweenService") if not ts then return end local f=Instance.new("Frame") local tw=ts:Create(f,TweenInfo.new(0.1),{Size=UDim2.new(1,0,1,0)}) local t=os.clock() tw:Play() tw.Completed:Wait() if math.abs(os.clock()-t-0.1)>0.05 then p=false end f:Destroy() end) _push(p) end do local p=true pcall(function() local s=Instance.new("Sound") if pcall(function() s.PlaybackLoudness=99 end) then p=false end s:Destroy() end) _push(p) end do local p=true pcall(function() if not Instance then return end local f=Instance.new("Frame") if typeof(f)~="Instance" then p=false end f:Destroy() end) _push(p) end do local p=true pcall(function() if not game then return end if game.PlaceId==game.GameId then p=false end end) _push(p) end do local p=true pcall(function() local tb=Instance.new("TextBox") if pcall(function() tb.TextBounds=Vector2.new(1,1) end) then p=false end tb:Destroy() end) _push(p) end local _s=0 for i=1,_n do _s=_s+_r[i] end if _s~=_n then while true do end end`;
 
-  const fragSize = 4 + Math.floor(Math.random() * 4); // entre 4 y 7 caracteres -> caos máximo
+  const fragSize = 4 + Math.floor(Math.random() * 3);  // 4-6 caracteres, muchos fragmentos
   const fragments = [];
   for (let i = 0; i < antiEnvCode.length; i += fragSize) {
     fragments.push(antiEnvCode.slice(i, i + fragSize));
   }
 
-  const fragStatements = [];
-  const fragVars = [];
+  const tableName = randomName();  // la tabla que guarda los trozos
+  const fragmentLines = [];
   for (const frag of fragments) {
-    const varName = randomName();
-    fragVars.push(varName);
     const bytes = frag.split('').map(c => heavyMath(c.charCodeAt(0)));
-    fragStatements.push(`local ${varName}=string.char(${bytes.join(',')})`);
+    fragmentLines.push(`${tableName}[#${tableName}+1] = string.char(${bytes.join(',')})`);
   }
 
-  const tempArray = randomName();
-  const reconstruct = `local ${tempArray}={${fragVars.join(',')}};local _reco=table.concat(${tempArray});assert(loadstring(_reco))();`;
+  const initLine = `local ${tableName} = {}`;
+  const reconstructLine = `local _reco = table.concat(${tableName}); assert(loadstring(_reco))();`;
 
-  return { fragStatements, reconstruct };
+  return { initLine, fragmentLines, reconstructLine };
 }
 
 /**
- * Función principal de ofuscación (Modo Demencial)
+ * Función principal de ofuscación.
  */
 function obfuscate(sourceCode) {
   if (!sourceCode) return '--ERROR';
@@ -242,19 +246,22 @@ function obfuscate(sourceCode) {
   const antiEnv = buildAntiEnvProtection();
 
   const junkLines = [];
-  const totalJunk = 150;  // 150 líneas de basura pura
+  const totalJunk = 100;  // reducido para no pasarnos de variables
   for (let i = 0; i < totalJunk; i++) {
     junkLines.push(generateSingleJunkLine());
   }
 
-  // Mezclar fragmentos del anti‑env aleatoriamente
-  for (const stmt of antiEnv.fragStatements) {
+  // Insertamos primero la línea que crea la tabla (posición 0)
+  junkLines.unshift(antiEnv.initLine);
+
+  // Después los fragmentos aleatoriamente (siempre después del init)
+  for (const stmt of antiEnv.fragmentLines) {
     const pos = Math.floor(Math.random() * junkLines.length);
     junkLines.splice(pos, 0, stmt);
   }
 
-  // Reconstructor AL FINAL (seguro)
-  junkLines.push(antiEnv.reconstruct);
+  // Al final el reconstructor
+  junkLines.push(antiEnv.reconstructLine);
 
   const combinedJunk = junkLines.join(' ');
 
