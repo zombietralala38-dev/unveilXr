@@ -50,22 +50,27 @@ function detectAndApplyMappings(code) {
   return headers + modified;
 }
 
+// ---------- Generación de una linea individual de basura ----------
+function generateSingleJunkLine() {
+  const r = Math.random()
+  if (r < 0.2) return `local ${randomName()}=${heavyMath(Math.floor(Math.random() * 999))} `
+  else if (r < 0.4) return `local ${randomName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
+  else if (r < 0.5) return `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `
+  else if (r < 0.7) {
+    const tp = randomName();
+    return `if type(nil)=="number" then while true do local ${tp}=1 end end `
+  } else if (r < 0.85) {
+    const vt = randomName();
+    return `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `
+  } else {
+    return `if type(math.pi)=="string" then local _=1 end `
+  }
+}
+
 function generateJunk(lines = 100) {
   let j = ''
   for (let i = 0; i < lines; i++) {
-    const r = Math.random()
-    if (r < 0.2) j += `local ${randomName()}=${heavyMath(Math.floor(Math.random() * 999))} `
-    else if (r < 0.4) j += `local ${randomName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
-    else if (r < 0.5) j += `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `
-    else if (r < 0.7) {
-      const tp = randomName();
-      j += `if type(nil)=="number" then while true do local ${tp}=1 end end `
-    } else if (r < 0.85) {
-      const vt = randomName();
-      j += `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `
-    } else {
-      j += `if type(math.pi)=="string" then local _=1 end `
-    }
+    j += generateSingleJunkLine()
   }
   return j
 }
@@ -85,7 +90,7 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
-// ---------- VM con una sola capa XOR (compatible y robusta) ----------
+// ---------- VM principal con una capa XOR ----------
 function buildTrueVM(payloadStr) {
   const STACK = randomName()
   const KEY = randomName()
@@ -138,7 +143,6 @@ function buildTrueVM(payloadStr) {
   
   vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `
   
-  // Ejecución usando getgenv (compatible con todos los exploits)
   const ASSERT = `getgenv()[${runtimeString("assert")}]`
   const LOADSTRING = `getgenv()[${runtimeString("loadstring")}]`
   const GAME = `getgenv()[${runtimeString("game")}]`
@@ -184,13 +188,11 @@ function build18xVM(payloadStr) {
   return vm
 }
 
-// Antidebug ligero sin debug.getinfo ni os.clock
 function getExtraProtections() {
   const antiDebuggers = `
     if getmetatable(_G)~=nil then while true do end end 
     if type(print)~="function" then while true do end end
   `
-  
   const rawTampers = [
     `if math.pi<3.14 or math.pi>3.15 then _err() end`,
     `if bit32 and bit32.bxor(10,5)~=15 then _err() end`,
@@ -221,34 +223,106 @@ function getExtraProtections() {
   return antiDebuggers + codeVaultGuards
 }
 
-function obfuscate(sourceCode) {
-  if (!sourceCode) return '--ERROR'
-
-  // ✅ Anti‑env logger SIEMPRE presente
-  const antiEnvCheck = `
-local p = game.Players.LocalPlayer
-local o = p.CameraMinZoomDistance
-pcall(function()
-  p.CameraMinZoomDistance = -5
-end)
-print(p.CameraMinZoomDistance ~= o and "detected" or "pass")
--- fin chequeo anti‑env
-`
-
-  const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `
-  const extraProtections = getExtraProtections()
-
-  let payloadToProtect = ""
-  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
-  const match = sourceCode.match(isLoadstringRegex)
-  if (match) { payloadToProtect = match[1] } 
-  else { payloadToProtect = detectAndApplyMappings(sourceCode) }
+// ---------- Anti‑env logger con XOR + repartición + anti‑tamper ----------
+function buildAntiEnvProtection() {
+  const antiEnvCode = `local p=game.Players.LocalPlayer local o=p.CameraMinZoomDistance pcall(function()p.CameraMinZoomDistance=-5 end)(p.CameraMinZoomDistance~=o and"I see you get detected,but the time you enjoy it's not time you lose"or"pass")`
   
-  const finalVM = build18xVM(payloadToProtect)
+  // Clave XOR aleatoria
+  const key = Math.floor(Math.random() * 200) + 30;
+  
+  // Convertir a bytes y cifrar
+  const bytes = Buffer.from(antiEnvCode, 'utf8');
+  const encrypted = bytes.map(b => b ^ key);
+  
+  // Checksum del código original (para anti‑tamper)
+  const checksum = bytes.reduce((s, b) => s + b, 0) % 65536;
+  
+  // Dividir en 4‑6 fragmentos
+  const numChunks = Math.floor(Math.random() * 3) + 4;
+  const chunkSize = Math.ceil(encrypted.length / numChunks);
+  const chunks = [];
+  for (let i = 0; i < numChunks; i++) {
+    chunks.push(encrypted.slice(i * chunkSize, (i + 1) * chunkSize));
+  }
+  
+  // Variables para cada fragmento
+  const chunkVars = chunks.map(() => randomName());
+  
+  // Líneas de asignación (cada una es una tabla de números ofuscados)
+  let assignments = chunkVars.map((v, i) => {
+    const numbers = chunks[i].map(b => heavyMath(b)).join(',');
+    return `local ${v}={${numbers}}`;
+  }).join(';');
+  
+  // Reconstructor + verificador anti‑tamper
+  const keyVar = randomName();
+  const checksumVar = randomName();
+  const decryptedVar = randomName();
+  const sumVar = randomName();
+  const codeVar = randomName();
+  
+  let reconstruct = `
+    local ${keyVar}=${heavyMath(key)};
+    local ${checksumVar}=${heavyMath(checksum)};
+    local ${decryptedVar}={};
+    local ${sumVar}=0;
+    for _,v in ipairs({${chunkVars.join(',')}}) do
+      for _,b in ipairs(v) do
+        local _d=bit32.bxor(b,${keyVar});
+        ${sumVar}=${sumVar}+_d;
+        table.insert(${decryptedVar},string.char(_d));
+      end;
+    end;
+    if ${sumVar}~=${checksumVar} then while true do end end;
+    local ${codeVar}=table.concat(${decryptedVar});
+    assert(loadstring(${codeVar}))();
+  `;
+  
+  return { assignments, reconstruct, chunkVars };
+}
 
-  // El anti‑env va justo después del HEADER, antes de cualquier basura u ofuscación
-  const result = `${HEADER} ${antiEnvCheck} ${generateJunk(50)} ${antiDebug} ${extraProtections} ${finalVM}`
-  return result.replace(/\s+/g, " ").trim()
+// ---------- Función principal de ofuscación ----------
+function obfuscate(sourceCode) {
+  if (!sourceCode) return '--ERROR';
+  
+  // Construir protección anti‑env
+  const antiEnv = buildAntiEnvProtection();
+  
+  // Generar array de lineas de basura
+  const junkLines = [];
+  const totalJunk = 60;
+  for (let i = 0; i < totalJunk; i++) {
+    junkLines.push(generateSingleJunkLine());
+  }
+  
+  // Insertar los fragmentos del anti‑env en posiciones aleatorias de la basura
+  const assignmentStatements = antiEnv.assignments.split(';').filter(s => s.trim() !== '');
+  assignmentStatements.forEach(stmt => {
+    const pos = Math.floor(Math.random() * junkLines.length);
+    junkLines.splice(pos, 0, stmt);
+  });
+  
+  // Colocar el reconstructor del anti‑env después de ~70% de la basura (para que se ejecute antes del payload principal)
+  const reconstructPos = Math.floor(junkLines.length * 0.7);
+  junkLines.splice(reconstructPos, 0, antiEnv.reconstruct);
+  
+  const combinedJunk = junkLines.join(' ');
+  
+  // Anti‑debug y protecciones extra
+  const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `;
+  const extraProtections = getExtraProtections();
+  
+  // Payload principal (código original o URL)
+  let payloadToProtect = "";
+  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
+  const match = sourceCode.match(isLoadstringRegex);
+  if (match) { payloadToProtect = match[1]; } 
+  else { payloadToProtect = detectAndApplyMappings(sourceCode); }
+  
+  const finalVM = build18xVM(payloadToProtect);
+  
+  const result = `${HEADER} ${combinedJunk} ${antiDebug} ${extraProtections} ${finalVM}`;
+  return result.replace(/\s+/g, " ").trim();
 }
 
 module.exports = { obfuscate }
