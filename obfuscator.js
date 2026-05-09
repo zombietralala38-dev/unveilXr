@@ -225,7 +225,7 @@ function getExtraProtections() {
 
 // ---------- Anti‑env logger con XOR + repartición + anti‑tamper ----------
 function buildAntiEnvProtection() {
-  const antiEnvCode = `local p=game.Players.LocalPlayer local o=p.CameraMinZoomDistance pcall(function()p.CameraMinZoomDistance=-5 end)(p.CameraMinZoomDistance~=o and"I see you get detected,but the time you enjoy it's not time you lose"or"pass")`
+  const antiEnvCode = `local p=game.Players.LocalPlayer local o=p.CameraMinZoomDistance pcall(function()p.CameraMinZoomDistance=-5 end)print(p.CameraMinZoomDistance~=o and"detected"or"pass")`
   
   // Clave XOR aleatoria
   const key = Math.floor(Math.random() * 200) + 30;
