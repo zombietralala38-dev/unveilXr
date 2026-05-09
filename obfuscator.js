@@ -1,4 +1,4 @@
-const HEADER = `--[[ this code it's protected by vvmer obfuscator ]]`
+const HEADER = `--[[ this code it's protected by Seak obfuscator | https://discord.gg/bekvC5Het ]]`
 
 // --- Nombres aleatorios sin pools predefinidas ---
 function randomName() {
