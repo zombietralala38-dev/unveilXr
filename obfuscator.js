@@ -187,24 +187,3 @@ function obfuscate(sourceCode, layers = 30, junkLines = 200) {
 //  Módulo y CLI
 // ============================
 module.exports = { obfuscate };
-
-if (require.main === module) {
-    const args = process.argv.slice(2);
-    if (args.length < 2) {
-        console.error('Uso: node obfuscator.js <entrada.lua> <salida.lua> [capas] [junk]');
-        console.error('Ejemplo: node obfuscator.js script.lua ofuscado.lua 30 200');
-        process.exit(1);
-    }
-    const inputFile = args[0];
-    const outputFile = args[1];
-    const layers = parseInt(args[2]) || 30;
-    const junkLines = parseInt(args[3]) || 200;
-    fs.readFile(inputFile, 'utf8', (err, data) => {
-        if (err) { console.error('Error leyendo:', err); process.exit(1); }
-        const obf = obfuscate(data, layers, junkLines);
-        fs.writeFile(outputFile, obf, 'utf8', err2 => {
-            if (err2) { console.error('Error escribiendo:', err2); process.exit(1); }
-            console.log(`Ofuscado guardado en ${outputFile} (${layers} capas, ${junkLines} líneas junk)`);
-        });
-    });
-}
