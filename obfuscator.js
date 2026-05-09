@@ -1,17 +1,18 @@
 // ============================================================
-//  Seak Obfuscator v7.1 - Robusto + XOR/Luraph VM (CORREGIDO)
+//  Seak Obfuscator v8.0 - Estructura Robusta + XOR/Luraph
 // ============================================================
 
 const CONFIG = {
     watermark: "--[[ this code it's protected by Seak obfuscator ]]",
     antiEnv: true,
-    vmCapas: 15,
-    junkLines: 60,
-    xorIntensity: 0.7
+    vmCapas: 12,            // capas de dispatcher
+    junkLines: 50,          // basura general
+    xorIntensity: 0.7       // 70% números con XOR
 };
 
 const HEADER = CONFIG.watermark;
 
+// ---------- UTILIDADES ----------
 function randomName() {
     return "_" + Math.random().toString(36).substring(2, 8) + Math.floor(Math.random() * 1000);
 }
@@ -36,6 +37,7 @@ function obfNumber(n) {
     return Math.random() < CONFIG.xorIntensity ? xorNumber(n) : heavyMath(n);
 }
 
+// Cifrar string a bytes ofuscados con XOR
 function xorStringToBytes(str) {
     const key = Math.floor(Math.random() * 200) + 30;
     const bytes = [];
@@ -45,6 +47,7 @@ function xorStringToBytes(str) {
     return { bytes, key };
 }
 
+// Línea de basura simple
 function generateJunkLine() {
     const r = Math.random();
     if (r < 0.3) return `local ${randomName()} = ${obfNumber(Math.floor(Math.random() * 999))};`;
@@ -53,6 +56,7 @@ function generateJunkLine() {
     return `do local ${randomName()} = {}; ${randomName()}[1] = nil; end;`;
 }
 
+// ---------- VM ESTILO LURAPH ----------
 function buildLuraphVM(code) {
     const key = Math.floor(Math.random() * 200) + 30;
     const chunkSize = 3 + Math.floor(Math.random() * 4);
@@ -85,6 +89,7 @@ function buildLuraphVM(code) {
     return init + decodeCode;
 }
 
+// ---------- CAPA DE DISPATCHER ----------
 function buildDispatcher(innerCode) {
     const nHandlers = 2 + Math.floor(Math.random() * 3);
     const realIdx = Math.floor(Math.random() * nHandlers);
@@ -107,8 +112,8 @@ function buildDispatcher(innerCode) {
     return code;
 }
 
-// ---------- ANTI-ENV LOGGER (devuelve partes separadas) ----------
-function buildAntiEnv() {
+// ---------- ANTI-ENV LOGGER (BLOQUE SEGURO) ----------
+function buildAntiEnvBlock() {
     const envCode = `local _r,_n={},0;local function _p(v) _n=_n+1;_r[_n]=v and 1 or 0;end;do local p=true;pcall(function() local ts=game:GetService("TweenService") if not ts then return end local f=Instance.new("Frame") local tw=ts:Create(f,TweenInfo.new(0.1),{Size=UDim2.new(1,0,1,0)}) local t=os.clock() tw:Play() tw.Completed:Wait() if math.abs(os.clock()-t-0.1)>0.05 then p=false end f:Destroy() end) _p(p) end;do local p=true;pcall(function() local s=Instance.new("Sound") if pcall(function() s.PlaybackLoudness=99 end) then p=false end s:Destroy() end) _p(p) end;do local p=true;pcall(function() if not Instance then return end local f=Instance.new("Frame") if typeof(f)~="Instance" then p=false end f:Destroy() end) _p(p) end;do local p=true;pcall(function() if not game then return end if game.PlaceId==game.GameId then p=false end end) _p(p) end;do local p=true;pcall(function() local tb=Instance.new("TextBox") if pcall(function() tb.TextBounds=Vector2.new(1,1) end) then p=false end tb:Destroy() end) _p(p) end;local _s=0;for i=1,_n do _s=_s+_r[i] end;if _s~=_n then while true do end end`;
 
     const chunkSize = 4 + Math.floor(Math.random() * 3);
@@ -118,15 +123,24 @@ function buildAntiEnv() {
     }
 
     const tableName = randomName();
-    const initLine = `local ${tableName} = {};`;
-    const fragmentLines = [];
-    chunks.forEach(chunk => {
+    const block = [];
+
+    // 1. Crear la tabla al inicio del bloque
+    block.push(`local ${tableName} = {};`);
+
+    // 2. Por cada fragmento, añadimos la línea y después una línea de basura (camuflaje)
+    chunks.forEach((chunk, index) => {
         const { bytes, key } = xorStringToBytes(chunk);
-        fragmentLines.push(`table.insert(${tableName}, {${obfNumber(key)}, {${bytes.join(',')}}});`);
+        block.push(`table.insert(${tableName}, {${obfNumber(key)}, {${bytes.join(',')}}});`);
+        // Insertar basura entre fragmentos (excepto después del último para no alargar demasiado)
+        if (index < chunks.length - 1 && Math.random() < 0.5) {
+            block.push(generateJunkLine());
+        }
     });
 
+    // 3. Reconstructor al final del bloque
     const reconstVar = randomName();
-    const reconstructLine = `
+    block.push(`
         local ${reconstVar} = "";
         for _, __entry in ipairs(${tableName}) do
             local __key = __entry[1];
@@ -136,45 +150,25 @@ function buildAntiEnv() {
             end
         end
         assert(loadstring(${reconstVar}))();
-    `;
+    `);
 
-    return { initLine, fragmentLines, reconstructLine };
+    return block.join(' ');
 }
 
 // ---------- OFUSCACIÓN PRINCIPAL ----------
 function obfuscate(sourceCode) {
     if (!sourceCode) return '--ERROR';
 
-    const antiEnv = CONFIG.antiEnv ? buildAntiEnv() : null;
+    // Bloque anti‑env (completo y seguro)
+    const antiEnvBlock = CONFIG.antiEnv ? buildAntiEnvBlock() : '';
+
+    // Basura adicional
     const junk = [];
     for (let i = 0; i < CONFIG.junkLines; i++) {
         junk.push(generateJunkLine());
     }
 
-    // Construir array final con orden garantizado
-    const combined = [];
-    
-    // 1. Línea de creación de tabla anti-env (si existe) siempre al principio
-    if (antiEnv) {
-        combined.push(antiEnv.initLine);
-    }
-    
-    // 2. Basura
-    combined.push(...junk);
-    
-    // 3. Insertar fragmentos del anti-env aleatoriamente, PERO NUNCA en índice 0
-    if (antiEnv) {
-        antiEnv.fragmentLines.forEach(line => {
-            const pos = Math.floor(Math.random() * (combined.length - 1)) + 1;
-            combined.splice(pos, 0, line);
-        });
-    }
-    
-    // 4. Reconstructor al FINAL
-    if (antiEnv) {
-        combined.push(antiEnv.reconstructLine);
-    }
-
+    // Anti‑debugger
     const antiDebug = `if getmetatable(_G)~=nil then while true do end end;`;
 
     // Payload
@@ -190,7 +184,9 @@ function obfuscate(sourceCode) {
         vmCode = buildDispatcher(vmCode);
     }
 
-    const result = `${HEADER} ${antiDebug} ${combined.join(' ')} ${vmCode}`;
+    // Resultado final:
+    // HEADER + antiDebug + (antiEnvBlock + basura + VM) todo compactado
+    const result = `${HEADER} ${antiDebug} ${antiEnvBlock} ${junk.join(' ')} ${vmCode}`;
     return result.replace(/\s+/g, " ").trim();
 }
 
