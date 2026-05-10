@@ -1,9 +1,9 @@
 // ------------------------------------------------------------
-//  Seak Obfuscator - v4 (Anti‑env logger FULL VM, límite 200 solucionado)
+//  Seak Obfuscator - v4 (Anti‑env logger con mensaje personalizado)
 // ------------------------------------------------------------
 const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
-// Anti‑env logger (se inyectará dentro de su propia VM)
+// Anti‑env logger: si detecta -> imprime "you get detected my boy" y se cuelga
 const ANTI_ENV_LOGGER_CODE = `local p = game.Players.LocalPlayer
 local c = p.Character
 local anim = c:FindFirstChild("Animate")
@@ -24,11 +24,15 @@ end
 if is_ok and not is_bad then
 print("pass")
 else
-print("fail")
+print("you get detected my boy")
+while true do end
 end
 else
-print("fail")
+print("you get detected my boy")
+while true do end
 end`
+
+// (resto del código sin cambios, solo se modificó la constante ANTI_ENV_LOGGER_CODE)
 
 function randomName() {
   return "_" + Math.random().toString(36).substring(2, 8) + Math.floor(Math.random() * 1000)
@@ -117,18 +121,16 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
-// ============== NUEVA buildTrueVM SIN EXCESO DE LOCALES ==============
 function buildTrueVM(payloadStr) {
   const STACK = randomName()
   const KEY = randomName()
   const ORDER = randomName()
   const seed = Math.floor(Math.random() * 200) + 50
 
-  // Tabla local única para todos los fragmentos (antes eran cientos de variables locales)
   let vmCore = `local _pool={} local ${STACK}={} local ${KEY}=${heavyMath(seed)} `
   const chunkSize = 10
   let realChunks = []
-  for (let i = 0; i < payloadStr.length; i += chunkSize)
+  for(let i = 0; i < payloadStr.length; i += chunkSize)
     realChunks.push(payloadStr.slice(i, i + chunkSize))
 
   let realOrder = []
@@ -136,22 +138,20 @@ function buildTrueVM(payloadStr) {
   let currentReal = 0
   let globalIndex = 0
 
-  for (let i = 0; i < totalChunks; i++) {
+  for(let i = 0; i < totalChunks; i++) {
     if (currentReal < realChunks.length && (Math.random() > 0.6 || (totalChunks - i) === (realChunks.length - currentReal))) {
       realOrder.push(i + 1)
-      let chunk = realChunks[currentReal]
-      let encryptedBytes = []
-      for (let j = 0; j < chunk.length; j++) {
+      let chunk = realChunks[currentReal], encryptedBytes = []
+      for(let j = 0; j < chunk.length; j++) {
         let enc = chunk.charCodeAt(j) ^ ((seed + globalIndex) & 0xFF)
         encryptedBytes.push(heavyMath(enc))
         globalIndex++
       }
-      // Insertar en la tabla _pool, no en una variable nueva
       vmCore += `_pool[${heavyMath(i + 1)}]={${encryptedBytes.join(',')}} `
       currentReal++
     } else {
       let fakeBytes = []
-      for (let j = 0; j < Math.floor(Math.random() * 25) + 5; j++)
+      for(let j = 0; j < Math.floor(Math.random() * 25) + 5; j++)
         fakeBytes.push(heavyMath(Math.floor(Math.random() * 255)))
       vmCore += `_pool[${heavyMath(i + 1)}]={${fakeBytes.join(',')}} `
     }
@@ -198,7 +198,7 @@ function buildSingleVM(innerCode, handlerCount) {
   return out
 }
 
-// VM de 25 capas (sin reducción)
+// VM de 25 capas
 function build25xVM(payloadStr) {
   let vm = buildTrueVM(payloadStr)
   for (let i = 0; i < 25; i++)
@@ -241,10 +241,10 @@ function getExtraProtections() {
 function obfuscate(sourceCode) {
     if (!sourceCode) return '--ERROR';
 
-    // 1. Anti‑env logger ofuscado en su propia VM de 25 capas
+    // 1. Anti‑env logger con mensaje personalizado y bloqueo
     const antiEnvVM = build25xVM(ANTI_ENV_LOGGER_CODE);
 
-    // 2. Junk (100 líneas) + inserción aleatoria del anti‑env VM
+    // 2. Junk (100 líneas) + inserción aleatoria del anti‑env logger
     const junkArray = generateJunkArray(100);
     const insertPos = Math.floor(Math.random() * (junkArray.length + 1));
     junkArray.splice(insertPos, 0, antiEnvVM);
