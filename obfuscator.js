@@ -274,7 +274,8 @@ function obfuscate(sourceCode) {
 
   const finalVM = build18xVM(payloadToProtect);
 
-  // NUEVO: se inyecta el anti‑env logger al principio, antes de todo
-  return `${ANTI_ENV_LOGGER_SNIPPET}\n${HEADER} ${combinedJunk} ${antiDebug} ${extraProtections} ${finalVM}`;
+  // ⚠️ LÍNEA MODIFICADA: HEADER ahora es lo primero, seguido del anti‑env logger
+  return `${HEADER}\n${ANTI_ENV_LOGGER_SNIPPET}\n${combinedJunk} ${antiDebug} ${extraProtections} ${finalVM}`;
 }
+
 module.exports = { obfuscate };
