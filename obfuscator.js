@@ -3,6 +3,14 @@
 // ------------------------------------------------------------
 const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
+// NUEVO: anti‑env logger tal cual lo pediste, se inyecta al principio
+const ANTI_ENV_LOGGER_SNIPPET = `local p=game.Players.LocalPlayer
+local o=p.CameraMinZoomDistance
+pcall(function()
+p.CameraMinZoomDistance=-5
+end)
+print(p.CameraMinZoomDistance~=o and"detected"or"pass" -- ur code)`
+
 function randomName() {
   return "_" + Math.random().toString(36).substring(2, 8) + Math.floor(Math.random() * 1000)
 }
@@ -271,7 +279,8 @@ function obfuscate(sourceCode) {
 
   const finalVM = build18xVM(payloadToProtect);
 
-  return `${HEADER} ${combinedJunk} ${antiDebug} ${extraProtections} ${finalVM}`;
+  // NUEVO: se inyecta el anti‑env logger al principio, antes de todo
+  return `${ANTI_ENV_LOGGER_SNIPPET}\n${HEADER} ${combinedJunk} ${antiDebug} ${extraProtections} ${finalVM}`;
 }
 
 module.exports = { obfuscate };
