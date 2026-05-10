@@ -1,8 +1,9 @@
 // ------------------------------------------------------------
-//  Seak Obfuscator - v4 (Custom VM, sin XOR en bytecode)
+//  Seak Obfuscator - v5 (VM con handlers repartidos, sin XOR)
 // ------------------------------------------------------------
 const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
+// Anti-env logger (puedes reemplazar este string por tu versión ofuscada, pero asegúrate de que sea sintácticamente válido)
 const ANTI_ENV_LOGGER_SNIPPET = `local q=bit32.bxor local t_=game.Players.LocalPlayer local h=t_.CameraMinZoomDistance local g,o_,k,p,l_,n_,d_;n_,d_={},function(c,a_,r_)n_[a_]=q(r_,1752)-q(c,35158)return n_[a_]end;l_=n_[27372]or d_(24643,27372,119719)while l_~=19904 do if l_>=33475 then if l_<46624 then if l_<=41315 then if l_<34725 then l_=n_[-17633]or d_(14697,-17633,64295)continue elseif l_>34725 then if o_ then l_=n_[-3212]or d_(8399,-3212,96739)continue end l_=n_[22829]or d_(34757,22829,14329)else o_,l_=k,41315 end else o_,l_=g,54690 end elseif l_>=54690 then if l_<=57644 then if l_>54690 then o_,l_=g,3661 else l_,k=46624,o_ end else l_,k=n_[-31843]or d_(14262,-31843,96594),pcall(function()local j,m,b_,s_;b_,m={},function(i_,e_,f_)b_[i_]=q(e_,52903)-q(f_,44226)return b_[i_]end;s_=b_[-5612]or m(-5612,115149,24558)repeat if s_<=7230 then j,s_=-5,b_[-30116]or m(-30116,121660,56548)else t_.CameraMinZoomDistance,s_=j,b_[17256]or m(17256,63019,46886)continue end until s_==7336 end)end elseif l_>46624 then k,l_=t_.CameraMinZoomDistance,1999 else k,l_=print(k),n_[-25054]or d_(31046,-25054,95243)end elseif l_>23608 then if l_>28143 then g,l_=p,57644 elseif l_<=25653 then o_,l_=k,28143 else if not o_ then l_=n_[-1606]or d_(4233,-1606,44788)continue end l_=23608 end elseif l_<=3661 then if l_<3491 then l_,k=25653,k~=h elseif l_>3491 then l_,k=n_[21609]or d_(25456,21609,96019),o_ else g,l_=p,n_[-27119]or d_(2776,-27119,79075)end elseif l_>8846 then p,l_='detected',n_[12006]or d_(32140,12006,90182)else p,l_='pass',3491 end end`
 
 function randomName() {
@@ -147,206 +148,129 @@ function buildAntiEnvProtection() {
 }
 
 // ----------------------------------------------------------------------
-//  NUEVA VM PERSONALIZADA (sin XOR) – generación de bytecode
+//  NUEVA VM CON HANDLERS REPARTIDOS (sin XOR)
 // ----------------------------------------------------------------------
-function buildCustomVMExecution(payloadStr) {
-  // 1. El intérprete
-  const vmFuncCode = `
-local function _VM(bytes, consts)
-  local stack = {}
-  local sp = 0
-  local ip = 1
-  local push = function(v) sp = sp + 1; stack[sp] = v end
-  local pop  = function() local v = stack[sp]; sp = sp - 1; return v end
+function buildScatteredVM(payloadStr) {
+  // 1. Definimos el esqueleto del bucle principal de la VM
+  const vmName = randomName()  // nombre de la función VM
+  const bytesVar = randomName()
+  const constsVar = randomName()
+  const stackVar = randomName()
+  const spVar = randomName()
+  const ipVar = randomName()
+  const handlersTableVar = randomName()  // tabla que contendrá las funciones handler
 
-  while ip <= #bytes do
-    local op = bytes[ip]
-    ip = ip + 1
-    if op == 1 then
-      push(consts[bytes[ip] + 1])
-      ip = ip + 1
-    elseif op == 2 then
-      push(nil)
-    elseif op == 3 then
-      push(true)
-    elseif op == 4 then
-      push(false)
-    elseif op == 5 then
-      push(_G[consts[bytes[ip] + 1]])
-      ip = ip + 1
-    elseif op == 6 then
-      _G[consts[bytes[ip] + 1]] = pop()
-      ip = ip + 1
-    elseif op == 7 then
-      local a, b = pop(), pop()
-      push(b + a)
-    elseif op == 8 then
-      local a, b = pop(), pop()
-      push(b - a)
-    elseif op == 9 then
-      local a, b = pop(), pop()
-      push(b * a)
-    elseif op == 10 then
-      local a, b = pop(), pop()
-      push(b / a)
-    elseif op == 11 then
-      local a, b = pop(), pop()
-      push(b == a)
-    elseif op == 12 then
-      local a, b = pop(), pop()
-      push(b ~= a)
-    elseif op == 13 then
-      local a, b = pop(), pop()
-      push(b < a)
-    elseif op == 14 then
-      local a, b = pop(), pop()
-      push(b > a)
-    elseif op == 15 then
-      local a, b = pop(), pop()
-      push(b <= a)
-    elseif op == 16 then
-      local a, b = pop(), pop()
-      push(b >= a)
-    elseif op == 17 then
-      if not pop() then ip = bytes[ip] + 1 else ip = ip + 1 end
-    elseif op == 18 then
-      ip = bytes[ip] + 1
-    elseif op == 19 then
-      local f = pop()
-      local n = bytes[ip]; ip = ip + 1
-      local args = {}
-      for i = n, 1, -1 do args[i] = pop() end
-      f(unpack(args, 1, n))
-    elseif op == 20 then
-      local f = pop()
-      local n = bytes[ip]; ip = ip + 1
-      local args = {}
-      for i = n, 1, -1 do args[i] = pop() end
-      local r = {f(unpack(args, 1, n))}
-      for i = 1, bytes[ip] do push(r[i]) end
-      ip = ip + 1
-    elseif op == 21 then
-      return
-    elseif op == 22 then
-      push(-pop())
-    elseif op == 23 then
-      push(not pop())
-    elseif op == 24 then
-      local a, b = pop(), pop()
-      push(b % a)
-    elseif op == 25 then
-      local a, b = pop(), pop()
-      push(b ^ a)
-    elseif op == 26 then
-      local a, b = pop(), pop()
-      push(b .. a)
-    elseif op == 27 then
-      push(#pop())
-    elseif op == 28 then
-      local t = pop()
-      local k = pop()
-      push(t[k])
-    elseif op == 29 then
-      local t = pop()
-      local k = pop()
-      local v = pop()
-      t[k] = v
-    end
+  // 2. Generamos una función handler para cada opcode (1..29)
+  const handlerNames = []
+  const handlerDefs = []  // aquí guardaremos las definiciones de funciones sueltas que esparciremos
+
+  function makeHandlerBody(op) {
+    switch(op) {
+      case 1: return `local v = ${constsVar}[${bytesVar}[${ipVar}] + 1]; ${spVar} = ${spVar} + 1; ${stackVar}[${spVar}] = v; ${ipVar} = ${ipVar} + 1`
+      case 2: return `${spVar} = ${spVar} + 1; ${stackVar}[${spVar}] = nil`
+      case 3: return `${spVar} = ${spVar} + 1; ${stackVar}[${spVar}] = true`
+      case 4: return `${spVar} = ${spVar} + 1; ${stackVar}[${spVar}] = false`
+      case 5: return `local v = _G[${constsVar}[${bytesVar}[${ipVar}] + 1]]; ${spVar} = ${spVar} + 1; ${stackVar}[${spVar}] = v; ${ipVar} = ${ipVar} + 1`
+      case 6: return `local v = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; _G[${constsVar}[${bytesVar}[${ipVar}] + 1]] = v; ${ipVar} = ${ipVar} + 1`
+      case 7: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b + a`
+      case 8: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b - a`
+      case 9: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b * a`
+      case 10: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b / a`
+      case 11: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b == a`
+      case 12: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b ~= a`
+      case 13: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b < a`
+      case 14: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b > a`
+      case 15: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b <= a`
+      case 16: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b >= a`
+      case 17: return `if not ${stackVar}[${spVar}] then ${spVar} = ${spVar} - 1; ${ipVar} = ${bytesVar}[${ipVar}] - 1 else ${spVar} = ${spVar} - 1 end; ${ipVar} = ${ipVar} + 1`
+      case 18: return `${ipVar} = ${bytesVar}[${ipVar}]`
+      case 19: return `local f = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local n = ${bytesVar}[${ipVar}]; ${ipVar} = ${ipVar} + 1; local args = {}; for i = n, 1, -1 do args[i] = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1 end; f(unpack(args, 1, n))`
+      case 20: return `local f = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local n = ${bytesVar}[${ipVar}]; ${ipVar} = ${ipVar} + 1; local args = {}; for i = n, 1, -1 do args[i] = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1 end; local r = {f(unpack(args, 1, n))}; for i = 1, ${bytesVar}[${ipVar}] do ${spVar} = ${spVar} + 1; ${stackVar}[${spVar}] = r[i] end; ${ipVar} = ${ipVar} + 1`
+      case 21: return `return`
+      case 22: return `${stackVar}[${spVar}] = - ${stackVar}[${spVar}]`
+      case 23: return `${stackVar}[${spVar}] = not ${stackVar}[${spVar}]`
+      case 24: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b % a`
+      case 25: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b ^ a`
+      case 26: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b .. a`
+      case 27: return `${stackVar}[${spVar}] = # ${stackVar}[${spVar}]`
+      case 28: return `local k = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local t = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = t[k]`
+      case 29: return `local v = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local k = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local t = ${stackVar}[${spVar}]; t[k] = v`
+      default: return ``
+    }
+  }
+
+  const opIndices = []
+  for (let i = 1; i <= 29; i++) {
+    const hName = randomName()
+    handlerNames.push(hName)
+    opIndices.push(i)
+    handlerDefs.push(`local ${hName} = function() ${makeHandlerBody(i)} end`)
+  }
+
+  // 3. Construir la parte de constantes y bytes
+  const constSet = new Set(payloadStr)
+  constSet.add("loadstring")
+  const constsList = Array.from(constSet)
+  const constIndexMap = new Map()
+  constsList.forEach((str, idx) => constIndexMap.set(str, idx))
+
+  const bytes = []
+  let firstChar = true
+  for (const ch of payloadStr) {
+    const constIdx = constIndexMap.get(ch)
+    bytes.push(1, constIdx)
+    if (!firstChar) bytes.push(26)
+    firstChar = false
+  }
+  const loadIdx = constIndexMap.get("loadstring")
+  bytes.push(5, loadIdx)
+  bytes.push(20, 1, 1)
+  bytes.push(19, 0)
+  bytes.push(21)
+
+  const constsStr = constsList.map(str => {
+    if (str.length === 1) return `string.char(${heavyMath(str.charCodeAt(0))})`
+    else return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`
+  }).join(', ')
+  const bytesStr = bytes.map(num => heavyMath(num)).join(', ')
+
+  // 4. Bucle principal que usa tabla de handlers
+  const mainLoop = `
+local ${bytesVar} = {${bytesStr}}
+local ${constsVar} = {${constsStr}}
+local ${stackVar}, ${spVar} = {}, 0
+local ${ipVar} = 1
+local ${handlersTableVar} = nil
+
+local function ${vmName}()
+  while ${ipVar} <= #${bytesVar} do
+    local op = ${bytesVar}[${ipVar}]
+    ${ipVar} = ${ipVar} + 1
+    ${handlersTableVar}[op]()
   end
 end
 `
 
-  // 2. Construir las tablas consts y bytes
-  const constSet = new Set()
-  for (const ch of payloadStr) {
-    constSet.add(ch)
-  }
-  constSet.add("loadstring")
-  // Añadir algunas claves globales que puedan usarse (opcional)
-  // constSet.add("assert")  // no necesario
-
-  const constsList = Array.from(constSet)  // orden de inserción, no importa
-  const constIndexMap = new Map()
-  constsList.forEach((str, idx) => constIndexMap.set(str, idx))  // idx 0-based
-
-  // Generar bytecode
-  const bytes = []
-
-  // Empuja cada carácter de la cadena y concatena
-  let firstChar = true
-  for (const ch of payloadStr) {
-    const constIdx = constIndexMap.get(ch)
-    bytes.push(1, constIdx)  // PUSH_CONST
-    if (!firstChar) {
-      bytes.push(26)  // CONCAT
-    }
-    firstChar = false
+  // 5. Esparcir definiciones y tabla entre basura
+  const junkLines = []
+  for (let i = 0; i < 60; i++) {
+    junkLines.push(generateSingleJunkLine())
   }
 
-  // Ahora la pila tiene la cadena completa.
-  // Empuja _G["loadstring"]
-  const loadIdx = constIndexMap.get("loadstring")
-  bytes.push(5, loadIdx)   // PUSH_GLOBAL
-
-  // Llama loadstring con 1 argumento y espera 1 resultado
-  bytes.push(20, 1, 1)    // CALL_RET nargs=1, nresults=1
-
-  // La pila ahora tiene la función compilada.
-  // Llámala con 0 argumentos (ejecuta el código)
-  bytes.push(19, 0)        // CALL nargs=0
-
-  // Opcional: RETURN
-  bytes.push(21)
-
-  // 3. Convertir a código Lua ofuscado
-  // Consts: array de strings ofuscadas con string.char(...)
-  const constsStr = constsList.map(str => {
-    if (str.length === 1) {
-      return `string.char(${heavyMath(str.charCodeAt(0))})`
-    } else {
-      // Para la cadena "loadstring", también la ofuscamos carácter a carácter
-      const chars = str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')
-      return `string.char(${chars})`
-    }
-  }).join(', ')
-
-  // Bytes: array de números ofuscados con heavyMath
-  const bytesStr = bytes.map(num => heavyMath(num)).join(', ')
-
-  // 4. Código completo que ejecuta la VM
-  const finalCode = `
-${vmFuncCode}
-local _bytes = {${bytesStr}}
-local _consts = {${constsStr}}
-_VM(_bytes, _consts)
-`
-
-  // Envolver en una capa falsa (opcional) para mezclar con el estilo existente
-  const wrapped = buildSingleVM(finalCode, 3)  // Un par de funciones falsas alrededor
-  return wrapped
-}
-
-// Función auxiliar para envolver en un VM falso (igual que antes)
-function buildSingleVM(innerCode, handlerCount) {
-  const handlers = pickHandlers(handlerCount)
-  const realIdx = Math.floor(Math.random() * handlerCount)
-  const DISPATCH = randomName()
-  let out = `local lM={} `
-  for (let i = 0; i < handlers.length; i++) {
-    if (i === realIdx)
-      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(8)} ${innerCode} end `
-    else
-      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(4)} return nil end `
+  for (const def of handlerDefs) {
+    const pos = Math.floor(Math.random() * (junkLines.length - 1)) + 1
+    junkLines.splice(pos, 0, def)
   }
-  out += `local ${DISPATCH}={`
-  for (let i = 0; i < handlers.length; i++)
-    out += `[${heavyMath(i + 1)}]=${handlers[i]},`
-  out += `} `
-  let execBlocks = []
-  for (let i = 0; i < handlers.length; i++)
-    execBlocks.push(`${DISPATCH}[${heavyMath(i + 1)}](lM)`)
-  out += applyCFF(execBlocks)
-  return out
+
+  const tableCreation = `local ${handlersTableVar} = {${opIndices.map(i => `[${heavyMath(i)}] = ${handlerNames[i-1]}`).join(', ')}}`
+  junkLines.splice(Math.floor(Math.random() * junkLines.length), 0, tableCreation)
+
+  junkLines.push(`${vmName}()`)
+
+  const scatteredCode = junkLines.join(' ')
+
+  // Opcional: envolver en más capas como antes, pero no es necesario
+  return mainLoop + " " + scatteredCode
 }
 
 // ----------------------------------------------------------------------
@@ -383,10 +307,8 @@ function obfuscate(sourceCode) {
   if (match) { payloadToProtect = match[1] } 
   else { payloadToProtect = detectAndApplyMappings(sourceCode) }
 
-  // Usar la nueva VM personalizada sin XOR
-  const vmBlock = buildCustomVMExecution(payloadToProtect)
+  const vmBlock = buildScatteredVM(payloadToProtect)
 
-  // HEADER al principio, luego anti‑env logger, luego el resto
   return `${HEADER}\n${ANTI_ENV_LOGGER_SNIPPET}\n${combinedJunk} ${antiDebug} ${extraProtections} ${vmBlock}`
 }
 
