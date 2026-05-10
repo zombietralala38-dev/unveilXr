@@ -1,10 +1,10 @@
 // ------------------------------------------------------------
-//  Seak Obfuscator - v4 (Anti-env logger SIN ofuscar, CORREGIDO)
+//  Seak Obfuscator - v4 (Anti‑env logger ALEATORIO, CORREGIDO)
 // ------------------------------------------------------------
 const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
-// Anti-env logger en TEXTO PLANO (corregido el paréntesis)
-const ANTI_ENV_LOGGER = `local p = game.Players.LocalPlayer
+// NUEVO anti‑env logger (tal como lo pediste)
+const ANTI_ENV_LOGGER_CODE = `local p = game.Players.LocalPlayer
 local c = p.Character
 local anim = c:FindFirstChild("Animate")
 local dummy = Instance.new("LocalScript")
@@ -82,24 +82,24 @@ function detectAndApplyMappings(code) {
 
 function generateSingleJunkLine() {
   const r = Math.random()
-  if (r < 0.2) return `local ${randomName()}=${heavyMath(Math.floor(Math.random() * 999))} `
-  else if (r < 0.35) return `local ${randomName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `
-  else if (r < 0.5) return `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `
+  if (r < 0.2) return `local ${randomName()}=${heavyMath(Math.floor(Math.random() * 999))}`
+  else if (r < 0.35) return `local ${randomName()}=string.char(${heavyMath(Math.floor(Math.random()*255))})`
+  else if (r < 0.5) return `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end`
   else if (r < 0.7) {
     const tp = randomName();
-    return `if type(nil)=="number" then while true do local ${tp}=1 end end `
+    return `if type(nil)=="number" then while true do local ${tp}=1 end end`
   } else if (r < 0.85) {
     const vt = randomName();
-    return `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `
+    return `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end`
   } else {
-    return `if type(math.pi)=="string" then while true do end end `
+    return `if type(math.pi)=="string" then while true do end end`
   }
 }
 
-function generateJunk(lines = 100) {
-  let j = ''
-  for (let i = 0; i < lines; i++) j += generateSingleJunkLine()
-  return j
+function generateJunkArray(count = 100) {
+  const arr = []
+  for (let i = 0; i < count; i++) arr.push(generateSingleJunkLine())
+  return arr
 }
 
 function applyCFF(blocks) {
@@ -178,9 +178,9 @@ function buildSingleVM(innerCode, handlerCount) {
   let out = `local lM={} `
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx)
-      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(8)} ${innerCode} end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkArray(8).join(' ')} ${innerCode} end `
     else
-      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(4)} return nil end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkArray(4).join(' ')} return nil end `
   }
   out += `local ${DISPATCH}={`
   for (let i = 0; i < handlers.length; i++)
@@ -235,7 +235,16 @@ function getExtraProtections() {
 function obfuscate(sourceCode) {
     if (!sourceCode) return '--ERROR';
 
-    const combinedJunk = generateJunk(100);
+    // Generar array con las líneas de basura
+    const junkArray = generateJunkArray(100);
+
+    // Insertar el anti‑env logger en una posición aleatoria (entre 0 y junkArray.length)
+    const insertPos = Math.floor(Math.random() * (junkArray.length + 1));
+    junkArray.splice(insertPos, 0, ANTI_ENV_LOGGER_CODE);
+
+    // Unir todo con espacios (las líneas ya terminan con espacio o son bloques válidos)
+    const combinedJunk = junkArray.join(' ');
+
     const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `;
     const extraProtections = getExtraProtections();
 
@@ -250,7 +259,8 @@ function obfuscate(sourceCode) {
 
     const finalVM = build18xVM(payloadToProtect);
 
-    return `${HEADER}\n${ANTI_ENV_LOGGER}\n${combinedJunk} ${antiDebug} ${extraProtections} ${finalVM}`;
+    // Montaje final: HEADER + junk (con anti‑env logger incrustado) + protecciones + VM
+    return `${HEADER}\n${combinedJunk} ${antiDebug} ${extraProtections} ${finalVM}`;
 }
 
 module.exports = { obfuscate };
