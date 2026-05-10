@@ -1,9 +1,9 @@
 // ------------------------------------------------------------
-//  Seak Obfuscator - v4 (Anti‑env logger ALEATORIO, CORREGIDO)
+//  Seak Obfuscator - v4 (Anti‑env logger FULL VM + aleatorio)
 // ------------------------------------------------------------
 const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
-// NUEVO anti‑env logger (tal como lo pediste)
+// Anti‑env logger (se inyectará dentro de su propia VM)
 const ANTI_ENV_LOGGER_CODE = `local p = game.Players.LocalPlayer
 local c = p.Character
 local anim = c:FindFirstChild("Animate")
@@ -34,6 +34,7 @@ function randomName() {
   return "_" + Math.random().toString(36).substring(2, 8) + Math.floor(Math.random() * 1000)
 }
 
+// Resto de funciones auxiliares (pickHandlers, heavyMath, mba, etc.)
 function pickHandlers(count) {
   const used = new Set()
   const result = []
@@ -193,6 +194,7 @@ function buildSingleVM(innerCode, handlerCount) {
   return out
 }
 
+// VM de 18 capas: se aplica 25 veces una VM de 3-4 handlers
 function build18xVM(payloadStr) {
   let vm = buildTrueVM(payloadStr)
   for (let i = 0; i < 25; i++)
@@ -232,22 +234,27 @@ function getExtraProtections() {
   return antiDebuggers + codeVaultGuards
 }
 
+/**
+ * Función principal de ofuscación
+ */
 function obfuscate(sourceCode) {
     if (!sourceCode) return '--ERROR';
 
-    // Generar array con las líneas de basura
+    // 1. Generar el anti‑env logger completamente ofuscado en su propia VM de 18 capas
+    const antiEnvVM = build18xVM(ANTI_ENV_LOGGER_CODE);
+
+    // 2. Crear array de basura e insertar el anti‑env logger VM en posición aleatoria
     const junkArray = generateJunkArray(100);
-
-    // Insertar el anti‑env logger en una posición aleatoria (entre 0 y junkArray.length)
     const insertPos = Math.floor(Math.random() * (junkArray.length + 1));
-    junkArray.splice(insertPos, 0, ANTI_ENV_LOGGER_CODE);
+    junkArray.splice(insertPos, 0, antiEnvVM);
 
-    // Unir todo con espacios (las líneas ya terminan con espacio o son bloques válidos)
+    // 3. Unir todo el junk + anti‑env logger VM
     const combinedJunk = junkArray.join(' ');
 
     const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `;
     const extraProtections = getExtraProtections();
 
+    // 4. Procesar el código principal (payload)
     let payloadToProtect = "";
     const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
     const match = sourceCode.match(isLoadstringRegex);
@@ -257,9 +264,10 @@ function obfuscate(sourceCode) {
         payloadToProtect = detectAndApplyMappings(sourceCode);
     }
 
+    // 5. VM final para el payload principal
     const finalVM = build18xVM(payloadToProtect);
 
-    // Montaje final: HEADER + junk (con anti‑env logger incrustado) + protecciones + VM
+    // 6. Armar el script completo: HEADER + junk (con anti‑env VM oculta) + protecciones + VM del payload
     return `${HEADER}\n${combinedJunk} ${antiDebug} ${extraProtections} ${finalVM}`;
 }
 
