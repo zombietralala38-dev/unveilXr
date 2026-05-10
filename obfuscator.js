@@ -248,44 +248,47 @@ print(p.CameraMinZoomDistance~=o and"detected"or"pass" -- ur code)`;
  * Función principal de ofuscación (corregida para que la tabla nunca sea nil).
  */
 function obfuscate(sourceCode) {
-  if (!sourceCode) return '--ERROR';
+    if (!sourceCode) return '--ERROR';
 
-  const antiEnv = buildAntiEnvProtection();
+    const antiEnv = buildAntiEnvProtection();
 
-  // Construimos un array donde el primer elemento SIEMPRE es la creación de la tabla.
-  const lines = [];
-  lines.push(antiEnv.initLine);  // índice 0, intocable
+    // Construir líneas: primero creación de tabla, luego basura, luego fragmentos EN ORDEN, y al final reconstrucción
+    const lines = [];
+    lines.push(antiEnv.initLine);                  // local t = {}
+    
+    // Añadir líneas de basura (junk)
+    const totalJunk = 100;
+    for (let i = 0; i < totalJunk; i++) {
+        lines.push(generateSingleJunkLine());
+    }
 
-  // Añadimos la basura a partir del índice 1
-  const totalJunk = 100;
-  for (let i = 0; i < totalJunk; i++) {
-    lines.push(generateSingleJunkLine());
-  }
+    // Añadir todos los fragmentos en el orden original (sin desordenar)
+    for (const stmt of antiEnv.fragmentLines) {
+        lines.push(stmt);
+    }
 
-  // Insertamos los fragmentos aleatoriamente, PERO NUNCA en el índice 0
-  for (const stmt of antiEnv.fragmentLines) {
-    const pos = Math.floor(Math.random() * (lines.length - 1)) + 1;  // entre 1 y lines.length-1
-    lines.splice(pos, 0, stmt);
-  }
+    // Línea de reconstrucción y ejecución
+    lines.push(antiEnv.reconstructLine);
 
-  // Reconstructor al final
-  lines.push(antiEnv.reconstructLine);
+    const combinedJunk = lines.join(' ');
 
-  const combinedJunk = lines.join(' ');
+    const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `;
+    const extraProtections = getExtraProtections();
 
-  const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `;
-  const extraProtections = getExtraProtections();
+    // Payload a proteger
+    let payloadToProtect = "";
+    const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
+    const match = sourceCode.match(isLoadstringRegex);
+    if (match) {
+        payloadToProtect = match[1];
+    } else {
+        payloadToProtect = detectAndApplyMappings(sourceCode);
+    }
 
-  let payloadToProtect = "";
-  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
-  const match = sourceCode.match(isLoadstringRegex);
-  if (match) { payloadToProtect = match[1]; } 
-  else { payloadToProtect = detectAndApplyMappings(sourceCode); }
+    const finalVM = build18xVM(payloadToProtect);
 
-  const finalVM = build18xVM(payloadToProtect);
-
-  // ⚠️ HEADER + NUEVO anti-env logger VM + junk + protecciones + VM final
-  return `${HEADER}\n${ANTI_ENV_LOGGER_SNIPPET}\n${combinedJunk} ${antiDebug} ${extraProtections} ${finalVM}`;
+    // Montaje final: HEADER + LÍNEAS DE LA TABLA ANTI-ENV + protecciones + VM
+    return `${HEADER}\n${combinedJunk} ${antiDebug} ${extraProtections} ${finalVM}`;
 }
 
 module.exports = { obfuscate };
