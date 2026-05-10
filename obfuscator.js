@@ -1,16 +1,14 @@
 // ------------------------------------------------------------
-//  Seak Obfuscator - v5 (Anti-Env Logger Dinámico Integrado)
+//  Seak Obfuscator v5 - FINAL (VM anidada extrema + XOR dinámico)
 // ------------------------------------------------------------
-const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`;
+const HEADER = `--[[ protected by Seak Obfuscator v5 ]]`;
 
-// Funciones auxiliares
 function randomName() {
   return "_" + Math.random().toString(36).substring(2, 8) + Math.floor(Math.random() * 1000);
 }
 
 function pickHandlers(count) {
-  const used = new Set();
-  const result = [];
+  const used = new Set(), result = [];
   while (result.length < count) {
     const name = randomName() + Math.floor(Math.random() * 99);
     if (!used.has(name)) { used.add(name); result.push(name); }
@@ -27,39 +25,8 @@ function heavyMath(n) {
   return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`;
 }
 
-function mba() {
-  let n = Math.random() > 0.5 ? 1 : 2,
-      a = Math.floor(Math.random() * 70) + 15,
-      b = Math.floor(Math.random() * 40) + 8;
-  return `((${n}*${a}-${a})/(${b}+1)+${n})`;
-}
-
-const MAPEO = {
-  "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
-  "TextButton":"Mixed Boolean Arithmetic","Humanoid":"Dynamic Junk","Player":"Fake Flow",
-  "RunService":"Virtual Machine","TweenService":"Fake Flow","Players":"Fake Flow"
-};
-
-function detectAndApplyMappings(code) {
-  let modified = code, headers = "";
-  for (const [word, tech] of Object.entries(MAPEO)) {
-    const regex = new RegExp(`\\b${word}\\b`, "g");
-    if (regex.test(modified)) {
-      let replacement = `"${word}"`;
-      if (tech.includes("Aggressive Renaming")) { 
-        const v = randomName(); 
-        headers += `local ${v}="${word}";`; 
-        replacement = v; 
-      } else if (tech.includes("String to Math")) {
-        replacement = `string.char(${word.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
-      } else if (tech.includes("Mixed Boolean Arithmetic")) {
-        replacement = `((${mba()}==1 or true)and"${word}")`;
-      }
-      regex.lastIndex = 0;
-      modified = modified.replace(regex, () => `game[${replacement}]`);
-    }
-  }
-  return headers + modified;
+function randomXORKey() {
+  return Math.floor(Math.random() * 0xFF);
 }
 
 function generateSingleJunkLine() {
@@ -67,15 +34,9 @@ function generateSingleJunkLine() {
   if (r < 0.2) return `local ${randomName()}=${heavyMath(Math.floor(Math.random() * 999))} `;
   else if (r < 0.35) return `local ${randomName()}=string.char(${heavyMath(Math.floor(Math.random()*255))}) `;
   else if (r < 0.5) return `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end `;
-  else if (r < 0.7) {
-    const tp = randomName();
-    return `if type(nil)=="number" then while true do local ${tp}=1 end end `;
-  } else if (r < 0.85) {
-    const vt = randomName();
-    return `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end `;
-  } else {
-    return `if type(math.pi)=="string" then while true do end end `;
-  }
+  else if (r < 0.7) return `if type(nil)=="number" then while true do local ${randomName()}=1 end end `;
+  else if (r < 0.85) return `do local ${randomName()}={} ${randomName()}["_"]=1 ${randomName()}=nil end `;
+  else return `if type(math.pi)=="string" then while true do end end `;
 }
 
 function generateJunk(lines = 100) {
@@ -99,27 +60,30 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
-function buildTrueVM(payloadStr) {
+// VM real con XOR dinámico
+function buildTrueVM(payloadStr, xorSeed = null) {
   const STACK = randomName();
-  const KEY = randomName();
+  const KEY = xorSeed !== null ? xorSeed : randomXORKey();
   const ORDER = randomName();
-  const seed = Math.floor(Math.random() * 200) + 50;
+  const seed = KEY;
 
-  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} `;
+  let vmCore = `local ${STACK}={} local ${randomName()}=${heavyMath(seed)} `;
   const chunkSize = 10;
   let realChunks = [];
-  for(let i = 0; i < payloadStr.length; i += chunkSize)
+  for (let i = 0; i < payloadStr.length; i += chunkSize)
     realChunks.push(payloadStr.slice(i, i + chunkSize));
 
-  let poolVars = [], realOrder = [], totalChunks = realChunks.length * 4, currentReal = 0, globalIndex = 0;
+  let poolVars = [], realOrder = [];
+  let totalChunks = realChunks.length * 4;
+  let currentReal = 0, globalIndex = 0;
 
-  for(let i = 0; i < totalChunks; i++) {
+  for (let i = 0; i < totalChunks; i++) {
     let memName = randomName();
     poolVars.push(memName);
     if (currentReal < realChunks.length && (Math.random() > 0.6 || (totalChunks - i) === (realChunks.length - currentReal))) {
       realOrder.push(i + 1);
       let chunk = realChunks[currentReal], encryptedBytes = [];
-      for(let j = 0; j < chunk.length; j++) {
+      for (let j = 0; j < chunk.length; j++) {
         let enc = chunk.charCodeAt(j) ^ ((seed + globalIndex) & 0xFF);
         encryptedBytes.push(heavyMath(enc));
         globalIndex++;
@@ -128,7 +92,7 @@ function buildTrueVM(payloadStr) {
       currentReal++;
     } else {
       let fakeBytes = [];
-      for(let j = 0; j < Math.floor(Math.random() * 25) + 5; j++)
+      for (let j = 0; j < Math.floor(Math.random() * 25) + 5; j++)
         fakeBytes.push(heavyMath(Math.floor(Math.random() * 255)));
       vmCore += `local ${memName}={${fakeBytes.join(',')}} `;
     }
@@ -136,9 +100,8 @@ function buildTrueVM(payloadStr) {
 
   vmCore += `local _pool={${poolVars.join(',')}} local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `;
   const idxVar = randomName(), byteVar = randomName();
-
   vmCore += `local _gIdx=0 for _, ${idxVar} in ipairs(${ORDER}) do for _, ${byteVar} in ipairs(_pool[${idxVar}]) do `;
-  vmCore += `table.insert(${STACK}, string.char(bit32.bxor(${byteVar}, (${KEY} + _gIdx) % 256))) _gIdx=_gIdx+1 end end `;
+  vmCore += `table.insert(${STACK}, string.char(bit32.bxor(${byteVar}, (${heavyMath(seed)} + _gIdx) % 256))) _gIdx=_gIdx+1 end end `;
   vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `;
 
   const ASSERT = `getgenv()[${runtimeString("assert")}]`;
@@ -153,6 +116,7 @@ function buildTrueVM(payloadStr) {
   return vmCore;
 }
 
+// VM anidada (capa de handlers falsos)
 function buildSingleVM(innerCode, handlerCount) {
   const handlers = pickHandlers(handlerCount);
   const realIdx = Math.floor(Math.random() * handlerCount);
@@ -175,13 +139,32 @@ function buildSingleVM(innerCode, handlerCount) {
   return out;
 }
 
-function build18xVM(payloadStr) {
-  let vm = buildTrueVM(payloadStr);
-  for (let i = 0; i < 25; i++)
-    vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3);
+// Construcción final con profundidad y handlers configurables
+function build18xVM(payloadStr, depth = 25, extraHandlers = 3) {
+  let vm = buildTrueVM(payloadStr, randomXORKey());
+  for (let i = 0; i < depth; i++) {
+    const handlerCount = Math.floor(Math.random() * extraHandlers) + 2;
+    vm = buildSingleVM(vm, handlerCount);
+  }
   return vm;
 }
 
+// Anti‑env logging (versión legible, SIN ofuscar)
+function getAntiEnvCode() {
+  return `
+-- Anti-Environment Logger Protection (visible)
+local _results, _count = {}, 0
+local function _store(value) _count = _count + 1; _results[_count] = value and 1 or 0 end
+do local ok=true pcall(function() local ts=game:GetService("TweenService") if not ts then return end local f=Instance.new("Frame") local tw=ts:Create(f,TweenInfo.new(0.1),{Size=UDim2.new(1,0,1,0)}) local t=os.clock() tw:Play() tw.Completed:Wait() if math.abs(os.clock()-t-0.1)>0.05 then ok=false end f:Destroy() end) _store(ok) end
+do local ok=true pcall(function() local s=Instance.new("Sound") if pcall(function() s.PlaybackLoudness=99 end) then ok=false end s:Destroy() end) _store(ok) end
+do local ok=true pcall(function() if not Instance then return end local f=Instance.new("Frame") if typeof(f)~="Instance" then ok=false end f:Destroy() end) _store(ok) end
+do local ok=true pcall(function() if not game then return end if game.PlaceId==game.GameId then ok=false end end) _store(ok) end
+do local ok=true pcall(function() local tb=Instance.new("TextBox") if pcall(function() tb.TextBounds=Vector2.new(1,1) end) then ok=false end tb:Destroy() end) _store(ok) end
+local _s=0 for i=1,_count do _s=_s+_results[i] end if _s~=_count then while true do end end
+`;
+}
+
+// Protecciones adicionales (anti-debug, anti-tamper)
 function getExtraProtections() {
   const antiDebuggers = `
     if getmetatable(_G)~=nil then while true do end end 
@@ -207,88 +190,84 @@ function getExtraProtections() {
     `if type(pcall)~="function" then _err() end`
   ];
   let codeVaultGuards = "";
-  for(let t of rawTampers) {
+  for (let t of rawTampers) {
     const fnName = randomName(), errName = randomName();
     codeVaultGuards += `local ${fnName}=function() local ${errName}=error ${t.replace("_err()", `${errName}("!")`)} end ${fnName}() `;
   }
   return antiDebuggers + codeVaultGuards;
 }
 
-/**
- * Genera el Anti-Env Logger (VM de 11 estados) completamente dinámico:
- * se fragmenta en líneas que se insertan en la basura.
- */
-function buildAntiEnvLoggerFragments() {
-  // El código real del logger, sin nombres fijos
-  const loggerCode = `local _X=function()local t={}local f=function(...)t[#t+1]=...return...end local s=0 local r=0 while s<11 do if s==0 then t[1]=game s=1 elseif s==1 then t[2]=t[1].Players s=2 elseif s==2 then t[3]=t[2].LocalPlayer s=3 elseif s==3 then t[4]=t[3].CameraMinZoomDistance s=4 elseif s==4 then f(pcall(function()t[3].CameraMinZoomDistance=-5 end))s=5 elseif s==5 then t[5]=t[3].CameraMinZoomDistance s=6 elseif s==6 then if t[4]~=t[5]then r=r+1 end s=7 elseif s==7 then if getmetatable(_G)~=nil then r=r+2 end s=8 elseif s==8 then if type(f)~=type(function()end)then r=r+4 end s=9 elseif s==9 then if debug and debug.getinfo then r=r+8 end s=10 elseif s==10 then if r>0 then while true do end end break end end end _X()`;
+// ------------------------------------------------------------
+//  Función principal de ofuscación (con opciones)
+// ------------------------------------------------------------
+function obfuscate(sourceCode, options = {}) {
+  if (!sourceCode) return '--ERROR: no source code provided';
 
-  // Fragmentar en trozos de 4-6 caracteres
-  const fragSize = 4 + Math.floor(Math.random() * 3);
-  const fragments = [];
-  for (let i = 0; i < loggerCode.length; i += fragSize) {
-    fragments.push(loggerCode.slice(i, i + fragSize));
+  const {
+    junkLines = 100,
+    vmDepth = 25,
+    vmHandlers = 3,
+    useAntiDebug = true,
+    useAntiEnv = true
+  } = options;
+
+  let finalCode = "";
+
+  // 1. Anti‑env (visible, no ofuscado)
+  if (useAntiEnv) {
+    finalCode += getAntiEnvCode() + "\n";
   }
 
-  // Nombre aleatorio para la tabla que guardará los strings
-  const tableName = randomName();
-  const initLine = `local ${tableName} = {}`; // creación de la tabla
-
-  const fragmentLines = [];
-  for (const frag of fragments) {
-    const bytes = frag.split('').map(c => heavyMath(c.charCodeAt(0)));
-    fragmentLines.push(`${tableName}[#${tableName}+1] = string.char(${bytes.join(',')})`);
+  // 2. Basura opcional
+  if (junkLines > 0) {
+    finalCode += generateJunk(junkLines) + "\n";
   }
 
-  const reconstructLine = `local _reco = table.concat(${tableName}); assert(loadstring(_reco))();`;
-
-  return { initLine, fragmentLines, reconstructLine };
-}
-
-/**
- * Función principal de ofuscación
- */
-function obfuscate(sourceCode) {
-  if (!sourceCode) return '--ERROR';
-
-  // 1. Anti-Env Logger dinámico
-  const antiEnv = buildAntiEnvLoggerFragments();
-
-  // 2. Construir el array de líneas finales
-  const lines = [];
-  lines.push(antiEnv.initLine);  // índice 0: la tabla contenedora
-
-  // Añadir basura (índices 1..100)
-  for (let i = 0; i < 100; i++) {
-    lines.push(generateSingleJunkLine());
+  // 3. Anti‑debug
+  if (useAntiDebug) {
+    finalCode += `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end\n`;
   }
 
-  // Insertar los fragmentos del logger en posiciones aleatorias (nunca en índice 0)
-  for (const stmt of antiEnv.fragmentLines) {
-    const pos = Math.floor(Math.random() * (lines.length - 1)) + 1;
-    lines.splice(pos, 0, stmt);
-  }
+  // 4. Protecciones extra
+  finalCode += getExtraProtections() + "\n";
 
-  // Reconstructor al final
-  lines.push(antiEnv.reconstructLine);
-
-  const combinedJunk = lines.join(' ');
-
-  // 3. Protecciones adicionales
-  const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `;
-  const extraProtections = getExtraProtections();
-
-  // 4. Preparar payload
+  // 5. Detectar si el código es una llamada loadstring con HttpGet
   let payloadToProtect = "";
   const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
   const match = sourceCode.match(isLoadstringRegex);
-  if (match) { payloadToProtect = match[1]; } 
-  else { payloadToProtect = detectAndApplyMappings(sourceCode); }
+  if (match) {
+    payloadToProtect = match[1];
+  } else {
+    payloadToProtect = sourceCode;
+  }
 
-  // 5. Encapsular en 18 capas de VM
-  const finalVM = build18xVM(payloadToProtect);
+  // 6. VM principal (anidada)
+  const vmCode = build18xVM(payloadToProtect, vmDepth, vmHandlers);
+  finalCode += vmCode;
 
-  // 6. Unir todo
-  return `${HEADER}\n${combinedJunk} ${antiDebug} ${extraProtections} ${finalVM}`;
+  return HEADER + "\n" + finalCode;
+}
+
+// ------------------------------------------------------------
+//  Ejemplo de uso (puedes modificar el script y los parámetros)
+// ------------------------------------------------------------
+if (require.main === module) {
+  const miScript = `
+    -- Tu script aquí
+    print("Hola mundo")
+    local player = game.Players.LocalPlayer
+    player.Character.Humanoid.Health = 100
+  `;
+
+  const ofuscado = obfuscate(miScript, {
+    junkLines: 80,      // Basura entre capas
+    vmDepth: 30,        // Capas de VM (más = más seguro)
+    vmHandlers: 5,      // Handlers falsos por capa
+    useAntiDebug: true,
+    useAntiEnv: true
+  });
+
+  console.log(ofuscado);
 }
 
 module.exports = { obfuscate };
