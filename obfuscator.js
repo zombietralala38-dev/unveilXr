@@ -1,5 +1,5 @@
 // ------------------------------------------------------------
-//  Seak Obfuscator - v4 (Anti‑env logger FULL VM + aleatorio)
+//  Seak Obfuscator - v4 (Anti‑env logger FULL VM, límite 200 solucionado)
 // ------------------------------------------------------------
 const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
@@ -34,7 +34,6 @@ function randomName() {
   return "_" + Math.random().toString(36).substring(2, 8) + Math.floor(Math.random() * 1000)
 }
 
-// Resto de funciones auxiliares (pickHandlers, heavyMath, mba, etc.)
 function pickHandlers(count) {
   const used = new Set()
   const result = []
@@ -118,42 +117,47 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
+// ============== NUEVA buildTrueVM SIN EXCESO DE LOCALES ==============
 function buildTrueVM(payloadStr) {
   const STACK = randomName()
   const KEY = randomName()
   const ORDER = randomName()
   const seed = Math.floor(Math.random() * 200) + 50
 
-  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} `
+  // Tabla local única para todos los fragmentos (antes eran cientos de variables locales)
+  let vmCore = `local _pool={} local ${STACK}={} local ${KEY}=${heavyMath(seed)} `
   const chunkSize = 10
   let realChunks = []
-  for(let i = 0; i < payloadStr.length; i += chunkSize)
+  for (let i = 0; i < payloadStr.length; i += chunkSize)
     realChunks.push(payloadStr.slice(i, i + chunkSize))
 
-  let poolVars = [], realOrder = [], totalChunks = realChunks.length * 4, currentReal = 0, globalIndex = 0
+  let realOrder = []
+  let totalChunks = realChunks.length * 4
+  let currentReal = 0
+  let globalIndex = 0
 
-  for(let i = 0; i < totalChunks; i++) {
-    let memName = randomName()
-    poolVars.push(memName)
+  for (let i = 0; i < totalChunks; i++) {
     if (currentReal < realChunks.length && (Math.random() > 0.6 || (totalChunks - i) === (realChunks.length - currentReal))) {
       realOrder.push(i + 1)
-      let chunk = realChunks[currentReal], encryptedBytes = []
-      for(let j = 0; j < chunk.length; j++) {
+      let chunk = realChunks[currentReal]
+      let encryptedBytes = []
+      for (let j = 0; j < chunk.length; j++) {
         let enc = chunk.charCodeAt(j) ^ ((seed + globalIndex) & 0xFF)
         encryptedBytes.push(heavyMath(enc))
         globalIndex++
       }
-      vmCore += `local ${memName}={${encryptedBytes.join(',')}} `
+      // Insertar en la tabla _pool, no en una variable nueva
+      vmCore += `_pool[${heavyMath(i + 1)}]={${encryptedBytes.join(',')}} `
       currentReal++
     } else {
       let fakeBytes = []
-      for(let j = 0; j < Math.floor(Math.random() * 25) + 5; j++)
+      for (let j = 0; j < Math.floor(Math.random() * 25) + 5; j++)
         fakeBytes.push(heavyMath(Math.floor(Math.random() * 255)))
-      vmCore += `local ${memName}={${fakeBytes.join(',')}} `
+      vmCore += `_pool[${heavyMath(i + 1)}]={${fakeBytes.join(',')}} `
     }
   }
 
-  vmCore += `local _pool={${poolVars.join(',')}} local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `
+  vmCore += `local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `
   const idxVar = randomName(), byteVar = randomName()
 
   vmCore += `local _gIdx=0 for _, ${idxVar} in ipairs(${ORDER}) do for _, ${byteVar} in ipairs(_pool[${idxVar}]) do `
@@ -179,9 +183,9 @@ function buildSingleVM(innerCode, handlerCount) {
   let out = `local lM={} `
   for (let i = 0; i < handlers.length; i++) {
     if (i === realIdx)
-      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkArray(8).join(' ')} ${innerCode} end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkArray(3).join(' ')} ${innerCode} end `
     else
-      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkArray(4).join(' ')} return nil end `
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkArray(2).join(' ')} return nil end `
   }
   out += `local ${DISPATCH}={`
   for (let i = 0; i < handlers.length; i++)
@@ -194,8 +198,8 @@ function buildSingleVM(innerCode, handlerCount) {
   return out
 }
 
-// VM de 18 capas: se aplica 25 veces una VM de 3-4 handlers
-function build18xVM(payloadStr) {
+// VM de 25 capas (sin reducción)
+function build25xVM(payloadStr) {
   let vm = buildTrueVM(payloadStr)
   for (let i = 0; i < 25; i++)
     vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3)
@@ -234,27 +238,23 @@ function getExtraProtections() {
   return antiDebuggers + codeVaultGuards
 }
 
-/**
- * Función principal de ofuscación
- */
 function obfuscate(sourceCode) {
     if (!sourceCode) return '--ERROR';
 
-    // 1. Generar el anti‑env logger completamente ofuscado en su propia VM de 18 capas
-    const antiEnvVM = build18xVM(ANTI_ENV_LOGGER_CODE);
+    // 1. Anti‑env logger ofuscado en su propia VM de 25 capas
+    const antiEnvVM = build25xVM(ANTI_ENV_LOGGER_CODE);
 
-    // 2. Crear array de basura e insertar el anti‑env logger VM en posición aleatoria
+    // 2. Junk (100 líneas) + inserción aleatoria del anti‑env VM
     const junkArray = generateJunkArray(100);
     const insertPos = Math.floor(Math.random() * (junkArray.length + 1));
     junkArray.splice(insertPos, 0, antiEnvVM);
 
-    // 3. Unir todo el junk + anti‑env logger VM
     const combinedJunk = junkArray.join(' ');
 
     const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `;
     const extraProtections = getExtraProtections();
 
-    // 4. Procesar el código principal (payload)
+    // 3. Payload principal (URL o código)
     let payloadToProtect = "";
     const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
     const match = sourceCode.match(isLoadstringRegex);
@@ -264,10 +264,9 @@ function obfuscate(sourceCode) {
         payloadToProtect = detectAndApplyMappings(sourceCode);
     }
 
-    // 5. VM final para el payload principal
-    const finalVM = build18xVM(payloadToProtect);
+    // 4. VM final de 25 capas para el payload
+    const finalVM = build25xVM(payloadToProtect);
 
-    // 6. Armar el script completo: HEADER + junk (con anti‑env VM oculta) + protecciones + VM del payload
     return `${HEADER}\n${combinedJunk} ${antiDebug} ${extraProtections} ${finalVM}`;
 }
 
