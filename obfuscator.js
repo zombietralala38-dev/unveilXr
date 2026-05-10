@@ -12,7 +12,33 @@ p.CameraMinZoomDistance=-5
 end)
 print(p.CameraMinZoomDistance~=o and "detected" or "pass") -- ur code
 local str = tostring(_ENV)
-print(str)`
+print(str)
+local p = game.Players.LocalPlayer
+local c = p.Character
+local anim = c:FindFirstChild("Animate")
+local dummy = Instance.new("LocalScript")
+local getsc = getrunningscripts
+if typeof(getsc) == "function" then
+local res = getsc()
+local is_ok = false
+local is_bad = false
+for i, v in next, res do
+if v == anim then
+is_ok = true
+end
+if v == dummy then
+is_bad = true
+end
+end
+if is_ok and not is_bad then
+print("pass")
+else
+print("fail")
+end
+else
+print("fail")
+end
+`
 
 function randomName() {
   return "_" + Math.random().toString(36).substring(2, 8) + Math.floor(Math.random() * 1000)
