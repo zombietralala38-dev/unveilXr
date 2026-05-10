@@ -1,15 +1,17 @@
 // ------------------------------------------------------------
-//  Seak Obfuscator - v4 (init de tabla asegurado)
+//  Seak Obfuscator - v4 (Anti-env logger SIN ofuscar)
 // ------------------------------------------------------------
 const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
-// ⚡ NUEVO Anti-Env Logger QUIRÚRGICO (11 estados VM)
-const ANTI_ENV_LOGGER_SNIPPET = `local p=game.Players.LocalPlayer
+// Anti-env logger en TEXTO PLANO (sin ofuscar)
+const ANTI_ENV_LOGGER = `
+local p=game.Players.LocalPlayer
 local o=p.CameraMinZoomDistance
 pcall(function()
 p.CameraMinZoomDistance=-5
 end)
-print(p.CameraMinZoomDistance~=o and"detected"or"pass" -- ur code)`
+print(p.CameraMinZoomDistance~=o and"detected"or"pass" -- ur code)
+`
 
 function randomName() {
   return "_" + Math.random().toString(36).substring(2, 8) + Math.floor(Math.random() * 1000)
@@ -214,68 +216,18 @@ function getExtraProtections() {
 }
 
 /**
- * Anti‑env logger: todos los fragmentos se insertan en una tabla.
- * La tabla se crea al principio y nunca se desplaza.
- */
-function buildAntiEnvProtection() {
-  const antiEnvCode = `local p=game.Players.LocalPlayer
-local o=p.CameraMinZoomDistance
-pcall(function()
-p.CameraMinZoomDistance=-5
-end)
-print(p.CameraMinZoomDistance~=o and"detected"or"pass" -- ur code)`;
-
-  const fragSize = 4 + Math.floor(Math.random() * 3);
-  const fragments = [];
-  for (let i = 0; i < antiEnvCode.length; i += fragSize) {
-    fragments.push(antiEnvCode.slice(i, i + fragSize));
-  }
-
-  const tableName = randomName();
-  const fragmentLines = [];
-  for (const frag of fragments) {
-    const bytes = frag.split('').map(c => heavyMath(c.charCodeAt(0)));
-    fragmentLines.push(`${tableName}[#${tableName}+1] = string.char(${bytes.join(',')})`);
-  }
-
-  const initLine = `local ${tableName} = {}`;
-  const reconstructLine = `local _reco = table.concat(${tableName}); assert(loadstring(_reco))();`;
-
-  return { initLine, fragmentLines, reconstructLine };
-}
-
-/**
- * Función principal de ofuscación (corregida para que la tabla nunca sea nil).
+ * Función principal de ofuscación 
+ * El anti-env logger va en TEXTO PLANO al inicio, el RESTO del código VA OFUSCADO
  */
 function obfuscate(sourceCode) {
     if (!sourceCode) return '--ERROR';
 
-    const antiEnv = buildAntiEnvProtection();
-
-    // Construir líneas: primero creación de tabla, luego basura, luego fragmentos EN ORDEN, y al final reconstrucción
-    const lines = [];
-    lines.push(antiEnv.initLine);                  // local t = {}
-    
-    // Añadir líneas de basura (junk)
-    const totalJunk = 100;
-    for (let i = 0; i < totalJunk; i++) {
-        lines.push(generateSingleJunkLine());
-    }
-
-    // Añadir todos los fragmentos en el orden original (sin desordenar)
-    for (const stmt of antiEnv.fragmentLines) {
-        lines.push(stmt);
-    }
-
-    // Línea de reconstrucción y ejecución
-    lines.push(antiEnv.reconstructLine);
-
-    const combinedJunk = lines.join(' ');
-
+    // Junk y protecciones para el código ofuscado
+    const combinedJunk = generateJunk(100);
     const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `;
     const extraProtections = getExtraProtections();
 
-    // Payload a proteger
+    // Payload a proteger (EL RESTO DEL CÓDIGO, NO el anti-env logger)
     let payloadToProtect = "";
     const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
     const match = sourceCode.match(isLoadstringRegex);
@@ -287,8 +239,8 @@ function obfuscate(sourceCode) {
 
     const finalVM = build18xVM(payloadToProtect);
 
-    // Montaje final: HEADER + LÍNEAS DE LA TABLA ANTI-ENV + protecciones + VM
-    return `${HEADER}\n${combinedJunk} ${antiDebug} ${extraProtections} ${finalVM}`;
+    // Montaje final: HEADER + ANTI-ENV LOGGER EN TEXTO PLANO + junk + protecciones + VM ofuscada
+    return `${HEADER}\n${ANTI_ENV_LOGGER}\n${combinedJunk} ${antiDebug} ${extraProtections} ${finalVM}`;
 }
 
 module.exports = { obfuscate };
