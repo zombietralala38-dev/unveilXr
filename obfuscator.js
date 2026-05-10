@@ -11,7 +11,8 @@ pcall(function()
 p.CameraMinZoomDistance=-5
 end)
 print(p.CameraMinZoomDistance~=o and "detected" or "pass") -- ur code
-`
+local str = tostring(_ENV)
+print(str)`
 
 function randomName() {
   return "_" + Math.random().toString(36).substring(2, 8) + Math.floor(Math.random() * 1000)
