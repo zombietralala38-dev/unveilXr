@@ -1,16 +1,16 @@
 // ------------------------------------------------------------
-//  Seak Obfuscator - v4 (Anti-env logger SIN ofuscar)
+//  Seak Obfuscator - v4 (Anti-env logger SIN ofuscar, CORREGIDO)
 // ------------------------------------------------------------
 const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
-// Anti-env logger en TEXTO PLANO (sin ofuscar)
+// Anti-env logger en TEXTO PLANO (corregido el paréntesis)
 const ANTI_ENV_LOGGER = `
 local p=game.Players.LocalPlayer
 local o=p.CameraMinZoomDistance
 pcall(function()
 p.CameraMinZoomDistance=-5
 end)
-print(p.CameraMinZoomDistance~=o and"detected"or"pass" -- ur code)
+print(p.CameraMinZoomDistance~=o and "detected" or "pass") -- ur code
 `
 
 function randomName() {
@@ -215,19 +215,13 @@ function getExtraProtections() {
   return antiDebuggers + codeVaultGuards
 }
 
-/**
- * Función principal de ofuscación 
- * El anti-env logger va en TEXTO PLANO al inicio, el RESTO del código VA OFUSCADO
- */
 function obfuscate(sourceCode) {
     if (!sourceCode) return '--ERROR';
 
-    // Junk y protecciones para el código ofuscado
     const combinedJunk = generateJunk(100);
     const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `;
     const extraProtections = getExtraProtections();
 
-    // Payload a proteger (EL RESTO DEL CÓDIGO, NO el anti-env logger)
     let payloadToProtect = "";
     const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
     const match = sourceCode.match(isLoadstringRegex);
@@ -239,7 +233,6 @@ function obfuscate(sourceCode) {
 
     const finalVM = build18xVM(payloadToProtect);
 
-    // Montaje final: HEADER + ANTI-ENV LOGGER EN TEXTO PLANO + junk + protecciones + VM ofuscada
     return `${HEADER}\n${ANTI_ENV_LOGGER}\n${combinedJunk} ${antiDebug} ${extraProtections} ${finalVM}`;
 }
 
