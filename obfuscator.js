@@ -3,8 +3,8 @@
 // ------------------------------------------------------------
 const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
-// NUEVO: anti‑env logger tal cual lo pediste, se inyecta al principio
-const ANTI_ENV_LOGGER_SNIPPET = `local q=bit32.bxor local t_=game.Players.LocalPlayer local h=t_.CameraMinZoomDistance local g,o_,k,p,l_,n_,d_;n_,d_={},function(c,a_,r_)n_[a_]=q(r_,1752)-q(c,35158)return n_[a_]end;l_=n_[27372]or d_(24643,27372,119719)while l_~=19904 do if l_>=33475 then if l_<46624 then if l_<=41315 then if l_<34725 then l_=n_[-17633]or d_(14697,-17633,64295)continue elseif l_>34725 then if o_ then l_=n_[-3212]or d_(8399,-3212,96739)continue end l_=n_[22829]or d_(34757,22829,14329)else o_,l_=k,41315 end else o_,l_=g,54690 end elseif l_>=54690 then if l_<=57644 then if l_>54690 then o_,l_=g,3661 else l_,k=46624,o_ end else l_,k=n_[-31843]or d_(14262,-31843,96594),pcall(function()local j,m,b_,s_;b_,m={},function(i_,e_,f_)b_[i_]=q(e_,52903)-q(f_,44226)return b_[i_]end;s_=b_[-5612]or m(-5612,115149,24558)repeat if s_<=7230 then j,s_=-5,b_[-30116]or m(-30116,121660,56548)else t_.CameraMinZoomDistance,s_=j,b_[17256]or m(17256,63019,46886)continue end until s_==7336 end)end elseif l_>46624 then k,l_=t_.CameraMinZoomDistance,1999 else k,l_=print(k),n_[-25054]or d_(31046,-25054,95243)end elseif l_>23608 then if l_>28143 then g,l_=p,57644 elseif l_<=25653 then o_,l_=k,28143 else if not o_ then l_=n_[-1606]or d_(4233,-1606,44788)continue end l_=23608 end elseif l_<=3661 then if l_<3491 then l_,k=25653,k~=h elseif l_>3491 then l_,k=n_[21609]or d_(25456,21609,96019),o_ else g,l_=p,n_[-27119]or d_(2776,-27119,79075)end elseif l_>8846 then p,l_='detected',n_[12006]or d_(32140,12006,90182)else p,l_='pass',3491 end end`
+// ⚡ NUEVO Anti-Env Logger QUIRÚRGICO (11 estados VM)
+const ANTI_ENV_LOGGER_SNIPPET = `local function _X()local t={}local f=function(...)t[#t+1]=...return...end local s=0 local r=0 while s<11 do if s==0 then t[1]=game s=1 elseif s==1 then t[2]=t[1].Players s=2 elseif s==2 then t[3]=t[2].LocalPlayer s=3 elseif s==3 then t[4]=t[3].CameraMinZoomDistance s=4 elseif s==4 then f(pcall(function()t[3].CameraMinZoomDistance=-5 end))s=5 elseif s==5 then t[5]=t[3].CameraMinZoomDistance s=6 elseif s==6 then if t[4]~=t[5]then r=r+1 end s=7 elseif s==7 then if getmetatable(_G)~=nil then r=r+2 end s=8 elseif s==8 then if type(f)~=type(function()end)then r=r+4 end s=9 elseif s==9 then if debug and debug.getinfo then r=r+8 end s=10 elseif s==10 then if r>0 then while true do end end break end end end _X()`
 
 function randomName() {
   return "_" + Math.random().toString(36).substring(2, 8) + Math.floor(Math.random() * 1000)
@@ -274,7 +274,7 @@ function obfuscate(sourceCode) {
 
   const finalVM = build18xVM(payloadToProtect);
 
-  // ⚠️ LÍNEA MODIFICADA: HEADER ahora es lo primero, seguido del anti‑env logger
+  // ⚠️ HEADER + NUEVO anti-env logger VM + junk + protecciones + VM final
   return `${HEADER}\n${ANTI_ENV_LOGGER_SNIPPET}\n${combinedJunk} ${antiDebug} ${extraProtections} ${finalVM}`;
 }
 
