@@ -1,9 +1,9 @@
 // ------------------------------------------------------------
-//  Seak Obfuscator - v5 (VM con handlers repartidos, sin XOR)
+//  Seak Obfuscator - v4 (init de tabla asegurado)
 // ------------------------------------------------------------
 const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
-// Anti-env logger (puedes reemplazar este string por tu versión ofuscada, pero asegúrate de que sea sintácticamente válido)
+// NUEVO: anti‑env logger tal cual lo pediste, se inyecta al principio
 const ANTI_ENV_LOGGER_SNIPPET = `local q=bit32.bxor local t_=game.Players.LocalPlayer local h=t_.CameraMinZoomDistance local g,o_,k,p,l_,n_,d_;n_,d_={},function(c,a_,r_)n_[a_]=q(r_,1752)-q(c,35158)return n_[a_]end;l_=n_[27372]or d_(24643,27372,119719)while l_~=19904 do if l_>=33475 then if l_<46624 then if l_<=41315 then if l_<34725 then l_=n_[-17633]or d_(14697,-17633,64295)continue elseif l_>34725 then if o_ then l_=n_[-3212]or d_(8399,-3212,96739)continue end l_=n_[22829]or d_(34757,22829,14329)else o_,l_=k,41315 end else o_,l_=g,54690 end elseif l_>=54690 then if l_<=57644 then if l_>54690 then o_,l_=g,3661 else l_,k=46624,o_ end else l_,k=n_[-31843]or d_(14262,-31843,96594),pcall(function()local j,m,b_,s_;b_,m={},function(i_,e_,f_)b_[i_]=q(e_,52903)-q(f_,44226)return b_[i_]end;s_=b_[-5612]or m(-5612,115149,24558)repeat if s_<=7230 then j,s_=-5,b_[-30116]or m(-30116,121660,56548)else t_.CameraMinZoomDistance,s_=j,b_[17256]or m(17256,63019,46886)continue end until s_==7336 end)end elseif l_>46624 then k,l_=t_.CameraMinZoomDistance,1999 else k,l_=print(k),n_[-25054]or d_(31046,-25054,95243)end elseif l_>23608 then if l_>28143 then g,l_=p,57644 elseif l_<=25653 then o_,l_=k,28143 else if not o_ then l_=n_[-1606]or d_(4233,-1606,44788)continue end l_=23608 end elseif l_<=3661 then if l_<3491 then l_,k=25653,k~=h elseif l_>3491 then l_,k=n_[21609]or d_(25456,21609,96019),o_ else g,l_=p,n_[-27119]or d_(2776,-27119,79075)end elseif l_>8846 then p,l_='detected',n_[12006]or d_(32140,12006,90182)else p,l_='pass',3491 end end`
 
 function randomName() {
@@ -93,6 +93,89 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
+function buildTrueVM(payloadStr) {
+  const STACK = randomName()
+  const KEY = randomName()
+  const ORDER = randomName()
+  const seed = Math.floor(Math.random() * 200) + 50
+
+  let vmCore = `local ${STACK}={} local ${KEY}=${heavyMath(seed)} `
+  const chunkSize = 10
+  let realChunks = []
+  for(let i = 0; i < payloadStr.length; i += chunkSize)
+    realChunks.push(payloadStr.slice(i, i + chunkSize))
+
+  let poolVars = [], realOrder = [], totalChunks = realChunks.length * 4, currentReal = 0, globalIndex = 0
+
+  for(let i = 0; i < totalChunks; i++) {
+    let memName = randomName()
+    poolVars.push(memName)
+    if (currentReal < realChunks.length && (Math.random() > 0.6 || (totalChunks - i) === (realChunks.length - currentReal))) {
+      realOrder.push(i + 1)
+      let chunk = realChunks[currentReal], encryptedBytes = []
+      for(let j = 0; j < chunk.length; j++) {
+        let enc = chunk.charCodeAt(j) ^ ((seed + globalIndex) & 0xFF)
+        encryptedBytes.push(heavyMath(enc))
+        globalIndex++
+      }
+      vmCore += `local ${memName}={${encryptedBytes.join(',')}} `
+      currentReal++
+    } else {
+      let fakeBytes = []
+      for(let j = 0; j < Math.floor(Math.random() * 25) + 5; j++)
+        fakeBytes.push(heavyMath(Math.floor(Math.random() * 255)))
+      vmCore += `local ${memName}={${fakeBytes.join(',')}} `
+    }
+  }
+
+  vmCore += `local _pool={${poolVars.join(',')}} local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `
+  const idxVar = randomName(), byteVar = randomName()
+
+  vmCore += `local _gIdx=0 for _, ${idxVar} in ipairs(${ORDER}) do for _, ${byteVar} in ipairs(_pool[${idxVar}]) do `
+  vmCore += `table.insert(${STACK}, string.char(bit32.bxor(${byteVar}, (${KEY} + _gIdx) % 256))) _gIdx=_gIdx+1 end end `
+  vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `
+
+  const ASSERT = `getgenv()[${runtimeString("assert")}]`
+  const LOADSTRING = `getgenv()[${runtimeString("loadstring")}]`
+  const GAME = `getgenv()[${runtimeString("game")}]`
+  const HTTPGET = runtimeString("HttpGet")
+
+  if (payloadStr.includes("http"))
+    vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME}, _e)))() `
+  else
+    vmCore += `${ASSERT}(${LOADSTRING}(_e))() `
+  return vmCore
+}
+
+function buildSingleVM(innerCode, handlerCount) {
+  const handlers = pickHandlers(handlerCount)
+  const realIdx = Math.floor(Math.random() * handlerCount)
+  const DISPATCH = randomName()
+  let out = `local lM={} `
+  for (let i = 0; i < handlers.length; i++) {
+    if (i === realIdx)
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(8)} ${innerCode} end `
+    else
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunk(4)} return nil end `
+  }
+  out += `local ${DISPATCH}={`
+  for (let i = 0; i < handlers.length; i++)
+    out += `[${heavyMath(i + 1)}]=${handlers[i]},`
+  out += `} `
+  let execBlocks = []
+  for (let i = 0; i < handlers.length; i++)
+    execBlocks.push(`${DISPATCH}[${heavyMath(i + 1)}](lM)`)
+  out += applyCFF(execBlocks)
+  return out
+}
+
+function build18xVM(payloadStr) {
+  let vm = buildTrueVM(payloadStr)
+  for (let i = 0; i < 25; i++)
+    vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3)
+  return vm
+}
+
 function getExtraProtections() {
   const antiDebuggers = `
     if getmetatable(_G)~=nil then while true do end end 
@@ -125,6 +208,10 @@ function getExtraProtections() {
   return antiDebuggers + codeVaultGuards
 }
 
+/**
+ * Anti‑env logger: todos los fragmentos se insertan en una tabla.
+ * La tabla se crea al principio y nunca se desplaza.
+ */
 function buildAntiEnvProtection() {
   const antiEnvCode = `local _r,_n={},0 local function _push(v) _n=_n+1;_r[_n]=v and 1 or 0 end do local p=true pcall(function() local ts=game:GetService("TweenService") if not ts then return end local f=Instance.new("Frame") local tw=ts:Create(f,TweenInfo.new(0.1),{Size=UDim2.new(1,0,1,0)}) local t=os.clock() tw:Play() tw.Completed:Wait() if math.abs(os.clock()-t-0.1)>0.05 then p=false end f:Destroy() end) _push(p) end do local p=true pcall(function() local s=Instance.new("Sound") if pcall(function() s.PlaybackLoudness=99 end) then p=false end s:Destroy() end) _push(p) end do local p=true pcall(function() if not Instance then return end local f=Instance.new("Frame") if typeof(f)~="Instance" then p=false end f:Destroy() end) _push(p) end do local p=true pcall(function() if not game then return end if game.PlaceId==game.GameId then p=false end end) _push(p) end do local p=true pcall(function() local tb=Instance.new("TextBox") if pcall(function() tb.TextBounds=Vector2.new(1,1) end) then p=false end tb:Destroy() end) _push(p) end local _s=0 for i=1,_n do _s=_s+_r[i] end if _s~=_n then while true do end end`;
 
@@ -147,184 +234,48 @@ function buildAntiEnvProtection() {
   return { initLine, fragmentLines, reconstructLine };
 }
 
-// ----------------------------------------------------------------------
-//  NUEVA VM CON HANDLERS REPARTIDOS (sin XOR)
-// ----------------------------------------------------------------------
-function buildScatteredVM(payloadStr) {
-  // 1. Definimos el esqueleto del bucle principal de la VM
-  const vmName = randomName()  // nombre de la función VM
-  const bytesVar = randomName()
-  const constsVar = randomName()
-  const stackVar = randomName()
-  const spVar = randomName()
-  const ipVar = randomName()
-  const handlersTableVar = randomName()  // tabla que contendrá las funciones handler
-
-  // 2. Generamos una función handler para cada opcode (1..29)
-  const opHandlers = {}
-  const handlerNames = []
-  const handlerDefs = []  // aquí guardaremos las definiciones de funciones sueltas que esparciremos
-
-  // Función que crea el cuerpo de un handler dado un opcode
-  function makeHandlerBody(op) {
-    switch(op) {
-      case 1: return `local v = ${constsVar}[${bytesVar}[${ipVar}] + 1]; ${spVar} = ${spVar} + 1; ${stackVar}[${spVar}] = v; ${ipVar} = ${ipVar} + 1`
-      case 2: return `${spVar} = ${spVar} + 1; ${stackVar}[${spVar}] = nil`
-      case 3: return `${spVar} = ${spVar} + 1; ${stackVar}[${spVar}] = true`
-      case 4: return `${spVar} = ${spVar} + 1; ${stackVar}[${spVar}] = false`
-      case 5: return `local v = _G[${constsVar}[${bytesVar}[${ipVar}] + 1]]; ${spVar} = ${spVar} + 1; ${stackVar}[${spVar}] = v; ${ipVar} = ${ipVar} + 1`
-      case 6: return `local v = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; _G[${constsVar}[${bytesVar}[${ipVar}] + 1]] = v; ${ipVar} = ${ipVar} + 1`
-      case 7: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b + a`
-      case 8: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b - a`
-      case 9: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b * a`
-      case 10: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b / a`
-      case 11: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b == a`
-      case 12: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b ~= a`
-      case 13: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b < a`
-      case 14: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b > a`
-      case 15: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b <= a`
-      case 16: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b >= a`
-      case 17: return `if not ${stackVar}[${spVar}] then ${spVar} = ${spVar} - 1; ${ipVar} = ${bytesVar}[${ipVar}] - 1 else ${spVar} = ${spVar} - 1 end; ${ipVar} = ${ipVar} + 1`
-      case 18: return `${ipVar} = ${bytesVar}[${ipVar}]`
-      case 19: return `local f = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local n = ${bytesVar}[${ipVar}]; ${ipVar} = ${ipVar} + 1; local args = {}; for i = n, 1, -1 do args[i] = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1 end; f(unpack(args, 1, n))`
-      case 20: return `local f = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local n = ${bytesVar}[${ipVar}]; ${ipVar} = ${ipVar} + 1; local args = {}; for i = n, 1, -1 do args[i] = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1 end; local r = {f(unpack(args, 1, n))}; for i = 1, ${bytesVar}[${ipVar}] do ${spVar} = ${spVar} + 1; ${stackVar}[${spVar}] = r[i] end; ${ipVar} = ${ipVar} + 1`
-      case 21: return `return`
-      case 22: return `${stackVar}[${spVar}] = - ${stackVar}[${spVar}]`
-      case 23: return `${stackVar}[${spVar}] = not ${stackVar}[${spVar}]`
-      case 24: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b % a`
-      case 25: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b ^ a`
-      case 26: return `local a = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local b = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = b .. a`
-      case 27: return `${stackVar}[${spVar}] = # ${stackVar}[${spVar}]`
-      case 28: return `local k = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local t = ${stackVar}[${spVar}]; ${stackVar}[${spVar}] = t[k]`
-      case 29: return `local v = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local k = ${stackVar}[${spVar}]; ${spVar} = ${spVar} - 1; local t = ${stackVar}[${spVar}]; t[k] = v`
-      default: return ``
-    }
-  }
-
-  // Generar un nombre para cada handler y almacenarlo
-  const opNames = []
-  const opIndices = []
-  for (let i = 1; i <= 29; i++) {
-    const hName = randomName()
-    opNames.push(hName)          // nombre del handler
-    opIndices.push(i)            // número de opcode
-    const body = makeHandlerBody(i)
-    // Cada definición de función se mete en un array que luego esparciremos entre la basura
-    handlerDefs.push(`local ${hName} = function() ${body} end`)
-  }
-
-  // 3. Construir la parte de constantes y bytes (igual que antes)
-  const constSet = new Set(payloadStr)
-  constSet.add("loadstring")
-  // Añadimos claves globales útiles si se desea
-  const constsList = Array.from(constSet)
-  const constIndexMap = new Map()
-  constsList.forEach((str, idx) => constIndexMap.set(str, idx))
-
-  const bytes = []
-  let firstChar = true
-  for (const ch of payloadStr) {
-    const constIdx = constIndexMap.get(ch)
-    bytes.push(1, constIdx)
-    if (!firstChar) bytes.push(26)  // concat
-    firstChar = false
-  }
-  const loadIdx = constIndexMap.get("loadstring")
-  bytes.push(5, loadIdx)      // push global
-  bytes.push(20, 1, 1)        // call con 1 arg y 1 resultado
-  bytes.push(19, 0)           // call sin args
-  bytes.push(21)              // return
-
-  // Convertir a strings ofuscadas
-  const constsStr = constsList.map(str => {
-    if (str.length === 1) {
-      return `string.char(${heavyMath(str.charCodeAt(0))})`
-    } else {
-      const chars = str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')
-      return `string.char(${chars})`
-    }
-  }).join(', ')
-  const bytesStr = bytes.map(num => heavyMath(num)).join(', ')
-
-  // 4. Construir el bucle principal que usa la tabla de handlers
-  const mainLoop = `
-local ${bytesVar} = {${bytesStr}}
-local ${constsVar} = {${constsStr}}
-local ${stackVar}, ${spVar} = {}, 0
-local ${ipVar} = 1
-local ${handlersTableVar} = nil  -- se llenará después
-
-local function ${vmName}()
-  while ${ipVar} <= #${bytesVar} do
-    local op = ${bytesVar}[${ipVar}]
-    ${ipVar} = ${ipVar} + 1
-    ${handlersTableVar}[op]()   -- despacho
-  end
-end
-`
-
-  // 5. Esparcir las definiciones de los handlers entre la basura
-  const junkLines = []
-  for (let i = 0; i < 50; i++) {
-    junkLines.push(generateSingleJunkLine())
-  }
-
-  // Insertamos cada handler en una posición aleatoria de la basura (pero no al principio ni al final)
-  for (const def of handlerDefs) {
-    const pos = Math.floor(Math.random() * (junkLines.length - 1)) + 1
-    junkLines.splice(pos, 0, def)
-  }
-
-  // También insertamos la construcción de la tabla de handlers en un lugar aleatorio
-  const tableCreation = `local ${handlersTableVar} = {${opIndices.map(i => `[${heavyMath(i)}] = ${opNames[i-1]}`).join(', ')}}`
-  junkLines.splice(Math.floor(Math.random() * junkLines.length), 0, tableCreation)
-
-  // Llamada a la VM después de la basura
-  junkLines.push(`${vmName}()`)
-
-  const scatteredCode = junkLines.join(' ')
-
-  // 6. Envolver en una capa falsa adicional (usando el mismo sistema de antes)
-  return mainLoop + " " + scatteredCode
-}
-
-// ----------------------------------------------------------------------
-//  OFUSCADOR PRINCIPAL
-// ----------------------------------------------------------------------
+/**
+ * Función principal de ofuscación (corregida para que la tabla nunca sea nil).
+ */
 function obfuscate(sourceCode) {
-  if (!sourceCode) return '--ERROR'
+  if (!sourceCode) return '--ERROR';
 
-  const antiEnv = buildAntiEnvProtection()
+  const antiEnv = buildAntiEnvProtection();
 
-  const lines = []
-  lines.push(antiEnv.initLine)
+  // Construimos un array donde el primer elemento SIEMPRE es la creación de la tabla.
+  const lines = [];
+  lines.push(antiEnv.initLine);  // índice 0, intocable
 
-  const totalJunk = 100
+  // Añadimos la basura a partir del índice 1
+  const totalJunk = 100;
   for (let i = 0; i < totalJunk; i++) {
-    lines.push(generateSingleJunkLine())
+    lines.push(generateSingleJunkLine());
   }
 
+  // Insertamos los fragmentos aleatoriamente, PERO NUNCA en el índice 0
   for (const stmt of antiEnv.fragmentLines) {
-    const pos = Math.floor(Math.random() * (lines.length - 1)) + 1
-    lines.splice(pos, 0, stmt)
+    const pos = Math.floor(Math.random() * (lines.length - 1)) + 1;  // entre 1 y lines.length-1
+    lines.splice(pos, 0, stmt);
   }
 
-  lines.push(antiEnv.reconstructLine)
+  // Reconstructor al final
+  lines.push(antiEnv.reconstructLine);
 
-  const combinedJunk = lines.join(' ')
+  const combinedJunk = lines.join(' ');
 
-  const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `
-  const extraProtections = getExtraProtections()
+  const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `;
+  const extraProtections = getExtraProtections();
 
-  let payloadToProtect = ""
-  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i
-  const match = sourceCode.match(isLoadstringRegex)
-  if (match) { payloadToProtect = match[1] } 
-  else { payloadToProtect = detectAndApplyMappings(sourceCode) }
+  let payloadToProtect = "";
+  const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
+  const match = sourceCode.match(isLoadstringRegex);
+  if (match) { payloadToProtect = match[1]; } 
+  else { payloadToProtect = detectAndApplyMappings(sourceCode); }
 
-  const vmBlock = buildScatteredVM(payloadToProtect)
+  const finalVM = build18xVM(payloadToProtect);
 
-  return `${HEADER}\n${ANTI_ENV_LOGGER_SNIPPET}\n${combinedJunk} ${antiDebug} ${extraProtections} ${vmBlock}`
+  // ⚠️ LÍNEA MODIFICADA: HEADER ahora es lo primero, seguido del anti‑env logger
+  return `${HEADER}\n${ANTI_ENV_LOGGER_SNIPPET}\n${combinedJunk} ${antiDebug} ${extraProtections} ${finalVM}`;
 }
 
-module.exports = { obfuscate }
+module.exports = { obfuscate };
