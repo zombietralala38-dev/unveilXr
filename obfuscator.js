@@ -161,9 +161,11 @@ function buildScatteredVM(payloadStr) {
   const handlersTableVar = randomName()  // tabla que contendrá las funciones handler
 
   // 2. Generamos una función handler para cada opcode (1..29)
+  const opHandlers = {}
   const handlerNames = []
   const handlerDefs = []  // aquí guardaremos las definiciones de funciones sueltas que esparciremos
 
+  // Función que crea el cuerpo de un handler dado un opcode
   function makeHandlerBody(op) {
     switch(op) {
       case 1: return `local v = ${constsVar}[${bytesVar}[${ipVar}] + 1]; ${spVar} = ${spVar} + 1; ${stackVar}[${spVar}] = v; ${ipVar} = ${ipVar} + 1`
@@ -199,17 +201,22 @@ function buildScatteredVM(payloadStr) {
     }
   }
 
+  // Generar un nombre para cada handler y almacenarlo
+  const opNames = []
   const opIndices = []
   for (let i = 1; i <= 29; i++) {
     const hName = randomName()
-    handlerNames.push(hName)
-    opIndices.push(i)
-    handlerDefs.push(`local ${hName} = function() ${makeHandlerBody(i)} end`)
+    opNames.push(hName)          // nombre del handler
+    opIndices.push(i)            // número de opcode
+    const body = makeHandlerBody(i)
+    // Cada definición de función se mete en un array que luego esparciremos entre la basura
+    handlerDefs.push(`local ${hName} = function() ${body} end`)
   }
 
-  // 3. Construir la parte de constantes y bytes
+  // 3. Construir la parte de constantes y bytes (igual que antes)
   const constSet = new Set(payloadStr)
   constSet.add("loadstring")
+  // Añadimos claves globales útiles si se desea
   const constsList = Array.from(constSet)
   const constIndexMap = new Map()
   constsList.forEach((str, idx) => constIndexMap.set(str, idx))
@@ -219,57 +226,65 @@ function buildScatteredVM(payloadStr) {
   for (const ch of payloadStr) {
     const constIdx = constIndexMap.get(ch)
     bytes.push(1, constIdx)
-    if (!firstChar) bytes.push(26)
+    if (!firstChar) bytes.push(26)  // concat
     firstChar = false
   }
   const loadIdx = constIndexMap.get("loadstring")
-  bytes.push(5, loadIdx)
-  bytes.push(20, 1, 1)
-  bytes.push(19, 0)
-  bytes.push(21)
+  bytes.push(5, loadIdx)      // push global
+  bytes.push(20, 1, 1)        // call con 1 arg y 1 resultado
+  bytes.push(19, 0)           // call sin args
+  bytes.push(21)              // return
 
+  // Convertir a strings ofuscadas
   const constsStr = constsList.map(str => {
-    if (str.length === 1) return `string.char(${heavyMath(str.charCodeAt(0))})`
-    else return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`
+    if (str.length === 1) {
+      return `string.char(${heavyMath(str.charCodeAt(0))})`
+    } else {
+      const chars = str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')
+      return `string.char(${chars})`
+    }
   }).join(', ')
   const bytesStr = bytes.map(num => heavyMath(num)).join(', ')
 
-  // 4. Bucle principal que usa tabla de handlers
+  // 4. Construir el bucle principal que usa la tabla de handlers
   const mainLoop = `
 local ${bytesVar} = {${bytesStr}}
 local ${constsVar} = {${constsStr}}
 local ${stackVar}, ${spVar} = {}, 0
 local ${ipVar} = 1
-local ${handlersTableVar} = nil
+local ${handlersTableVar} = nil  -- se llenará después
 
 local function ${vmName}()
   while ${ipVar} <= #${bytesVar} do
     local op = ${bytesVar}[${ipVar}]
     ${ipVar} = ${ipVar} + 1
-    ${handlersTableVar}[op]()
+    ${handlersTableVar}[op]()   -- despacho
   end
 end
 `
 
-  // 5. Esparcir definiciones y tabla entre basura
+  // 5. Esparcir las definiciones de los handlers entre la basura
   const junkLines = []
-  for (let i = 0; i < 60; i++) {
+  for (let i = 0; i < 50; i++) {
     junkLines.push(generateSingleJunkLine())
   }
 
+  // Insertamos cada handler en una posición aleatoria de la basura (pero no al principio ni al final)
   for (const def of handlerDefs) {
     const pos = Math.floor(Math.random() * (junkLines.length - 1)) + 1
     junkLines.splice(pos, 0, def)
   }
 
-  const tableCreation = `local ${handlersTableVar} = {${opIndices.map(i => `[${heavyMath(i)}] = ${handlerNames[i-1]}`).join(', ')}}`
+  // También insertamos la construcción de la tabla de handlers en un lugar aleatorio
+  const tableCreation = `local ${handlersTableVar} = {${opIndices.map(i => `[${heavyMath(i)}] = ${opNames[i-1]}`).join(', ')}}`
   junkLines.splice(Math.floor(Math.random() * junkLines.length), 0, tableCreation)
 
+  // Llamada a la VM después de la basura
   junkLines.push(`${vmName}()`)
 
   const scatteredCode = junkLines.join(' ')
 
-  // Opcional: envolver en más capas como antes, pero no es necesario
+  // 6. Envolver en una capa falsa adicional (usando el mismo sistema de antes)
   return mainLoop + " " + scatteredCode
 }
 
