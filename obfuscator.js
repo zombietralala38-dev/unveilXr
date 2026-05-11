@@ -1,10 +1,10 @@
 // ------------------------------------------------------------
-//  Seak Obfuscator - v7 BLINDADO (Anti-desofuscador total)
+//  Seak Obfuscator - v7 BLINDADO (marca de agua árabe)
 // ------------------------------------------------------------
 const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
-// Anti-env logger (se cifrará completamente, sin strings visibles)
-const ANTI_ENV_LOGGER_CODE = `local p=game.Players.LocalPlayer local c=p and p.Character local anim=c and c:FindFirstChild("Animate") local dummy=Instance.new("LocalScript") local ok,bad=false,false if anim and pcall(function()return anim:IsA("LocalScript")end)then ok=true end if not pcall(function()return dummy:IsA("LocalScript")end)then bad=true end if not(ok and not bad)then while true do end end`
+// Anti‑env logger con mensaje en árabe (cifrado dentro de la VM)
+const ANTI_ENV_LOGGER_CODE = `local p=game.Players.LocalPlayer local c=p and p.Character local anim=c and c:FindFirstChild("Animate") local dummy=Instance.new("LocalScript") local ok,bad=false,false if anim and pcall(function()return anim:IsA("LocalScript")end)then ok=true end if not pcall(function()return dummy:IsA("LocalScript")end)then bad=true end if not(ok and not bad)then print("يعلم الله أنك تحاول سرقة الشفرة، وانظر، لا ينبغي لك تهديد الناس؛ الله يعلم ما في قلبك.")while true do end end`
 
 function randomName() {
   return "_" + Math.random().toString(36).substring(2, 8) + Math.floor(Math.random() * 1000)
