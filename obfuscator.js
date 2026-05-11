@@ -1,158 +1,186 @@
 // ------------------------------------------------------------
-//  Seak Nano v2 — Corregido, sin errores de nil
+//  Seak Obfuscator - v7 BLINDADO (Anti-desofuscador total)
 // ------------------------------------------------------------
+const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
-function randomName(len = 6) {
-    let s = '';
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_';
-    for (let i = 0; i < len; i++) s += chars[Math.floor(Math.random() * chars.length)];
-    return '_' + s;
+// Anti-env logger (se cifrará completamente, sin strings visibles)
+const ANTI_ENV_LOGGER_CODE = `local p=game.Players.LocalPlayer local c=p and p.Character local anim=c and c:FindFirstChild("Animate") local dummy=Instance.new("LocalScript") local ok,bad=false,false if anim and pcall(function()return anim:IsA("LocalScript")end)then ok=true end if not pcall(function()return dummy:IsA("LocalScript")end)then bad=true end if not(ok and not bad)then while true do end end`
+
+function randomName() {
+  return "_" + Math.random().toString(36).substring(2, 8) + Math.floor(Math.random() * 1000)
 }
 
-function mba(n) {
-    if (Math.random() > 0.6) return n.toString();
-    const a = Math.floor(Math.random() * 100) + 10;
-    return `((${n}+${a})-${a})`;
+function pickHandlers(count) {
+  const used = new Set()
+  const result = []
+  while (result.length < count) {
+    const name = randomName() + Math.floor(Math.random() * 99)
+    if (!used.has(name)) { used.add(name); result.push(name) }
+  }
+  return result
 }
 
-// ------------------------------------------------------------
-//  MÓDULO 1: ENCRIPTACIÓN DE STRINGS (XOR)
-// ------------------------------------------------------------
-function encryptStrings(code) {
-    return code.replace(/"([^"]*)"|'([^']*)'/g, (match, double, single) => {
-        const str = double || single;
-        if (!str || str.length < 2) return match;
-        const key = Math.floor(Math.random() * 200) + 50;
-        const enc = str.split('').map((c, i) => ((c.charCodeAt(0) ^ ((key + i) & 0xFF))));
-        const decName = randomName();
-        const keyName = randomName();
-        // Generar decodificación segura dentro de una función
-        return `(function()local ${keyName}=${key}local t={${enc.join(',')}}local r=''for i=1,#t do r=r..string.char(bit32.bxor(t[i],(${keyName}+i-1)%256))end return r end)()`;
-    });
+function heavyMath(n) {
+  if (Math.random() < 0.8) return n.toString();
+  let a = Math.floor(Math.random() * 3000) + 500
+  let b = Math.floor(Math.random() * 50) + 2
+  let c = Math.floor(Math.random() * 800) + 10
+  let d = Math.floor(Math.random() * 20) + 2
+  return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`
 }
 
-// ------------------------------------------------------------
-//  MÓDULO 2: OFUSCACIÓN DE NÚMEROS (MBA)
-// ------------------------------------------------------------
-function obfuscateNumbers(code) {
-    return code.replace(/\b(\d+)\b/g, (match, num) => {
-        if (match.startsWith('0x')) return match; // no tocar hex
-        return Math.random() < 0.6 ? mba(Number(num)) : match;
-    });
+function generateSingleJunkLine() {
+  const r = Math.random()
+  if (r < 0.2) return `local ${randomName()}=${heavyMath(Math.floor(Math.random() * 999))}`
+  else if (r < 0.35) return `local ${randomName()}=string.char(${heavyMath(Math.floor(Math.random()*255))})`
+  else if (r < 0.5) return `if not(${heavyMath(1)}==${heavyMath(1)}) then local x=1 end`
+  else if (r < 0.7) {
+    const tp = randomName();
+    return `if type(nil)=="number" then while true do local ${tp}=1 end end`
+  } else if (r < 0.85) {
+    const vt = randomName();
+    return `do local ${vt}={} ${vt}["_"]=1 ${vt}=nil end`
+  } else {
+    return `if type(math.pi)=="string" then while true do end end`
+  }
 }
 
-// ------------------------------------------------------------
-//  MÓDULO 3: JUNK-IF MÍNIMO
-// ------------------------------------------------------------
-function junkIf(code) {
-    const a = Math.floor(Math.random() * 100);
-    const b = a + Math.floor(Math.random() * 20) + 1; // garantiza que nunca sean iguales
-    const v = randomName();
-    return `if ${a}==${b} then local ${v}=1 end;` + code;
+function generateJunkArray(count = 100) {
+  const arr = []
+  for (let i = 0; i < count; i++) arr.push(generateSingleJunkLine())
+  return arr
 }
 
-// ------------------------------------------------------------
-//  MÓDULO 4: REVERSE-IF
-// ------------------------------------------------------------
-function reverseIf(code) {
-    return code.replace(/if\s+(.+?)\s+then\s+(.+?)\s+end/g, (match, cond, body) => {
-        if (body.length > 40 || Math.random() > 0.4) return match;
-        return `if not(${cond})then else ${body} end`;
-    });
+function applyCFF(blocks) {
+  const stateVar = randomName()
+  let lua = `local ${stateVar}=${heavyMath(1)} while true do `
+  for (let i = 0; i < blocks.length; i++) {
+    if (i === 0) lua += `if ${stateVar}==${heavyMath(1)} then ${blocks[i]} ${stateVar}=${heavyMath(2)} `
+    else lua += `elseif ${stateVar}==${heavyMath(i + 1)} then ${blocks[i]} ${stateVar}=${heavyMath(i + 2)} `
+  }
+  lua += `elseif ${stateVar}==${heavyMath(blocks.length + 1)} then break end end `
+  return lua
 }
 
-// ------------------------------------------------------------
-//  MÓDULO 5: OFUSCACIÓN DE LOCALS (renombrado seguro)
-// ------------------------------------------------------------
-function obfuscateLocals(code) {
-    const keywords = new Set([
-        'local', 'if', 'then', 'else', 'elseif', 'end', 'for', 'while', 'do',
-        'function', 'return', 'break', 'nil', 'true', 'false', 'and', 'or',
-        'not', 'repeat', 'until', 'in', 'pairs', 'ipairs', 'self'
-    ]);
-    const builtins = new Set([
-        'print', 'warn', 'error', 'game', 'workspace', 'math', 'string',
-        'table', 'bit32', 'tick', 'wait', 'spawn', 'delay', 'pcall',
-        'xpcall', 'loadstring', 'getfenv', 'setfenv', 'rawget', 'rawset',
-        'type', 'tonumber', 'tostring', 'assert', 'select', 'unpack',
-        'require', 'Vector3', 'CFrame', 'UDim2', 'Color3', 'Instance'
-    ]);
+function runtimeString(str) {
+  return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
+}
 
-    const localMap = {};
+// VM base: cifra y ejecuta un payload (string)
+function buildTrueVM(payloadStr) {
+  const STACK = randomName()
+  const KEY = randomName()
+  const ORDER = randomName()
+  const seed = Math.floor(Math.random() * 200) + 50
 
-    // Primero renombrar declaraciones local
-    code = code.replace(/local\s+(\w+)/g, (match, name) => {
-        if (keywords.has(name) || builtins.has(name)) return match;
-        if (!localMap[name]) localMap[name] = randomName(8);
-        return `local ${localMap[name]}`;
-    });
+  let vmCore = `local _pool={} local ${STACK}={} local ${KEY}=${heavyMath(seed)} `
+  const chunkSize = 10
+  let realChunks = []
+  for(let i = 0; i < payloadStr.length; i += chunkSize)
+    realChunks.push(payloadStr.slice(i, i + chunkSize))
 
-    // Luego renombrar usos (evitando palabras clave y builtins)
-    for (const [orig, obf] of Object.entries(localMap)) {
-        const regex = new RegExp(`(?<![a-zA-Z0-9_])${orig}(?![a-zA-Z0-9_])`, 'g');
-        code = code.replace(regex, obf);
+  let realOrder = []
+  let totalChunks = realChunks.length * 4
+  let currentReal = 0
+  let globalIndex = 0
+
+  for(let i = 0; i < totalChunks; i++) {
+    if (currentReal < realChunks.length && (Math.random() > 0.6 || (totalChunks - i) === (realChunks.length - currentReal))) {
+      realOrder.push(i + 1)
+      let chunk = realChunks[currentReal], encryptedBytes = []
+      for(let j = 0; j < chunk.length; j++) {
+        let enc = chunk.charCodeAt(j) ^ ((seed + globalIndex) & 0xFF)
+        encryptedBytes.push(heavyMath(enc))
+        globalIndex++
+      }
+      vmCore += `_pool[${heavyMath(i + 1)}]={${encryptedBytes.join(',')}} `
+      currentReal++
+    } else {
+      let fakeBytes = []
+      for(let j = 0; j < Math.floor(Math.random() * 25) + 5; j++)
+        fakeBytes.push(heavyMath(Math.floor(Math.random() * 255)))
+      vmCore += `_pool[${heavyMath(i + 1)}]={${fakeBytes.join(',')}} `
+    }
+  }
+
+  vmCore += `local ${ORDER}={${realOrder.map(n => heavyMath(n)).join(',')}} `
+  const idxVar = randomName(), byteVar = randomName()
+
+  vmCore += `local _gIdx=0 for _, ${idxVar} in ipairs(${ORDER}) do for _, ${byteVar} in ipairs(_pool[${idxVar}]) do `
+  vmCore += `table.insert(${STACK}, string.char(bit32.bxor(${byteVar}, (${KEY} + _gIdx) % 256))) _gIdx=_gIdx+1 end end `
+  vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `
+
+  const ASSERT = `getgenv()[${runtimeString("assert")}]`
+  const LOADSTRING = `getgenv()[${runtimeString("loadstring")}]`
+
+  vmCore += `${ASSERT}(${LOADSTRING}(_e))() `
+  return vmCore
+}
+
+// Capa de VM con UN solo handler real (los demás son señuelo)
+function buildSingleVM(innerCode, handlerCount) {
+  const handlers = pickHandlers(handlerCount)
+  const realIdx = Math.floor(Math.random() * handlerCount)
+  const DISPATCH = randomName()
+  let out = `local lM={} `
+  for (let i = 0; i < handlers.length; i++) {
+    if (i === realIdx)
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkArray(3).join(' ')} ${innerCode} end `
+    else
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkArray(2).join(' ')} return nil end `
+  }
+  out += `local ${DISPATCH}={`
+  for (let i = 0; i < handlers.length; i++)
+    out += `[${heavyMath(i + 1)}]=${handlers[i]},`
+  out += `} `
+  let execBlocks = []
+  for (let i = 0; i < handlers.length; i++)
+    execBlocks.push(`${DISPATCH}[${heavyMath(i + 1)}](lM)`)
+  out += applyCFF(execBlocks)
+  return out
+}
+
+// Construye VM con anti-env DENTRO del cifrado
+function buildSecureVM(payloadStr) {
+  // Combinar anti-env + payload en UN SOLO string que se cifrará
+  const combinedCode = `${ANTI_ENV_LOGGER_CODE} ${payloadStr}`
+
+  // Cifrar TODO junto (anti-env + payload)
+  let vm = buildTrueVM(combinedCode)
+
+  // Envolver en 25 capas adicionales
+  for (let i = 0; i < 25; i++) {
+    vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3)
+  }
+
+  return vm
+}
+
+/**
+ * Función principal de ofuscación
+ * @param {string} sourceCode - Código Lua a ofuscar
+ * @returns {string} Código Lua ofuscado y blindado
+ */
+function obfuscate(sourceCode) {
+    if (!sourceCode) return '--ERROR';
+
+    // Extraer payload
+    let payload = "";
+    const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
+    const match = sourceCode.match(isLoadstringRegex);
+    if (match) {
+        payload = `loadstring(game:HttpGet("${match[1]}"))()`;
+    } else {
+        payload = sourceCode;
     }
 
-    return code;
+    // VM blindada (TODO cifrado, anti-env + payload juntos)
+    const finalVM = buildSecureVM(payload);
+
+    // Basura externa para camuflaje
+    const junk = generateJunkArray(80).join(' ');
+
+    return `${HEADER}\n${junk}\n${finalVM}`;
 }
-
-// ------------------------------------------------------------
-//  MÓDULO 6: WPACKER CORREGIDO (sin errores de nil)
-// ------------------------------------------------------------
-function wpacker(code) {
-    const bytes = code.split('').map(c => c.charCodeAt(0));
-    const key = Math.floor(Math.random() * 200) + 50;
-    const enc = bytes.map((b, i) => ((b ^ ((key + i) & 0xFF))));
-    const dataName = randomName();
-    const resultName = randomName();
-    const keyName = randomName();
-    const idxName = randomName();
-
-    // Estructura segura: todo dentro de una función anónima que se autoejecuta
-    return `(function()local ${dataName}={${enc.join(',')}}local ${keyName}=${key}local ${resultName}=''for ${idxName}=1,#${dataName} do ${resultName}=${resultName}..string.char(bit32.bxor(${dataName}[${idxName}],(${keyName}+${idxName}-1)%256))end loadstring(${resultName})()end)()`;
-}
-
-// ------------------------------------------------------------
-//  OFUSCADOR PRINCIPAL
-// ------------------------------------------------------------
-function obfuscate(code) {
-    let result = code;
-
-    result = junkIf(result);           // +50 bytes
-    result = encryptStrings(result);   // +150-300 bytes
-    result = obfuscateNumbers(result); // +50-100 bytes
-    result = reverseIf(result);        // +20-50 bytes
-    result = obfuscateLocals(result);  // +100-200 bytes
-    result = wpacker(result);          // +200-400 bytes (capa final)
-
-    return result;
-}
-
-// ------------------------------------------------------------
-//  PRUEBA
-// ------------------------------------------------------------
-function test() {
-    const simple = `print("hola")`;
-    const hub = `
-        local player = game.Players.LocalPlayer
-        local char = player.Character
-        if char then
-            print("hub cargado")
-        end
-    `;
-
-    const ofSimple = obfuscate(simple);
-    const ofHub = obfuscate(hub);
-
-    console.log('=== SIMPLE ===');
-    console.log('Peso:', ofSimple.length, 'bytes');
-    console.log(ofSimple);
-    console.log('');
-    console.log('=== HUB ===');
-    console.log('Peso:', ofHub.length, 'bytes');
-    console.log(ofHub);
-}
-
-if (require.main === module) test();
 
 module.exports = { obfuscate };
