@@ -1,213 +1,277 @@
-// ------------------------------------------------------------
-//  Seak Obfuscator – vFINAL (clon exacto de Luraph, formato binario preempaquetado)
-// ------------------------------------------------------------
-
-const HEADER = `--[[ this code is protected by Seak obfuscator ]]`;
-
-// Anti‑env logger original (sin detección de Studio)
-const ANTI_ENV_LOGGER_CODE = `local p=game.Players.LocalPlayer local c=p and p.Character local anim=c and c:FindFirstChild("Animate") local dummy=Instance.new("LocalScript") local ok,bad=false,false if anim and pcall(function()return anim:IsA("LocalScript")end)then ok=true end if not pcall(function()return dummy:IsA("LocalScript") print("https://r.mtdv.me/blog/posts/obfuscaiton-methods-") twhile true do end end`;
-
-// ---------------------- Utilidades (estilo Luraph) ----------------------
-function randomName() {
-    const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
-    let s = '';
-    for (let i = 0; i < 15; i++) s += chars[Math.floor(Math.random() * chars.length)];
-    return s;
-}
-
-// Ofuscación de números exactamente como Luraph (expansión matemática)
-function luraphMath(n) {
-    if (Math.random() < 0.8) return n.toString();  // a veces los deja limpios
-    const a = Math.floor(Math.random() * 3000) + 500;
-    const b = Math.floor(Math.random() * 50) + 2;
-    const c = Math.floor(Math.random() * 800) + 10;
-    const d = Math.floor(Math.random() * 20) + 2;
-    return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`;
-}
-
-function runtimeString(str) {
-    return `string.char(${str.split('').map(c => luraphMath(c.charCodeAt(0))).join(',')})`;
-}
-
-// Basura idéntica a la de Luraph (predicados opacos y variables muertas)
-function generateSingleJunkLine() {
-    const r = Math.random();
-    if (r < 0.3) return `local ${randomName()}=${luraphMath(Math.floor(Math.random() * 999))};`;
-    else if (r < 0.6) return `local ${randomName()}=string.char(${luraphMath(Math.floor(Math.random() * 255))});`;
-    else return `if not(${luraphMath(1)}==${luraphMath(1)})then local x=1 end;`;
-}
-
-function generateJunkArray(count) {
-    return Array.from({ length: count }, generateSingleJunkLine);
-}
-
-// ---------------------- Control Flow Flattening (CFF) ----------------------
-function applyCFF(blocks) {
-    const stateVar = randomName();
-    let lua = `local ${stateVar}=${luraphMath(1)}; while true do `;
-    for (let i = 0; i < blocks.length; i++) {
-        if (i === 0) lua += `if ${stateVar}==${luraphMath(1)} then ${blocks[i]} ${stateVar}=${luraphMath(2)} `;
-        else lua += `elseif ${stateVar}==${luraphMath(i + 1)} then ${blocks[i]} ${stateVar}=${luraphMath(i + 2)} `;
+class LuaObfuscator {
+    constructor() {
+        this.junkChars = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_";
+        this.mbaMappings = new Map();
+        this.initMBAMappings();
     }
-    lua += `elseif ${stateVar}==${luraphMath(blocks.length + 1)} then break end end `;
-    return lua;
-}
 
-// ---------------------- VM Binaria Preempaquetada (idéntica a Luraph) ----------------------
-function buildBinaryVM(payloadStr) {
-    // 1. Empaquetar binario: DWORD (4 bytes) tamaño + payload bytes
-    const len = payloadStr.length;
-    const lenBytes = [
-        (len >> 24) & 0xFF,
-        (len >> 16) & 0xFF,
-        (len >> 8) & 0xFF,
-        len & 0xFF
-    ];
-    const payloadBytes = [];
-    for (let i = 0; i < len; i++) {
-        payloadBytes.push(payloadStr.charCodeAt(i));
+    initMBAMappings() {
+        // MBA v1 mappings: operaciones equivalentes
+        const ops = [
+            { orig: "a + b", equiv: "(a - -b)" },
+            { orig: "a - b", equiv: "(a + -b)" },
+            { orig: "a * b", equiv: "(a / (1/b))" },
+            { orig: "a == b", equiv: "not (a ~= b)" },
+            { orig: "a ~= b", equiv: "not (a == b)" },
+            { orig: "a > b", equiv: "(b < a)" },
+            { orig: "a < b", equiv: "(b > a)" },
+            { orig: "a >= b", equiv: "not (a < b)" },
+            { orig: "a <= b", equiv: "not (a > b)" },
+            { orig: "a and b", equiv: "a and b or false" },
+            { orig: "a or b", equiv: "a or b and true" }
+        ];
+        ops.forEach(op => this.mbaMappings.set(op.orig, op.equiv));
     }
-    const allBytes = lenBytes.concat(payloadBytes);
 
-    // 2. Cifrar con XOR (clave dinámica, igual que Luraph)
-    const key = Math.floor(Math.random() * 200) + 50;
-    const encrypted = allBytes.map((b, idx) => (b ^ ((key + idx) & 0xFF)));
+    generateRandomName(prefix = "v") {
+        let name = prefix;
+        for (let i = 0; i < 6; i++) {
+            name += this.junkChars[Math.floor(Math.random() * this.junkChars.length)];
+        }
+        return name;
+    }
 
-    // 3. Cinta binaria cifrada (string Lua)
-    const tape = encrypted.map(b => luraphMath(b)).join(',');
+    encryptString(str) {
+        let encrypted = "";
+        for (let i = 0; i < str.length; i++) {
+            encrypted += "\\" + str.charCodeAt(i).toString(8);
+        }
+        return `(function() return "${encrypted}" end)()`;
+    }
 
-    // Nombres de variables ofuscados
-    const DATA   = randomName();   // string binario
-    const POS    = randomName();   // puntero
-    const GETB   = randomName();   // getByte()
-    const GETDW  = randomName();   // getDWORD()
-    const GETSTR = randomName();   // getString()
-    const SRC    = randomName();   // código fuente desempaquetado
-    const F      = randomName();   // función cargada
+    obfuscateNumber(num) {
+        const methods = [
+            `(${num})`,
+            `(${Math.floor(Math.random() * 1000)} + ${num - Math.floor(Math.random() * 1000)})`,
+            `(${num * 2} - ${num})`,
+            `(0x${num.toString(16)})`
+        ];
+        return methods[Math.floor(Math.random() * methods.length)];
+    }
 
-    // 4. Construir el intérprete (cuerpo principal)
-    const vmCode = `
-        local ${DATA} = string.char(${tape});
-        local ${POS} = ${luraphMath(1)};
-        local key = ${key};
+    obfuscateString(str) {
+        return this.encryptString(str);
+    }
 
-        local function ${GETB}()
-            local b = string.byte(${DATA}, ${POS}, ${POS});
-            ${POS} = ${POS} + ${luraphMath(1)};
-            return bit32.bxor(b, (key + ${POS} - ${luraphMath(2)}) % 256);
-        end
+    createTableIndirection(table) {
+        const keys = [];
+        const values = [];
+        for (let [k, v] of Object.entries(table)) {
+            const newKey = this.generateRandomName("idx");
+            keys.push(newKey);
+            values.push(`${newKey} = ${JSON.stringify(v)}`);
+        }
+        return { keys, values };
+    }
 
-        local function ${GETDW}()
-            local b1 = ${GETB}();
-            local b2 = ${GETB}();
-            local b3 = ${GETB}();
-            local b4 = ${GETB}();
-            return b1 * 16777216 + b2 * 65536 + b3 * 256 + b4;
-        end
+    swizzleCode(code) {
+        const lines = code.split('\n').filter(l => l.trim());
+        for (let i = lines.length - 1; i > 0; i--) {
+            const j = Math.floor(Math.random() * (i + 1));
+            [lines[i], lines[j]] = [lines[j], lines[i]];
+        }
+        return lines.join('\n');
+    }
 
-        local function ${GETSTR}(len)
-            local t = {};
-            for i = ${luraphMath(1)}, len do
-                t[i] = string.char(${GETB}());
-            end
-            return table.concat(t);
-        end
+    createControlFlowFlattening(code) {
+        const blocks = code.split(';').filter(b => b.trim());
+        let flattened = `local dispatch = {`;
+        for (let i = 0; i < blocks.length; i++) {
+            flattened += `\n    [${i}] = function() ${blocks[i]} end,`;
+        }
+        flattened += `\n}\nlocal pc = 0\nwhile pc < ${blocks.length} do\n    dispatch[pc]()\n    pc = pc + 1\nend`;
+        return flattened;
+    }
 
-        -- Desempaquetar tamaño y código fuente
-        local len = ${GETDW}();
-        local ${SRC} = ${GETSTR}(len);
+    reverseIf(condition) {
+        const reversed = condition.includes("==") ? condition.replace("==", "~=") :
+                        condition.includes("~=") ? condition.replace("~=", "==") :
+                        condition.includes(">") ? condition.replace(">", "<=") :
+                        condition.includes("<") ? condition.replace("<", ">=") :
+                        condition.includes(">=") ? condition.replace(">=", "<") :
+                        condition.includes("<=") ? condition.replace("<=", ">") :
+                        condition;
+        
+        return `if not (${reversed}) then`;
+    }
 
-        -- Ejecutar (igual que Luraph)
-        local ${F}, err = loadstring(${SRC});
-        if ${F} then ${F}() end;
-    `;
+    addJunkIfs(code) {
+        const junkConditions = [
+            "1 == 1", "2 > 1", "3 ~= 0", "true", "not false",
+            "(1 + 1) == 2", "type('a') == 'string'"
+        ];
+        
+        let junked = "";
+        const lines = code.split('\n');
+        
+        for (let line of lines) {
+            if (Math.random() > 0.7 && line.includes("=")) {
+                const cond = junkConditions[Math.floor(Math.random() * junkConditions.length)];
+                junked += `if ${cond} then\n    ${line}\nend\n`;
+            } else {
+                junked += line + '\n';
+            }
+        }
+        
+        return junked;
+    }
 
-    // 5. Aplanar el flujo de la VM con CFF
-    const blocks = vmCode.split(';').filter(s => s.trim().length > 0).map(s => s.trim());
-    return applyCFF(blocks);
+    encryptFunctionCalls(code) {
+        const funcCallRegex = /(\w+)\s*\(([^)]*)\)/g;
+        let encrypted = code.replace(funcCallRegex, (match, func, args) => {
+            const fakeFunc = this.generateRandomName("_f");
+            return `(function() local ${fakeFunc} = ${func}; return ${fakeFunc}(${args}) end)()`;
+        });
+        return encrypted;
+    }
+
+    applyMBA(code) {
+        for (let [orig, equiv] of this.mbaMappings) {
+            const regex = new RegExp(orig.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'g');
+            if (Math.random() > 0.5) {
+                code = code.replace(regex, equiv);
+            }
+        }
+        return code;
+    }
+
+    obfuscateLocals(code) {
+        const varRegex = /local\s+(\w+)\s*=/g;
+        const replacements = new Map();
+        
+        let obfuscated = code.replace(varRegex, (match, varName) => {
+            const newName = this.generateRandomName("l");
+            replacements.set(varName, newName);
+            return `local ${newName} =`;
+        });
+        
+        for (let [oldName, newName] of replacements) {
+            const oldNameRegex = new RegExp(`\\b${oldName}\\b`, 'g');
+            obfuscated = obfuscated.replace(oldNameRegex, newName);
+        }
+        
+        return obfuscated;
+    }
+
+    createGLookup() {
+        return `local _ENV = setmetatable({}, {__index = function(t, k) return _G[k] end})\n`;
+    }
+
+    createVMDispatch(instructions) {
+        let vm = `local vm = {`;
+        for (let i = 0; i < instructions.length; i++) {
+            vm += `\n    [${i}] = function() ${instructions[i]} end,`;
+        }
+        vm += `\n}\nlocal ip = 0\nwhile ip < ${instructions.length} do\n    vm[ip]()\n    ip = ip + 1\nend`;
+        return vm;
+    }
+
+    wrapWithWPacker(code) {
+        const wrapper = `--[[ WPacker v1 ]]\n(function()\n    local w = string.char\n    ${code}\nend)()`;
+        return wrapper;
+    }
+
+    luaminaPushPull(code) {
+        const lines = code.split('\n');
+        let result = "local stack = {}\nfunction push(v) table.insert(stack, v) end\nfunction pull() return table.remove(stack) end\n\n";
+        
+        for (let line of lines) {
+            if (line.includes("=")) {
+                const parts = line.split('=');
+                if (parts.length === 2) {
+                    result += `push(${parts[1].trim()})\n${parts[0].trim()} = pull()\n`;
+                } else {
+                    result += line + '\n';
+                }
+            } else {
+                result += line + '\n';
+            }
+        }
+        return result;
+    }
+
+    minify(code) {
+        return code.replace(/--.*$/gm, '')      // Remove comments
+                   .replace(/\s+/g, ' ')        // Collapse whitespace
+                   .replace(/;\s*;/g, ';')      // Remove empty statements
+                   .replace(/\(\s*/g, '(')      // Remove spaces after (
+                   .replace(/\s*\)/g, ')')      // Remove spaces before )
+                   .replace(/\s*=/g, '=')       // Remove spaces around =
+                   .replace(/=\s*/g, '=')       // Remove spaces after =
+                   .replace(/\s*,\s*/g, ',')    // Remove spaces around commas
+                   .trim();
+    }
+
+    obfuscate(code, options = {}) {
+        let result = code;
+        
+        if (options.strings) result = this.obfuscateString(result);
+        if (options.literals) {
+            result = result.replace(/\b(\d+(?:\.\d+)?)\b/g, (match) => this.obfuscateNumber(parseFloat(match)));
+        }
+        if (options.tableIndirection) {
+            // Aplicar indirectción de tablas
+            result = result.replace(/(\w+)\[(\w+)\]/g, (match, table, key) => {
+                const tempVar = this.generateRandomName("t");
+                return `(function() local ${tempVar} = ${table}; return ${tempVar}[${key}] end)()`;
+            });
+        }
+        if (options.swizzle) result = this.swizzleCode(result);
+        if (options.cff) result = this.createControlFlowFlattening(result);
+        if (options.reverseIf) {
+            result = result.replace(/if\s+(.+?)\s+then/g, (match, cond) => this.reverseIf(cond));
+        }
+        if (options.junkIf) result = this.addJunkIfs(result);
+        if (options.encFuncDec) result = this.encryptFunctionCalls(result);
+        if (options.mba) result = this.applyMBA(result);
+        if (options.locals) result = this.obfuscateLocals(result);
+        if (options.gLookup) result = this.createGLookup() + result;
+        if (options.vm) {
+            const instructions = result.split(';').filter(i => i.trim());
+            result = this.createVMDispatch(instructions);
+        }
+        if (options.wpacker) result = this.wrapWithWPacker(result);
+        if (options.luamina) result = this.luaminaPushPull(result);
+        if (options.minify) result = this.minify(result);
+        
+        return result;
+    }
 }
 
-// ---------------------- Anti‑debug (Luraph exacto) ----------------------
-const ANTI_DEBUG_CODE = `
-    local hookOk = pcall(function()
-        debug.sethook(function() end, "c");
-        debug.sethook(nil);
-    end);
-    if not hookOk then while true do end end;
+// Ejemplo de uso
+const obfuscator = new LuaObfuscator();
 
-    local origPrint, origWarn, origError = print, warn, error;
-    print = function() end;
-    warn = function() end;
-    error = function() end;
+const originalLuaCode = `
+local x = 10
+local y = 20
+local sum = x + y
+if sum > 25 then
+    print("Sum is greater than 25")
+else
+    print("Sum is 25 or less")
+end
 `;
 
-// ---------------------- Capas de VM señuelo (Multi‑handler) ----------------------
-function pickHandlers(count) {
-    const used = new Set();
-    const res = [];
-    while (res.length < count) {
-        const n = randomName() + Math.floor(Math.random() * 99);
-        if (!used.has(n)) { used.add(n); res.push(n); }
-    }
-    return res;
-}
+const obfuscated = obfuscator.obfuscate(originalLuaCode, {
+    strings: true,
+    literals: true,
+    tableIndirection: true,
+    swizzle: true,
+    cff: true,
+    reverseIf: true,
+    junkIf: true,
+    encFuncDec: true,
+    mba: true,
+    locals: true,
+    gLookup: true,
+    vm: true,
+    wpacker: true,
+    luamina: true,
+    minify: true
+});
 
-function buildSingleVM(innerCode, handlerCount) {
-    const handlers = pickHandlers(handlerCount);
-    const realIdx = Math.floor(Math.random() * handlerCount);
-    const DISPATCH = randomName();
-    let out = `local lM={}; `;
-    for (let i = 0; i < handlers.length; i++) {
-        if (i === realIdx) {
-            out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkArray(5).join(' ')} ${innerCode} end; `;
-        } else {
-            out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkArray(3).join(' ')} return nil end; `;
-        }
-    }
-    out += `local ${DISPATCH}={`;
-    for (let i = 0; i < handlers.length; i++) {
-        out += `[${luraphMath(i + 1)}]=${handlers[i]},`;
-    }
-    out += `}; `;
-    const execBlocks = handlers.map((_, i) => `${DISPATCH}[${luraphMath(i + 1)}](lM)`);
-    out += applyCFF(execBlocks);
-    return out;
-}
-
-// ---------------------- Construcción final del blindaje ----------------------
-function buildSecureVM(payloadStr) {
-    // 1. Unir todo: anti‑env logger + anti‑debug + código real
-    const combined = `${ANTI_ENV_LOGGER_CODE} ${ANTI_DEBUG_CODE} ${payloadStr}`;
-
-    // 2. VM binaria principal (formato preempaquetado)
-    let vm = buildBinaryVM(combined);
-
-    // 3. 25 capas de VM señuelo (igual que Luraph)
-    for (let i = 0; i < 25; i++) {
-        vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3);
-    }
-
-    return vm;
-}
-
-// ---------------------- Función principal de ofuscación ----------------------
-function obfuscate(sourceCode) {
-    if (!sourceCode) return '--ERROR';
-
-    // Si el script original es un loadstring(HttpGet(...))() extraemos la URL
-    let payload = sourceCode;
-    const match = sourceCode.match(/loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i);
-    if (match) {
-        payload = `loadstring(game:HttpGet("${match[1]}"))()`;
-    }
-
-    // Blindar completamente
-    const finalVM = buildSecureVM(payload);
-
-    // Basura externa (150 líneas) para camuflaje
-    const junk = generateJunkArray(150).join(' ');
-
-    return `${HEADER}\n${junk}\n${finalVM}`;
-}
-
+console.log("=== ORIGINAL CODE ===");
+console.log(originalLuaCode);
+console.log("\n=== OBFUSCATED CODE ===");
+console.log(obfuscated);
 module.exports = { obfuscate };
