@@ -1,204 +1,156 @@
 // ------------------------------------------------------------
-//  Seak Mini Obfuscator v1 — Ofuscador Lua modular en JavaScript
+//  Seak Nano v1 — Ofuscador Lua ultraligero (<1KB print, <10KB hub)
 // ------------------------------------------------------------
 
-// ========== UTILIDADES GENERALES ==========
-function randomName(len = 8) {
+function randomName(len = 6) {
     let s = '';
-    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_';
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ_';
     for (let i = 0; i < len; i++) s += chars[Math.floor(Math.random() * chars.length)];
     return '_' + s;
 }
 
-// Genera una expresión MBA que siempre evalúa a 'n'
-function mbaNumber(n) {
-    const a = Math.floor(Math.random() * 200) + 10;
-    const b = Math.floor(Math.random() * 20) + 2;
-    const c = Math.floor(Math.random() * 100) + 5;
-    const d = Math.floor(Math.random() * 20) + 2;
-    return `(((${n}+${a})*${b}/${b})-${a}+(${c}*${d}/${d})-${c})`;
+// MBA ligero (sin exagerar)
+function mba(n) {
+    if (Math.random() > 0.5) return n.toString();
+    const a = Math.floor(Math.random() * 100) + 10;
+    return `((${n}+${a})-${a})`;
 }
 
-// ========== 0. MINIFY (simple) ==========
-function minify(code) {
-    return code
-        .replace(/--\[\[[\s\S]*?\]\]/g, '')   // comentarios multilinea
-        .replace(/--.*$/gm, '')               // comentarios de línea
-        .replace(/\n\s*\n/g, '\n')            // líneas vacías
-        .replace(/[ \t]+/g, ' ')              // espacios múltiples
-        .trim();
-}
-
-// ========== 1. STRING ENCRYPTION ==========
+// ------------------------------------------------------------
+//  MÓDULO 1: ENCRIPTACIÓN DE STRINGS (XOR ligero)
+// ------------------------------------------------------------
 function encryptStrings(code) {
-    return code.replace(/"([^"]*)"|'([^']*)'/g, (match, double, single) => {
-        const str = double || single;
-        if (str.length === 0) return match;
-        const bytes = str.split('').map(c => c.charCodeAt(0));
-        const key = Math.floor(Math.random() * 200) + 50;
-        const enc = bytes.map((b, i) => ((b ^ ((key + i) & 0xFF)))).join(',');
-        return `string.char(${bytes.map((b, i) => mbaNumber((b ^ ((key + i) & 0xFF)))).join(',')})`;
+    return code.replace(/"([^"]+)"|'([^']+)'/g, (match, d, s) => {
+        const str = d || s;
+        if (str.length < 2) return match;
+        const k = Math.floor(Math.random() * 200) + 50;
+        const enc = str.split('').map((c, i) => ((c.charCodeAt(0) ^ ((k + i) & 0xFF)))).join(',');
+        return `string.char(${enc})`;
     });
 }
 
-// ========== 2. NUMBER OBFUSCATION (Literals) ==========
+// ------------------------------------------------------------
+//  MÓDULO 2: OFUSCACIÓN DE NÚMEROS (MBA ligero)
+// ------------------------------------------------------------
 function obfuscateNumbers(code) {
-    return code.replace(/\b(\d+(\.\d+)?)\b/g, (match, num) => {
-        if (isNaN(num)) return match;
-        return Math.random() < 0.7 ? mbaNumber(Number(num)) : match;
-    });
+    return code.replace(/\b(\d+)\b/g, (m, n) => Math.random() < 0.6 ? mba(Number(n)) : m);
 }
 
-// ========== 3. TABLE INDIRECTION ==========
-function tableIndirection(code) {
-    // Envuelve tablas literales en accesos indirectos
-    return code.replace(/(local\s+\w+\s*=\s*)\{/g, (match, prefix) => {
-        const tName = randomName();
-        return `local ${tName}={} ${prefix}${tName}`;
-    });
-}
-
-// ========== 4. SWIZZLE (intercambio de variables) ==========
-function swizzle(code) {
-    const locals = code.match(/local\s+(\w+)/g);
-    if (!locals || locals.length < 2) return code;
-    const names = locals.map(l => l.replace('local ', ''));
-    // Intercambia pares
-    for (let i = 0; i < names.length - 1; i += 2) {
-        const a = names[i], b = names[i + 1];
-        code = code.replace(new RegExp(`\\b${a}\\b`, 'g'), '___SWAP___');
-        code = code.replace(new RegExp(`\\b${b}\\b`, 'g'), a);
-        code = code.replace(/___SWAP___/g, b);
-    }
-    return code;
-}
-
-// ========== 5. CFF v1 (Control Flow Flattening simple) ==========
-function controlFlowFlattening(code) {
+// ------------------------------------------------------------
+//  MÓDULO 3: CFF LIGERO (solo si el código es corto)
+// ------------------------------------------------------------
+function cffLite(code) {
     const lines = code.split('\n').filter(l => l.trim().length > 0);
-    if (lines.length < 3) return code;
-    const stateVar = randomName();
-    let result = `local ${stateVar}=1 while true do `;
-    lines.forEach((line, i) => {
-        if (i === 0) result += `if ${stateVar}==${mbaNumber(1)} then ${line} ${stateVar}=${mbaNumber(2)} `;
-        else result += `elseif ${stateVar}==${mbaNumber(i + 1)} then ${line} ${stateVar}=${mbaNumber(i + 2)} `;
+    if (lines.length < 2) return code;
+    const sv = randomName();
+    let out = `local ${sv}=1 while ${sv}<${lines.length + 2} do `;
+    lines.forEach((l, i) => {
+        out += `if ${sv}==${i + 1} then ${l} ${sv}=${i + 2} `;
     });
-    result += `elseif ${stateVar}==${mbaNumber(lines.length + 1)} then break end end`;
-    return result;
+    out += `end `;
+    return out;
 }
 
-// ========== 6. REVERSE-IF ==========
+// ------------------------------------------------------------
+//  MÓDULO 4: REVERSE-IF (ligero)
+// ------------------------------------------------------------
 function reverseIf(code) {
-    return code.replace(/if\s+(.+?)\s+then\s+(.+?)\s+end/gi, (match, cond, body) => {
-        if (Math.random() > 0.5) {
-            return `if not(${cond}) then else ${body} end`;
-        }
-        return match;
+    return code.replace(/if\s+(.+?)\s+then\s+(.+?)\s+end/g, (m, cond, body) => {
+        if (Math.random() > 0.5 || body.length > 30) return m;
+        return `if not(${cond})then else ${body} end`;
     });
 }
 
-// ========== 7. JUNK-IF ==========
-function junkIf(code) {
-    const junkLines = [];
-    for (let i = 0; i < 3; i++) {
-        const a = Math.floor(Math.random() * 100);
-        const b = Math.floor(Math.random() * 100);
-        junkLines.push(`if ${mbaNumber(a)}==${mbaNumber(b)} then local ${randomName()}=1 end;`);
-    }
-    return junkLines.join(' ') + code;
+// ------------------------------------------------------------
+//  MÓDULO 5: JUNK-IF MÍNIMO (1 o 2 líneas)
+// ------------------------------------------------------------
+function junkIfLite(code) {
+    const a = Math.floor(Math.random() * 50);
+    const b = a + Math.floor(Math.random() * 10) + 1;
+    const v = randomName();
+    return `if ${a}==${b} then local ${v}=1 end; ` + code;
 }
 
-// ========== 8. ENCRYPT FUNCTION CALLS ==========
-function encryptFunctionCalls(code) {
-    const funcs = ['print', 'warn', 'game', 'pairs', 'ipairs', 'table', 'string', 'math', 'tick'];
+// ------------------------------------------------------------
+//  MÓDULO 6: ENCRIPTACIÓN DE FUNCIONES (lookup mínimo)
+// ------------------------------------------------------------
+function encryptFunctions(code) {
+    const funcs = ['print', 'warn', 'game', 'pairs', 'ipairs', 'tick'];
     funcs.forEach(fn => {
-        const enc = fn.split('').map(c => c.charCodeAt(0) + 1).join(',');
+        const enc = fn.split('').map(c => c.charCodeAt(0)).join(',');
         code = code.replace(new RegExp(`\\b${fn}\\b`, 'g'), `getfenv()[string.char(${enc})]`);
     });
     return code;
 }
 
-// ========== 9. MBA v1 (Mixed Boolean Arithmetic) ==========
-function mixedBooleanArithmetic(code) {
-    return code.replace(/\b(\d+)\s*([+\-*/])\s*(\d+)\b/g, (match, a, op, b) => {
-        const expr = `(bit32.bxor(${a},0) ${op} bit32.bxor(${b},0))`;
-        return Math.random() < 0.5 ? expr : match;
-    });
-}
-
-// ========== 10. LOCAL VARIABLE OBFUSCATION ==========
+// ------------------------------------------------------------
+//  MÓDULO 7: OFUSCACIÓN DE LOCALS (solo renombrado ligero)
+// ------------------------------------------------------------
 function obfuscateLocals(code) {
-    const localMap = {};
-    return code.replace(/\b(\w+)\b/g, (match, word) => {
-        if (/^(local|if|then|else|end|for|while|do|function|return|break)$/.test(word)) return word;
-        if (!localMap[word]) localMap[word] = randomName(6);
-        return localMap[word];
+    const keywords = new Set(['local','if','then','else','end','for','while','do','function','return','break','nil','true','false','and','or','not','repeat','until']);
+    const map = {};
+    code = code.replace(/local\s+(\w+)/g, (m, name) => {
+        if (!map[name]) map[name] = randomName(6);
+        return `local ${map[name]}`;
     });
-}
-
-// ========== 11. _G LOOKUP ==========
-function gLookup(code) {
-    const globals = ['print', 'game', 'workspace', 'math', 'string', 'table'];
-    globals.forEach(g => {
-        code = code.replace(new RegExp(`\\b${g}\\b`, 'g'), `_G[${mbaNumber(g.charCodeAt(0))}]`);
-    });
+    // Reemplazar usos
+    for (const [orig, obf] of Object.entries(map)) {
+        code = code.replace(new RegExp(`\\b${orig}\\b`, 'g'), obf);
+    }
     return code;
 }
 
-// ========== 12. DEMO VM (Luamina PUSH/PULL) ==========
-function demoVM(code) {
-    const varName = randomName();
+// ------------------------------------------------------------
+//  MÓDULO 8: WPACKER NANO (empaquetado binario mínimo)
+// ------------------------------------------------------------
+function wpackerNano(code) {
     const bytes = code.split('').map(c => c.charCodeAt(0));
-    const key = Math.floor(Math.random() * 200) + 50;
-    const enc = bytes.map((b, i) => ((b ^ ((key + i) & 0xFF))));
-    const pushPull = enc.map(b => `table.insert(stack,${b})`).join(';');
-    const dec = `for i=1,#stack do result=result..string.char(bit32.bxor(stack[i],(${key}+i-1)%256)) end`;
-    return `local stack={} ${pushPull} local result='' ${dec} loadstring(result)()`;
+    const k = Math.floor(Math.random() * 200) + 50;
+    const enc = bytes.map((b, i) => ((b ^ ((k + i) & 0xFF)))).join(',');
+    return `local d={${enc}}local r=''for i=1,#d do r=r..string.char(bit32.bxor(d[i],(${k}+i-1)%256))end loadstring(r)()`;
 }
 
-// ========== 13. WPACKER (empaquetado binario simple) ==========
-function wpacker(code) {
-    const bytes = code.split('').map(c => c.charCodeAt(0));
-    const key = Math.floor(Math.random() * 200) + 50;
-    const enc = bytes.map((b, i) => ((b ^ ((key + i) & 0xFF))));
-    const data = enc.join(',');
-    return `local d={${data}} local r='' for i=1,#d do r=r..string.char(bit32.bxor(d[i],(${key}+i-1)%256)) end loadstring(r)()`;
-}
-
-// ========== OFUSCADOR PRINCIPAL ==========
-function obfuscate(code, options = {}) {
+// ------------------------------------------------------------
+//  OFUSCADOR PRINCIPAL
+// ------------------------------------------------------------
+function obfuscate(code) {
     let result = code;
 
-    const passes = [
-        { name: 'minify', fn: minify, enabled: options.minify !== false },
-        { name: 'encryptStrings', fn: encryptStrings, enabled: options.encryptStrings !== false },
-        { name: 'obfuscateNumbers', fn: obfuscateNumbers, enabled: options.obfuscateNumbers !== false },
-        { name: 'tableIndirection', fn: tableIndirection, enabled: options.tableIndirection !== false },
-        { name: 'swizzle', fn: swizzle, enabled: options.swizzle !== false },
-        { name: 'controlFlowFlattening', fn: controlFlowFlattening, enabled: options.cff !== false },
-        { name: 'reverseIf', fn: reverseIf, enabled: options.reverseIf !== false },
-        { name: 'junkIf', fn: junkIf, enabled: options.junkIf !== false },
-        { name: 'encryptFunctionCalls', fn: encryptFunctionCalls, enabled: options.encFunc !== false },
-        { name: 'mixedBooleanArithmetic', fn: mixedBooleanArithmetic, enabled: options.mba !== false },
-        { name: 'obfuscateLocals', fn: obfuscateLocals, enabled: options.locals !== false },
-        { name: 'gLookup', fn: gLookup, enabled: options.gLookup !== false },
-        { name: 'demoVM', fn: demoVM, enabled: options.demoVM !== false },
-        { name: 'wpacker', fn: wpacker, enabled: options.wpacker !== false },
-    ];
-
-    passes.forEach(pass => {
-        if (pass.enabled) {
-            try {
-                result = pass.fn(result);
-                console.log(`✔ ${pass.name}`);
-            } catch (e) {
-                console.error(`✖ ${pass.name}: ${e.message}`);
-            }
-        }
-    });
+    // Aplicar solo las transformaciones más ligeras
+    result = encryptStrings(result);       // +100-300 bytes
+    result = obfuscateNumbers(result);     // +50-150 bytes
+    result = reverseIf(result);            // +20-50 bytes
+    result = junkIfLite(result);           // +50 bytes fijo
+    result = encryptFunctions(result);     // +100-200 bytes
+    result = obfuscateLocals(result);      // +50-100 bytes
+    result = wpackerNano(result);          // +200-400 bytes (capa final)
 
     return result;
 }
 
-// ========== EXPORTAR ==========
-module.exports = { obfuscate, minify, encryptStrings, obfuscateNumbers, tableIndirection, swizzle, controlFlowFlattening, reverseIf, junkIf, encryptFunctionCalls, mixedBooleanArithmetic, obfuscateLocals, gLookup, demoVM, wpacker };
+// ------------------------------------------------------------
+//  PRUEBA RÁPIDA
+// ------------------------------------------------------------
+function test() {
+    const simple = `print("hola")`;
+    const hub = `
+        local a = 1
+        local b = 2
+        game.Players.LocalPlayer:Kick()
+        print("hub cargado")
+    `;
+
+    const o1 = obfuscate(simple);
+    const o2 = obfuscate(hub);
+
+    console.log('Simple:', o1.length, 'bytes');
+    console.log(o1);
+    console.log('');
+    console.log('Hub:', o2.length, 'bytes');
+    console.log(o2);
+}
+
+// Solo ejecutar test si se llama directamente
+if (require.main === module) test();
+
+module.exports = { obfuscate };
