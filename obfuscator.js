@@ -1,9 +1,9 @@
 // ------------------------------------------------------------
-//  Seak Obfuscator - v6 (Anti‑env inside VM, payload seguro)
+//  Seak Obfuscator - v6 FINAL (Anti‑env interior, tamaño lineal)
 // ------------------------------------------------------------
 const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
-// El anti‑env logger ya NO va en texto plano. Se inyecta dentro de la VM.
+// Anti‑env logger (se inyecta en la última capa de la VM)
 const ANTI_ENV_LOGGER_CODE = `
 local p = game.Players.LocalPlayer
 local c = p and p.Character
@@ -85,7 +85,7 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
-// VM base: descifra y ejecuta el payload final (sin el anti‑env)
+// VM base: cifra y ejecuta un payload (string)
 function buildTrueVM(payloadStr) {
   const STACK = randomName()
   const KEY = randomName()
@@ -141,13 +141,17 @@ function buildTrueVM(payloadStr) {
   return vmCore
 }
 
-// Capa de VM REAL: todos los handlers ejecutan el código completo
-function buildRealVM(innerCode, handlerCount = 3) {
+// Capa de VM con UN solo handler real (los demás son señuelo)
+function buildSingleVM(innerCode, handlerCount) {
   const handlers = pickHandlers(handlerCount)
+  const realIdx = Math.floor(Math.random() * handlerCount)
   const DISPATCH = randomName()
   let out = `local lM={} `
   for (let i = 0; i < handlers.length; i++) {
-    out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkArray(2).join(' ')} ${innerCode} end `
+    if (i === realIdx)
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkArray(3).join(' ')} ${innerCode} end `
+    else
+      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkArray(2).join(' ')} return nil end `
   }
   out += `local ${DISPATCH}={`
   for (let i = 0; i < handlers.length; i++)
@@ -160,19 +164,19 @@ function buildRealVM(innerCode, handlerCount = 3) {
   return out
 }
 
-// Construye la VM completa: 1 capa de anti‑env + 24 capas de payload
+// Construye 25 capas: payload puro → 24 capas de VM → 1 capa con anti‑env + payload
 function buildFullVM(payloadStr) {
-  // 1. Creamos la VM del payload puro
+  // VM base del payload
   let vmPayload = buildTrueVM(payloadStr)
 
-  // 2. Envolvemos en 24 capas de VM reales (para que el anti‑env quede en la 25)
+  // 24 capas intermedias
   for (let i = 0; i < 24; i++) {
-    vmPayload = buildRealVM(vmPayload, Math.floor(Math.random() * 2) + 3)
+    vmPayload = buildSingleVM(vmPayload, Math.floor(Math.random() * 2) + 3)
   }
 
-  // 3. Ahora envolvemos una capa más, pero esta capa incluye el anti‑env logger ANTES del payload
+  // Última capa: anti‑env SEGUIDO del payload (si pasa)
   const antiEnvAndPayload = `${ANTI_ENV_LOGGER_CODE} ${vmPayload}`
-  const finalVM = buildRealVM(antiEnvAndPayload, Math.floor(Math.random() * 2) + 3)
+  const finalVM = buildSingleVM(antiEnvAndPayload, Math.floor(Math.random() * 2) + 3)
 
   return finalVM
 }
@@ -212,7 +216,7 @@ function getExtraProtections() {
 function obfuscate(sourceCode) {
     if (!sourceCode) return '--ERROR';
 
-    // Payload a proteger (extrae URL si es loadstring(HttpGet))
+    // Payload: extraer URL si es loadstring(game:HttpGet("URL"))
     let payload = "";
     const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
     const match = sourceCode.match(isLoadstringRegex);
@@ -222,10 +226,10 @@ function obfuscate(sourceCode) {
         payload = sourceCode;
     }
 
-    // VM completa: anti‑env logger + payload integrados
+    // VM blindada (anti‑env dentro)
     const finalVM = buildFullVM(payload);
 
-    // Junk alrededor para camuflaje (el anti‑env ya no está en texto plano)
+    // Basura externa para camuflaje
     const junk = generateJunkArray(80).join(' ');
 
     const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `;
