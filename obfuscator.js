@@ -1,10 +1,9 @@
 // ------------------------------------------------------------
-//  Seak Obfuscator - v4 (Anti‑env logger con mensaje personalizado)
+//  Seak Obfuscator - v4 (Anti‑env logger con marca de agua)
 // ------------------------------------------------------------
 const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
-// Anti‑env logger: si detecta -> imprime "you get detected my boy" y se cuelga
-const ANTI_ENV_LOGGER_CODE = `local pass = true
+const ANTI_ENV_LOGGER_CODE = `pass = true   -- variable global para la VM
 
 if _VERSION ~= "Luau" then pass = false end
 
@@ -26,14 +25,21 @@ for _, f in ipairs(fns) do
     if not rawequal(f, f) then pass = false break end
 end
 
-if pass then
-    print("pass")
-else
-    print("Detect")
+if not pass then
+    warn("you get detected my boy")
+    -- Corromper funciones vitales
+    bit32 = nil
+    table = nil
+    -- Congelar el hilo para evitar que el script continúe
+    task.spawn(function()
+        while true do end
+    end)
+    error("you get detected my boy")
 end`
 
-// (resto del código sin cambios, solo se modificó la constante ANTI_ENV_LOGGER_CODE)
-
+// ------------------------------------------------------------
+// Funciones auxiliares
+// ------------------------------------------------------------
 function randomName() {
   return "_" + Math.random().toString(36).substring(2, 8) + Math.floor(Math.random() * 1000)
 }
@@ -121,6 +127,9 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
+// ------------------------------------------------------------
+// VM verdadera (corregida)
+// ------------------------------------------------------------
 function buildTrueVM(payloadStr) {
   const STACK = randomName()
   const KEY = randomName()
@@ -164,18 +173,60 @@ function buildTrueVM(payloadStr) {
   vmCore += `table.insert(${STACK}, string.char(bit32.bxor(${byteVar}, (${KEY} + _gIdx) % 256))) _gIdx=_gIdx+1 end end `
   vmCore += `local _e = table.concat(${STACK}) ${STACK}=nil `
 
-  const ASSERT = `getgenv()[${runtimeString("assert")}]`
-  const LOADSTRING = `getgenv()[${runtimeString("loadstring")}]`
-  const GAME = `getgenv()[${runtimeString("game")}]`
-  const HTTPGET = runtimeString("HttpGet")
+  // Recuperación segura de loadstring y assert
+  const SAFE_LOAD = `(getgenv().loadstring or loadstring or _G.loadstring)`;
+  const SAFE_ASSERT = `(getgenv().assert or assert or _G.assert)`;
 
-  if (payloadStr.includes("http"))
-    vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME}, _e)))() `
-  else
-    vmCore += `${ASSERT}(${LOADSTRING}(_e))() `
-  return vmCore
+  // ¿Es una URL?
+  const isUrl = /^https?:\/\//i.test(payloadStr);
+
+  if (isUrl) {
+    vmCore += `
+local _L = ${SAFE_LOAD}
+local _A = ${SAFE_ASSERT}
+
+if not _L then
+    while true do end
+end
+
+if pass then
+    local _http = (getgenv().game or game)
+    local _res = _http:HttpGet(_http, _e)
+    _A(_L(_res))()
+else
+    _e = nil
+    ${STACK} = nil
+    error("Security Violation")
+    while true do end
+end
+`;
+  } else {
+    // Código normal
+    vmCore += `
+local _L = ${SAFE_LOAD}
+local _A = ${SAFE_ASSERT}
+
+if not _L then
+    while true do end
+end
+
+if pass then
+    _A(_L(_e))()
+else
+    _e = nil
+    ${STACK} = nil
+    error("Security Violation")
+    while true do end
+end
+`;
+  }
+
+  return vmCore;
 }
 
+// ------------------------------------------------------------
+// Capas de VM falsas (25x)
+// ------------------------------------------------------------
 function buildSingleVM(innerCode, handlerCount) {
   const handlers = pickHandlers(handlerCount)
   const realIdx = Math.floor(Math.random() * handlerCount)
@@ -198,7 +249,6 @@ function buildSingleVM(innerCode, handlerCount) {
   return out
 }
 
-// VM de 25 capas
 function build25xVM(payloadStr) {
   let vm = buildTrueVM(payloadStr)
   for (let i = 0; i < 25; i++)
@@ -206,6 +256,9 @@ function build25xVM(payloadStr) {
   return vm
 }
 
+// ------------------------------------------------------------
+// Protecciones extra
+// ------------------------------------------------------------
 function getExtraProtections() {
   const antiDebuggers = `
     if getmetatable(_G)~=nil then while true do end end 
@@ -238,29 +291,33 @@ function getExtraProtections() {
   return antiDebuggers + codeVaultGuards
 }
 
+// ------------------------------------------------------------
+// Ofuscador principal
+// ------------------------------------------------------------
 function obfuscate(sourceCode) {
     if (!sourceCode) return '--ERROR';
 
-    // 1. Anti‑env logger con mensaje personalizado y bloqueo
+    // 1. Anti‑env logger con 25 capas (establece la variable global "pass")
     const antiEnvVM = build25xVM(ANTI_ENV_LOGGER_CODE);
 
     // 2. Junk (100 líneas) + inserción aleatoria del anti‑env logger
     const junkArray = generateJunkArray(100);
     const insertPos = Math.floor(Math.random() * (junkArray.length + 1));
     junkArray.splice(insertPos, 0, antiEnvVM);
-
     const combinedJunk = junkArray.join(' ');
 
     const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `;
     const extraProtections = getExtraProtections();
 
-    // 3. Payload principal (URL o código)
+    // 3. Payload principal
     let payloadToProtect = "";
     const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
     const match = sourceCode.match(isLoadstringRegex);
     if (match) {
+        // Es un loadstring(HttpGet(URL)) → extraemos la URL
         payloadToProtect = match[1];
     } else {
+        // Código normal → aplicamos mapeos y lo usamos directamente
         payloadToProtect = detectAndApplyMappings(sourceCode);
     }
 
