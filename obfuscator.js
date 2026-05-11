@@ -1,48 +1,24 @@
 // ============================================================
-//  ADVANCED LUA OBFUSCATOR - Luraph Protection Suite
+//  ADVANCED LUA OBFUSCATOR - Luraph Protection Suite v2
 // ============================================================
 
 // ============================================================
 //  CONFIGURATION
 // ============================================================
 const CONFIG = {
-    // VM Configuration
     vm: {
         maxLayers: 25,
         chunkSize: 10,
         fakeChunkMultiplier: 4,
         seedRange: { min: 50, max: 200 }
     },
-    
-    // Anti-Debug
     antiDebug: {
         enabled: true,
-        memoryCheck: true,
         timingCheck: true,
         hookDetection: true
     },
-    
-    // Anti-Tamper
-    antiTamper: {
-        enabled: true,
-        integrityCheck: true,
-        selfModifyProtection: true
-    },
-    
-    // Environment Detection
-    envDetection: {
-        enabled: true,
-        sandboxCheck: true,
-        vmDetection: true,
-        scriptContextCheck: true
-    },
-    
-    // Obfuscation
     obfuscation: {
-        stringEncryption: true,
-        controlFlowFlattening: true,
-        junkCodeDensity: 100,
-        identifierRenaming: true
+        junkCodeDensity: 100
     }
 };
 
@@ -64,137 +40,12 @@ class ObfuscatorUtils {
         return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`;
     }
     
-    static mbaExpression() {
-        const n = Math.random() > 0.5 ? 1 : 2;
-        const a = Math.floor(Math.random() * 70) + 15;
-        const b = Math.floor(Math.random() * 40) + 8;
-        return `((${n}*${a}-${a})/(${b}+1)+${n})`;
-    }
-    
     static xorEncrypt(str, key) {
         let result = '';
         for (let i = 0; i < str.length; i++) {
             result += String.fromCharCode(str.charCodeAt(i) ^ key);
         }
         return result;
-    }
-    
-    static generateHash(str) {
-        let hash = 0;
-        for (let i = 0; i < str.length; i++) {
-            const char = str.charCodeAt(i);
-            hash = ((hash << 5) - hash) + char;
-            hash = hash & hash; // Convert to 32bit integer
-        }
-        return Math.abs(hash).toString(16);
-    }
-}
-
-// ============================================================
-//  ANTI-ENVIRONMENT DETECTION SYSTEM
-// ============================================================
-class AntiEnvironmentDetection {
-    static generate() {
-        return `
--- Anti-Environment Detection Layer
-local function _checkEnvironment()
-    -- Sandbox Detection
-    local sandboxIndicators = 0
-    
-    -- Check 1: Function environment integrity
-    local success, env = pcall(function() return getfenv() end)
-    if not success or type(env) ~= "table" then
-        sandboxIndicators = sandboxIndicators + 1
-    end
-    
-    -- Check 2: Global table integrity
-    if getmetatable(_G) ~= nil then
-        sandboxIndicators = sandboxIndicators + 1
-    end
-    
-    -- Check 3: Core function availability
-    local coreFuncs = {"print", "type", "tostring", "pcall", "error"}
-    for _, func in ipairs(coreFuncs) do
-        if type(_G[func]) ~= "function" then
-            sandboxIndicators = sandboxIndicators + 1
-            break
-        end
-    end
-    
-    -- Check 4: Script context verification
-    local scriptContext = getfenv and getfenv().script
-    if not scriptContext then
-        sandboxIndicators = sandboxIndicators + 1
-    end
-    
-    -- Check 5: Memory inspection protection
-    local memCheck = pcall(function()
-        local test = {}
-        test[1] = 1
-        return test[1] == 1
-    end)
-    if not memCheck then
-        sandboxIndicators = sandboxIndicators + 1
-    end
-    
-    if sandboxIndicators >= 3 then
-        return false -- Environment compromised
-    end
-    
-    return true -- Environment safe
-end
-
-if not _checkEnvironment() then
-    while true do end -- Freeze if environment is hostile
-end
-`;
-    }
-}
-
-// ============================================================
-//  ANTI-DEBUGGING SYSTEM
-// ============================================================
-class AntiDebugging {
-    static generate() {
-        const checks = [];
-        
-        if (CONFIG.antiDebug.timingCheck) {
-            checks.push(`
--- Timing-based debugger detection
-local _startTime = tick()
-local _loopCounter = 0
-for _ = 1, 100000 do
-    _loopCounter = _loopCounter + 1
-end
-local _endTime = tick()
-local _executionTime = _endTime - _startTime
-
--- Debuggers slow down execution significantly
-if _executionTime > 1.0 then
-    while true do end
-end
-`);
-        }
-        
-        if (CONFIG.antiDebug.hookDetection) {
-            checks.push(`
--- Hook detection for common debugger functions
-local _hookCheck1 = debug and debug.gethook
-if _hookCheck1 and _hookCheck1() ~= nil then
-    while true do end
-end
-
--- Check for instruction-level hooks
-local _hookCheck2 = pcall(function()
-    return debug.getinfo(1, "L")
-end)
-if not _hookCheck2 then
-    while true do end
-end
-`);
-        }
-        
-        return checks.join('\n');
     }
 }
 
@@ -207,7 +58,7 @@ class JunkCodeGenerator {
         if (r < 0.2) {
             return `local ${ObfuscatorUtils.randomName()}=${ObfuscatorUtils.heavyMath(Math.floor(Math.random() * 999))}`;
         } else if (r < 0.35) {
-            return `local ${ObfuscatorUtils.randomName()}=string.char(${ObfuscatorUtils.heavyMath(Math.floor(Math.random()*255))})`;
+            return `local ${ObfuscatorUtils.randomName()}=${ObfuscatorUtils.heavyMath(Math.floor(Math.random()*255))}`;
         } else if (r < 0.5) {
             return `if not(${ObfuscatorUtils.heavyMath(1)}==${ObfuscatorUtils.heavyMath(1)}) then local x=1 end`;
         } else if (r < 0.7) {
@@ -231,27 +82,7 @@ class JunkCodeGenerator {
 }
 
 // ============================================================
-//  STRING ENCRYPTION SYSTEM
-// ============================================================
-class StringEncryption {
-    static encryptString(str) {
-        const key = Math.floor(Math.random() * 255);
-        const encrypted = ObfuscatorUtils.xorEncrypt(str, key);
-        const bytes = [];
-        
-        for (let i = 0; i < encrypted.length; i++) {
-            bytes.push(ObfuscatorUtils.heavyMath(encrypted.charCodeAt(i)));
-        }
-        
-        return {
-            decrypt: `(function() local _t={${bytes.join(',')}} local _r="" for _,v in ipairs(_t) do _r=_r..string.char(bit32.bxor(v,${key})) end return _r end)()`,
-            encrypted: encrypted
-        };
-    }
-}
-
-// ============================================================
-//  VIRTUAL MACHINE SYSTEM (ETR-Style)
+//  VIRTUAL MACHINE SYSTEM
 // ============================================================
 class VirtualMachine {
     static buildBase(payloadStr) {
@@ -264,7 +95,6 @@ class VirtualMachine {
         
         let vmCore = `local _pool={} local ${STACK}={} local ${KEY}=${ObfuscatorUtils.heavyMath(seed)} `;
         
-        // Split payload into chunks and encrypt
         const realChunks = [];
         for (let i = 0; i < payloadStr.length; i += CONFIG.vm.chunkSize) {
             realChunks.push(payloadStr.slice(i, i + CONFIG.vm.chunkSize));
@@ -337,7 +167,6 @@ class VirtualMachine {
         }
         out += `} `;
         
-        // CFF dispatcher
         const stateVar = ObfuscatorUtils.randomName();
         out += `local ${stateVar}=${ObfuscatorUtils.heavyMath(1)} while true do `;
         for (let i = 0; i < handlers.length; i++) {
@@ -362,27 +191,61 @@ class VirtualMachine {
 }
 
 // ============================================================
-//  ANTI-ENV LOGGER (CUSTOM MESSAGE)
+//  ANTI-ENV LOGGER (SIMPLIFICADO SIN FUNCIONES BLOQUEADAS)
 // ============================================================
 class AntiEnvLogger {
     static generate() {
         return `
-local p = game.Players.LocalPlayer
-local c = p and p.Character
-local anim = c and c:FindFirstChild("Animate")
-local dummy = Instance.new("LocalScript")
-local ok, bad = false, false
+local _p = game and game.Players and game.Players.LocalPlayer
+local _c = _p and _p.Character
+local _anim = _c and _c.FindFirstChild and _c:FindFirstChild("Animate")
+local _dummy = pcall(function() return Instance.new("LocalScript") end)
+local _ok = false
+local _bad = false
 
-if anim and pcall(function() return anim:IsA("LocalScript") end) then
-    ok = true
+if _anim then
+    local _success, _result = pcall(function() return _anim.IsA and _anim:IsA("LocalScript") end)
+    if _success and _result then
+        _ok = true
+    end
 end
 
-if not pcall(function() return dummy:IsA("LocalScript") end) then
-    bad = true
+if not _dummy then
+    _bad = true
 end
 
-if not (ok and not bad) then
-    print("يعلم الله أنك تحاول سرقة الشفرة، وانظر، لا ينبغي لك تهديد الناس؛ الله يعلم ما في قلبك.")
+if not (_ok and not _bad) then
+    while true do end
+end
+`;
+    }
+}
+
+// ============================================================
+//  ANTI-DEBUGGING SYSTEM (SIMPLIFICADO)
+// ============================================================
+class AntiDebugging {
+    static generate() {
+        return `
+-- Anti-debugging check
+local _startTime = tick()
+local _loopCounter = 0
+for _ = 1, 100000 do
+    _loopCounter = _loopCounter + 1
+end
+local _endTime = tick()
+if _endTime - _startTime > 1.0 then
+    while true do end
+end
+
+-- Hook detection
+local _hookCheck = pcall(function()
+    if debug and debug.gethook then
+        return debug.gethook()
+    end
+    return nil
+end)
+if _hookCheck and _hookCheck ~= nil then
     while true do end
 end
 `;
