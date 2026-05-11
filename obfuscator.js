@@ -1,28 +1,34 @@
 // ------------------------------------------------------------
-//  Seak Obfuscator - v4 FINAL (Anti‑env logger corregido)
+//  Seak Obfuscator - v5 (Anti‑env blindado + 25 VM reales)
 // ------------------------------------------------------------
 const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
-// Anti‑env logger CORREGIDO: no usa getrunningscripts (evita "Security Violation")
-const ANTI_ENV_LOGGER_CODE = `local p = game.Players.LocalPlayer
-local c = p.Character
-local anim = c:FindFirstChild("Animate")
+// Anti‑env logger corregido y reforzado
+const ANTI_ENV_LOGGER_CODE = `
+local p = game.Players.LocalPlayer
+local c = p and p.Character
+local anim = c and c:FindFirstChild("Animate")
 local dummy = Instance.new("LocalScript")
 local is_ok = false
 local is_bad = false
-if anim and anim:IsA("LocalScript") then
-is_ok = true
+
+-- Verificación real del Animate
+if anim and pcall(function() return anim:IsA("LocalScript") end) then
+    is_ok = true
 end
-if dummy and dummy:IsA("LocalScript") then
-else
-is_bad = true
+
+-- Verificación del dummy: debe ser un LocalScript válido
+if not pcall(function() return dummy:IsA("LocalScript") end) then
+    is_bad = true
 end
+
 if is_ok and not is_bad then
-print("pass")
+    print("pass")
 else
-print("you get detected my boy")
-while true do end
-end`
+    print("you get detected my boy")
+    while true do end
+end
+`
 
 function randomName() {
   return "_" + Math.random().toString(36).substring(2, 8) + Math.floor(Math.random() * 1000)
@@ -45,33 +51,6 @@ function heavyMath(n) {
   let c = Math.floor(Math.random() * 800) + 10
   let d = Math.floor(Math.random() * 20) + 2
   return `(((((${n}+${a})*${b})/${b})-${a})+((${c}*${d})/${d})-${c})`
-}
-
-function mba() {
-  let n = Math.random() > 0.5 ? 1 : 2, a = Math.floor(Math.random() * 70) + 15, b = Math.floor(Math.random() * 40) + 8;
-  return `((${n}*${a}-${a})/(${b}+1)+${n})`;
-}
-
-const MAPEO = {
-  "ScreenGui":"Aggressive Renaming","Frame":"String to Math","TextLabel":"Table Indirection",
-  "TextButton":"Mixed Boolean Arithmetic","Humanoid":"Dynamic Junk","Player":"Fake Flow",
-  "RunService":"Virtual Machine","TweenService":"Fake Flow","Players":"Fake Flow"
-};
-
-function detectAndApplyMappings(code) {
-  let modified = code, headers = "";
-  for (const [word, tech] of Object.entries(MAPEO)) {
-    const regex = new RegExp(`\\b${word}\\b`, "g");
-    if (regex.test(modified)) {
-      let replacement = `"${word}"`;
-      if (tech.includes("Aggressive Renaming")) { const v = randomName(); headers += `local ${v}="${word}";`; replacement = v; }
-      else if (tech.includes("String to Math")) replacement = `string.char(${word.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
-      else if (tech.includes("Mixed Boolean Arithmetic")) replacement = `((${mba()}==1 or true)and"${word}")`;
-      regex.lastIndex = 0;
-      modified = modified.replace(regex, (match) => `game[${replacement}]`);
-    }
-  }
-  return headers + modified;
 }
 
 function generateSingleJunkLine() {
@@ -111,6 +90,7 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
+// VM base (descifra y ejecuta el payload)
 function buildTrueVM(payloadStr) {
   const STACK = randomName()
   const KEY = randomName()
@@ -166,16 +146,14 @@ function buildTrueVM(payloadStr) {
   return vmCore
 }
 
-function buildSingleVM(innerCode, handlerCount) {
+// Capa de VM REAL: todos los handlers ejecutan el mismo código verdadero
+function buildRealVM(innerCode, handlerCount = 3) {
   const handlers = pickHandlers(handlerCount)
-  const realIdx = Math.floor(Math.random() * handlerCount)
   const DISPATCH = randomName()
   let out = `local lM={} `
   for (let i = 0; i < handlers.length; i++) {
-    if (i === realIdx)
-      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkArray(3).join(' ')} ${innerCode} end `
-    else
-      out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkArray(2).join(' ')} return nil end `
+    // Todos los handlers ejecutan el innerCode completo
+    out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkArray(2).join(' ')} ${innerCode} end `
   }
   out += `local ${DISPATCH}={`
   for (let i = 0; i < handlers.length; i++)
@@ -188,80 +166,46 @@ function buildSingleVM(innerCode, handlerCount) {
   return out
 }
 
-// VM de 25 capas para el payload
-function build25xVM(payloadStr) {
-  let vm = buildTrueVM(payloadStr)
-  for (let i = 0; i < 25; i++)
-    vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3)
+// 25 capas REALES (cada capa envuelve la salida de la anterior)
+function build25xRealVM(payloadStr) {
+  let vm = buildTrueVM(payloadStr)   // VM base
+  for (let i = 0; i < 25; i++) {
+    vm = buildRealVM(vm, Math.floor(Math.random() * 2) + 3) // 2-4 handlers reales
+  }
   return vm
 }
 
-function getExtraProtections() {
-  const antiDebuggers = `
-    if getmetatable(_G)~=nil then while true do end end 
-    if type(print)~="function" then while true do end end
-  `
-  const rawTampers = [
-    `if math.pi<3.14 or math.pi>3.15 then _err() end`,
-    `if bit32 and bit32.bxor(10,5)~=15 then _err() end`,
-    `if type(tostring)~="function" then _err() end`,
-    `if not string.match("chk","^c.*k$") then _err() end`,
-    `if type(coroutine.create)~="function" then _err() end`,
-    `if type(table.concat)~="function" then _err() end`,
-    `local _tm1=tick() local _tm2=tick() if _tm2<_tm1 then _err() end`,
-    `if math.abs(-10)~=10 then _err() end`,
-    `if gcinfo and gcinfo()<0 then _err() end`,
-    `if type(next)~="function" then _err() end`,
-    `if string.len("a")~=1 then _err() end`,
-    `if type(table.insert)~="function" then _err() end`,
-    `if string.byte("Z",1)~=90 then _err() end`,
-    `if math.floor(-1/10)~=-1 then _err() end`,
-    `if (true and 1 or 2)~=1 then _err() end`,
-    `if type(1)~="number" then _err() end`,
-    `if type(pcall)~="function" then _err() end`
-  ]
-  let codeVaultGuards = ""
-  for(let t of rawTampers) {
-    const fnName = randomName(), errName = randomName()
-    codeVaultGuards += `local ${fnName}=function() local ${errName}=error ${t.replace("_err()", `${errName}("!")`)} end ${fnName}() `
-  }
-  return antiDebuggers + codeVaultGuards
-}
-
-/**
- * Función principal de ofuscación
- * @param {string} sourceCode - Código Lua a ofuscar (puede ser un loadstring o script completo)
- * @returns {string} Código Lua ofuscado
- */
 function obfuscate(sourceCode) {
     if (!sourceCode) return '--ERROR';
 
-    // 1. Anti‑env logger en texto plano, oculto entre basura
+    // 1. Anti‑env logger se coloca PRIMERO antes de cualquier basura
     const junkArray = generateJunkArray(100);
-    const insertPos = Math.floor(Math.random() * (junkArray.length + 1));
-    junkArray.splice(insertPos, 0, ANTI_ENV_LOGGER_CODE);
+    junkArray.unshift(ANTI_ENV_LOGGER_CODE); // al inicio para que se ejecute primero
     const combinedJunk = junkArray.join(' ');
 
+    // Protecciones extra (pueden colgar si detectan manipulación)
     const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `;
-    const extraProtections = getExtraProtections();
+    const extraProtections = `
+      if getmetatable(_G)~=nil then while true do end end 
+      if type(print)~="function" then while true do end end
+    `;
 
-    // 2. Detectar si el código fuente es un loadstring(game:HttpGet("URL")) y extraer la URL
+    // 2. Payload: extraer URL si es loadstring(HttpGet(...))
     let payload = "";
     const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
     const match = sourceCode.match(isLoadstringRegex);
     if (match) {
-        // Solo pasamos la URL a la VM; ella misma construye el loader
         payload = match[1];
     } else {
-        // Para cualquier otro código, aplicamos mapeos (si se desea) y luego lo envolvemos
-        payload = detectAndApplyMappings(sourceCode);
+        // Para otro código, simplemente lo envolvemos en loadstring
+        payload = sourceCode;
     }
 
-    // 3. Ofuscar el payload en una VM de 25 capas
-    const finalVM = build25xVM(payload);
+    // 3. VM real de 25 capas
+    const finalVM = build25xRealVM(payload);
 
     // 4. Montaje final
-    return `${HEADER}\n${combinedJunk} ${antiDebug} ${extraProtections} ${finalVM}`;
+    return `${HEADER}\n${combinedJunk}\n${antiDebug}\n${extraProtections}\n${finalVM}`;
 }
 
 module.exports = { obfuscate };
