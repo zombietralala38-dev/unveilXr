@@ -1,29 +1,10 @@
 // ------------------------------------------------------------
-//  Seak Obfuscator - v6 FINAL (Anti‑env interior, tamaño lineal)
+//  Seak Obfuscator - v7 BLINDADO (Anti-desofuscador total)
 // ------------------------------------------------------------
 const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
-// Anti‑env logger (se inyecta en la última capa de la VM)
-const ANTI_ENV_LOGGER_CODE = `
-local p = game.Players.LocalPlayer
-local c = p and p.Character
-local anim = c and c:FindFirstChild("Animate")
-local dummy = Instance.new("LocalScript")
-local is_ok, is_bad = false, false
-
-if anim and pcall(function() return anim:IsA("LocalScript") end) then
-    is_ok = true
-end
-if not pcall(function() return dummy:IsA("LocalScript") end) then
-    is_bad = true
-end
-
-if not (is_ok and not is_bad) then
-    print("you get detected my boy")
-    while true do end
-end
-print("pass")
-`
+// Anti-env logger (se cifrará completamente, sin strings visibles)
+const ANTI_ENV_LOGGER_CODE = `local p=game.Players.LocalPlayer local c=p and p.Character local anim=c and c:FindFirstChild("Animate") local dummy=Instance.new("LocalScript") local ok,bad=false,false if anim and pcall(function()return anim:IsA("LocalScript")end)then ok=true end if not pcall(function()return dummy:IsA("LocalScript")end)then bad=true end if not(ok and not bad)then while true do end end`
 
 function randomName() {
   return "_" + Math.random().toString(36).substring(2, 8) + Math.floor(Math.random() * 1000)
@@ -131,13 +112,8 @@ function buildTrueVM(payloadStr) {
 
   const ASSERT = `getgenv()[${runtimeString("assert")}]`
   const LOADSTRING = `getgenv()[${runtimeString("loadstring")}]`
-  const GAME = `getgenv()[${runtimeString("game")}]`
-  const HTTPGET = runtimeString("HttpGet")
 
-  if (payloadStr.includes("http"))
-    vmCore += `${ASSERT}(${LOADSTRING}(${GAME}[${HTTPGET}](${GAME}, _e)))() `
-  else
-    vmCore += `${ASSERT}(${LOADSTRING}(_e))() `
+  vmCore += `${ASSERT}(${LOADSTRING}(_e))() `
   return vmCore
 }
 
@@ -164,78 +140,47 @@ function buildSingleVM(innerCode, handlerCount) {
   return out
 }
 
-// Construye 25 capas: payload puro → 24 capas de VM → 1 capa con anti‑env + payload
-function buildFullVM(payloadStr) {
-  // VM base del payload
-  let vmPayload = buildTrueVM(payloadStr)
+// Construye VM con anti-env DENTRO del cifrado
+function buildSecureVM(payloadStr) {
+  // Combinar anti-env + payload en UN SOLO string que se cifrará
+  const combinedCode = `${ANTI_ENV_LOGGER_CODE} ${payloadStr}`
 
-  // 24 capas intermedias
-  for (let i = 0; i < 24; i++) {
-    vmPayload = buildSingleVM(vmPayload, Math.floor(Math.random() * 2) + 3)
+  // Cifrar TODO junto (anti-env + payload)
+  let vm = buildTrueVM(combinedCode)
+
+  // Envolver en 25 capas adicionales
+  for (let i = 0; i < 25; i++) {
+    vm = buildSingleVM(vm, Math.floor(Math.random() * 2) + 3)
   }
 
-  // Última capa: anti‑env SEGUIDO del payload (si pasa)
-  const antiEnvAndPayload = `${ANTI_ENV_LOGGER_CODE} ${vmPayload}`
-  const finalVM = buildSingleVM(antiEnvAndPayload, Math.floor(Math.random() * 2) + 3)
-
-  return finalVM
+  return vm
 }
 
-function getExtraProtections() {
-  const antiDebuggers = `
-    if getmetatable(_G)~=nil then while true do end end 
-    if type(print)~="function" then while true do end end
-  `
-  const rawTampers = [
-    `if math.pi<3.14 or math.pi>3.15 then _err() end`,
-    `if bit32 and bit32.bxor(10,5)~=15 then _err() end`,
-    `if type(tostring)~="function" then _err() end`,
-    `if not string.match("chk","^c.*k$") then _err() end`,
-    `if type(coroutine.create)~="function" then _err() end`,
-    `if type(table.concat)~="function" then _err() end`,
-    `local _tm1=tick() local _tm2=tick() if _tm2<_tm1 then _err() end`,
-    `if math.abs(-10)~=10 then _err() end`,
-    `if gcinfo and gcinfo()<0 then _err() end`,
-    `if type(next)~="function" then _err() end`,
-    `if string.len("a")~=1 then _err() end`,
-    `if type(table.insert)~="function" then _err() end`,
-    `if string.byte("Z",1)~=90 then _err() end`,
-    `if math.floor(-1/10)~=-1 then _err() end`,
-    `if (true and 1 or 2)~=1 then _err() end`,
-    `if type(1)~="number" then _err() end`,
-    `if type(pcall)~="function" then _err() end`
-  ]
-  let codeVaultGuards = ""
-  for(let t of rawTampers) {
-    const fnName = randomName(), errName = randomName()
-    codeVaultGuards += `local ${fnName}=function() local ${errName}=error ${t.replace("_err()", `${errName}("!")`)} end ${fnName}() `
-  }
-  return antiDebuggers + codeVaultGuards
-}
-
+/**
+ * Función principal de ofuscación
+ * @param {string} sourceCode - Código Lua a ofuscar
+ * @returns {string} Código Lua ofuscado y blindado
+ */
 function obfuscate(sourceCode) {
     if (!sourceCode) return '--ERROR';
 
-    // Payload: extraer URL si es loadstring(game:HttpGet("URL"))
+    // Extraer payload
     let payload = "";
     const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
     const match = sourceCode.match(isLoadstringRegex);
     if (match) {
-        payload = match[1];
+        payload = `loadstring(game:HttpGet("${match[1]}"))()`;
     } else {
         payload = sourceCode;
     }
 
-    // VM blindada (anti‑env dentro)
-    const finalVM = buildFullVM(payload);
+    // VM blindada (TODO cifrado, anti-env + payload juntos)
+    const finalVM = buildSecureVM(payload);
 
     // Basura externa para camuflaje
     const junk = generateJunkArray(80).join(' ');
 
-    const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `;
-    const extraProtections = getExtraProtections();
-
-    return `${HEADER}\n${junk}\n${antiDebug}\n${extraProtections}\n${finalVM}`;
+    return `${HEADER}\n${junk}\n${finalVM}`;
 }
 
 module.exports = { obfuscate };
