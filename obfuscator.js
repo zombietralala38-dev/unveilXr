@@ -1,33 +1,28 @@
 // ------------------------------------------------------------
-//  Seak Obfuscator - v5 (Anti‑env blindado + 25 VM reales)
+//  Seak Obfuscator - v6 (Anti‑env inside VM, payload seguro)
 // ------------------------------------------------------------
 const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
-// Anti‑env logger corregido y reforzado
+// El anti‑env logger ya NO va en texto plano. Se inyecta dentro de la VM.
 const ANTI_ENV_LOGGER_CODE = `
 local p = game.Players.LocalPlayer
 local c = p and p.Character
 local anim = c and c:FindFirstChild("Animate")
 local dummy = Instance.new("LocalScript")
-local is_ok = false
-local is_bad = false
+local is_ok, is_bad = false, false
 
--- Verificación real del Animate
 if anim and pcall(function() return anim:IsA("LocalScript") end) then
     is_ok = true
 end
-
--- Verificación del dummy: debe ser un LocalScript válido
 if not pcall(function() return dummy:IsA("LocalScript") end) then
     is_bad = true
 end
 
-if is_ok and not is_bad then
-    print("pass")
-else
+if not (is_ok and not is_bad) then
     print("you get detected my boy")
     while true do end
 end
+print("pass")
 `
 
 function randomName() {
@@ -90,7 +85,7 @@ function runtimeString(str) {
   return `string.char(${str.split('').map(c => heavyMath(c.charCodeAt(0))).join(',')})`;
 }
 
-// VM base (descifra y ejecuta el payload)
+// VM base: descifra y ejecuta el payload final (sin el anti‑env)
 function buildTrueVM(payloadStr) {
   const STACK = randomName()
   const KEY = randomName()
@@ -146,13 +141,12 @@ function buildTrueVM(payloadStr) {
   return vmCore
 }
 
-// Capa de VM REAL: todos los handlers ejecutan el mismo código verdadero
+// Capa de VM REAL: todos los handlers ejecutan el código completo
 function buildRealVM(innerCode, handlerCount = 3) {
   const handlers = pickHandlers(handlerCount)
   const DISPATCH = randomName()
   let out = `local lM={} `
   for (let i = 0; i < handlers.length; i++) {
-    // Todos los handlers ejecutan el innerCode completo
     out += `local ${handlers[i]}=function(lM) local lM=lM; ${generateJunkArray(2).join(' ')} ${innerCode} end `
   }
   out += `local ${DISPATCH}={`
@@ -166,46 +160,78 @@ function buildRealVM(innerCode, handlerCount = 3) {
   return out
 }
 
-// 25 capas REALES (cada capa envuelve la salida de la anterior)
-function build25xRealVM(payloadStr) {
-  let vm = buildTrueVM(payloadStr)   // VM base
-  for (let i = 0; i < 25; i++) {
-    vm = buildRealVM(vm, Math.floor(Math.random() * 2) + 3) // 2-4 handlers reales
+// Construye la VM completa: 1 capa de anti‑env + 24 capas de payload
+function buildFullVM(payloadStr) {
+  // 1. Creamos la VM del payload puro
+  let vmPayload = buildTrueVM(payloadStr)
+
+  // 2. Envolvemos en 24 capas de VM reales (para que el anti‑env quede en la 25)
+  for (let i = 0; i < 24; i++) {
+    vmPayload = buildRealVM(vmPayload, Math.floor(Math.random() * 2) + 3)
   }
-  return vm
+
+  // 3. Ahora envolvemos una capa más, pero esta capa incluye el anti‑env logger ANTES del payload
+  const antiEnvAndPayload = `${ANTI_ENV_LOGGER_CODE} ${vmPayload}`
+  const finalVM = buildRealVM(antiEnvAndPayload, Math.floor(Math.random() * 2) + 3)
+
+  return finalVM
+}
+
+function getExtraProtections() {
+  const antiDebuggers = `
+    if getmetatable(_G)~=nil then while true do end end 
+    if type(print)~="function" then while true do end end
+  `
+  const rawTampers = [
+    `if math.pi<3.14 or math.pi>3.15 then _err() end`,
+    `if bit32 and bit32.bxor(10,5)~=15 then _err() end`,
+    `if type(tostring)~="function" then _err() end`,
+    `if not string.match("chk","^c.*k$") then _err() end`,
+    `if type(coroutine.create)~="function" then _err() end`,
+    `if type(table.concat)~="function" then _err() end`,
+    `local _tm1=tick() local _tm2=tick() if _tm2<_tm1 then _err() end`,
+    `if math.abs(-10)~=10 then _err() end`,
+    `if gcinfo and gcinfo()<0 then _err() end`,
+    `if type(next)~="function" then _err() end`,
+    `if string.len("a")~=1 then _err() end`,
+    `if type(table.insert)~="function" then _err() end`,
+    `if string.byte("Z",1)~=90 then _err() end`,
+    `if math.floor(-1/10)~=-1 then _err() end`,
+    `if (true and 1 or 2)~=1 then _err() end`,
+    `if type(1)~="number" then _err() end`,
+    `if type(pcall)~="function" then _err() end`
+  ]
+  let codeVaultGuards = ""
+  for(let t of rawTampers) {
+    const fnName = randomName(), errName = randomName()
+    codeVaultGuards += `local ${fnName}=function() local ${errName}=error ${t.replace("_err()", `${errName}("!")`)} end ${fnName}() `
+  }
+  return antiDebuggers + codeVaultGuards
 }
 
 function obfuscate(sourceCode) {
     if (!sourceCode) return '--ERROR';
 
-    // 1. Anti‑env logger se coloca PRIMERO antes de cualquier basura
-    const junkArray = generateJunkArray(100);
-    junkArray.unshift(ANTI_ENV_LOGGER_CODE); // al inicio para que se ejecute primero
-    const combinedJunk = junkArray.join(' ');
-
-    // Protecciones extra (pueden colgar si detectan manipulación)
-    const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `;
-    const extraProtections = `
-      if getmetatable(_G)~=nil then while true do end end 
-      if type(print)~="function" then while true do end end
-    `;
-
-    // 2. Payload: extraer URL si es loadstring(HttpGet(...))
+    // Payload a proteger (extrae URL si es loadstring(HttpGet))
     let payload = "";
     const isLoadstringRegex = /loadstring\s*\(\s*game\s*:\s*HttpGet\s*\(\s*["']([^"']+)["']\s*\)\s*\)\s*\(\s*\)/i;
     const match = sourceCode.match(isLoadstringRegex);
     if (match) {
         payload = match[1];
     } else {
-        // Para otro código, simplemente lo envolvemos en loadstring
         payload = sourceCode;
     }
 
-    // 3. VM real de 25 capas
-    const finalVM = build25xRealVM(payload);
+    // VM completa: anti‑env logger + payload integrados
+    const finalVM = buildFullVM(payload);
 
-    // 4. Montaje final
-    return `${HEADER}\n${combinedJunk}\n${antiDebug}\n${extraProtections}\n${finalVM}`;
+    // Junk alrededor para camuflaje (el anti‑env ya no está en texto plano)
+    const junk = generateJunkArray(80).join(' ');
+
+    const antiDebug = `local _t=tick() for _=1,150000 do end if tick()-_t>5.0 then while true do end end `;
+    const extraProtections = getExtraProtections();
+
+    return `${HEADER}\n${junk}\n${antiDebug}\n${extraProtections}\n${finalVM}`;
 }
 
 module.exports = { obfuscate };
