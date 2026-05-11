@@ -4,32 +4,32 @@
 const HEADER = `--[[ this code it's protected by Seak obfuscator ]]`
 
 // Anti‑env logger: si detecta -> imprime "you get detected my boy" y se cuelga
-const ANTI_ENV_LOGGER_CODE = `local p = game.Players.LocalPlayer
-local c = p.Character
-local anim = c:FindFirstChild("Animate")
-local dummy = Instance.new("LocalScript")
-local getsc = getrunningscripts
-if typeof(getsc) == "function" then
-local res = getsc()
-local is_ok = false
-local is_bad = false
-for i, v in next, res do
-if v == anim then
-is_ok = true
+const ANTI_ENV_LOGGER_CODE = `local pass = true
+
+if _VERSION ~= "Luau" then pass = false end
+
+if type(table.freeze) ~= "function" or type(table.isfrozen) ~= "function" then pass = false end
+
+if type(bit32) ~= "table" then pass = false end
+
+if pass then
+    local ok = pcall(function()
+        local t = table.freeze({x = 1})
+        if not table.isfrozen(t) then error() end
+        if bit32.bor(1, 2) ~= 3 then error() end
+    end)
+    if not ok then pass = false end
 end
-if v == dummy then
-is_bad = true
+
+local fns = {tostring, pairs, ipairs, pcall, rawequal, type}
+for _, f in ipairs(fns) do
+    if not rawequal(f, f) then pass = false break end
 end
-end
-if is_ok and not is_bad then
-print("pass")
+
+if pass then
+    print("pass")
 else
-print("you get detected my boy")
-while true do end
-end
-else
-print("you get detected my boy")
-while true do end
+    print("Detect")
 end`
 
 // (resto del código sin cambios, solo se modificó la constante ANTI_ENV_LOGGER_CODE)
